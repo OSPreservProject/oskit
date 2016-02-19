@@ -1,0 +1,9 @@
+
+Directories: oskit/examples/x86/security
+Targets: security
+Documentation: See the headers of each .c
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory serves to build certain of the example kernels
+	which require the security server (-loskit_security).
+

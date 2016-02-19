@@ -1,0 +1,102 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Processes
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype _Exit_T =
+{ include "${OSKITDIR}/oskit/c/unistd.h",
+  _exit
+} with flags libc
+
+bundletype PosixProcess_T = 
+{ include "${OSKITDIR}/oskit/c/sys/types.h",
+  include "${OSKITDIR}/oskit/c/unistd.h",
+  include "${OSKITDIR}/oskit/c/sys/wait.h",
+  //  extends _Exit_T,
+  execve,
+  fork,
+  vfork,
+  getpid,
+  wait4,
+  waitpid,
+} with flags libc
+
+bundletype Exec_T = 
+{ include "${OSKITDIR}/oskit/exec/exec.h",
+  exec_load,
+  exec_load_aout,
+  exec_load_elf,
+} with flags libc
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+// ToDo: is there any point in making this separate from null_posix_process?
+// (or in having it at all)
+
+// mk_unit -o -n posix__exit posix/sys/_exit.o 
+unit posix__exit = {
+  imports[ clientos : ClientOS_T // libc_environment
+         ];
+  exports[ exit : { oskit_libc_exit, _exit } // extends _Exit_T
+         ];
+  depends{ exports + inits + finis needs { clientos.libc_environment } };
+  files{ "posix/sys/_exit.c"
+  } with flags posix;
+}
+
+/*#
+A collection of process-related functions for use in systems that don't
+really support process functionality.
+All except getpid return error codes.
+#*/
+
+// mk_unit -o -n null_posix_process posix/sys/execve.o posix/sys/fork.o posix/sys/getpid.o posix/sys/sbrk.o posix/sys/vfork.o posix/sys/wait4.o posix/sys/waitpid.o 
+
+unit null_posix_process = {
+  imports[ panic : Panic_T ];
+  exports[ out : PosixProcess_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "posix/sys/execve.c",
+    "posix/sys/fork.c",
+    "posix/sys/getpid.c",
+    "posix/sys/sbrk.c",
+    "posix/sys/vfork.c",
+    "posix/sys/wait4.c",
+    "posix/sys/waitpid.c",
+  } with flags posix;
+}
+
+// mk_unit -nexec exec/load.o exec/aout.o exec/elf.o 
+unit exec = {
+  imports[ ];
+  exports[ out : Exec_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "exec/load.c",
+    "exec/elf.c",
+    "exec/x86/aout.c",
+  } with flags exec;
+}
+
+/************************************************************/
+// End
+/************************************************************/

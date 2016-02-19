@@ -1,0 +1,25 @@
+							-*-text-*-
+srealloc, scalloc (native and debug versions)
+
+Add statistics gathering.  
+	which functions
+	what sizes
+	fragmentation
+	timestamps
+
+Add the ability to check each block for a live flob when its free'd.
+
+The lock used to protect the global list of allocated memory is the
+same as the lock used to protect the memory allocator (we use
+mem_lock() and mem_unlock()) perhaps these should be different locks.
+
+Make the compile-time options of the library (detect free(0), etc)
+into run-time options.  Provide an interface for manipulating them.
+
+The sweep, mark, and check functions all have names that are too
+confusingly similar (can you tell which is the matching pair of the
+three?)
+
+
+
+

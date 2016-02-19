@@ -1,0 +1,25 @@
+
+Directories: oskit/udp
+Target: liboskit_udp.a
+Documentation: [doc/udp.tex - should be, but doesn't exist yet]
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	A simple UDP implementation.  It provides a simple send and recv
+	UDP interface without fragmentation. There are no options supported.
+        Unlike FUDP, this library does real arp and operates on the supplied
+	ethernet device directly, instead of a supplied netio.
+
+	This library is used by netdisk, and perhaps netboot at some point.
+
+	Notable holes in this implementation are:
+
+		- Its very simple.
+
+		- Only handles one interface.
+
+		- Concept of gateway is pretty simplistic.
+
+		- No fragmentation or reassembly.
+
+		- ICMP support is for ping only!
+

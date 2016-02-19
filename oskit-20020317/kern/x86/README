@@ -1,0 +1,21 @@
+
+Directories: oskit/kern/x86, oskit/kern/x86/pc,
+	oskit/kern/x86/dos, oskit/kern/x86/i16
+Target: liboskit_kern.a
+Documentation: doc/kern.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Mach Project, Carnegie Mellon University (base*.c, base_trap_inittab.S)
+Description:  
+	A set of functions and definitions useful primarily in
+	OS kernels.
+
+	x86/ contians most of the real code.
+	
+	x86/dos contains DOS code (remember int 0x21?)
+
+	x86/dos/i16 contains 16-bit DOS code.
+
+	x86/i16 contains 16-bit code.
+	
+	x86/pc contains pc-specific code.

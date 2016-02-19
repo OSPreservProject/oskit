@@ -1,0 +1,1 @@
+#define NSNP 0

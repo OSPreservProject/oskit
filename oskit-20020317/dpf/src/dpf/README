@@ -1,0 +1,132 @@
+DPF version 2.0. 
+
+	The current system is a rewrite of the dpf system described in
+Engler & Kaashoek, SIGCOMM 96.  For simplicity, its language has been
+pared to resemble that of pathfinder (Bailey et al OSDI 95).  There is
+no support for fragmentation.  If the language is too spare,  or you
+need fragmentation (or the implementation is slow on some style of
+usage you care about) please email engler@lcs.mit.edu.  In particular
+this version of dpf has been optimized for insertion overhead rather
+than demux speed (the current system demux's about 2x slower than the
+system in the paper).   There are modifications that can be done to 
+speed this up, but I've been deferring until there is a
+stated need: if you care about demux speed let me know and I'll fix
+it.  More details can be found in the OVERVIEW file.  The official
+DPF url is:
+		http://www.pdos.lcs.mit.edu/~engler/dpf.html
+
+-------------------------------------------------------------
+To build the system:
+	get dpf
+	untar in its own directory
+
+	get vcode
+		http://www.pdos.lcs.mit.edu/~engler/latest-vcode-release.tar.Z
+	make the system and symbolically link the vcode source directory
+		(vcode-src) as 'vcode'' in dpf source directory:
+			ln -s ``path-to-vcode''/vcode-src vcode
+
+	make clean
+	make depend
+	make
+
+To test, cd into the tests directory and type:
+	make
+	dpf  ( will spit out a bunch text; should not assert fail)
+	driver -f 100 -d 100 (should not assert fail)
+
+
+-----------------------------------------------------------
+Using the system
+
+
+The interface to construct a filter is in dpf.h; example uses are
+in dpf-test.c and in xlate.c (xlate.c translates old dpf filters
+to new ones).  
+
+Public interface:
+	int dpf_insert(struct dpf_ir *filter);
+		install filter in the current dpf trie; returns the
+		filter id or < 0 on error.
+
+	int dpf_delete(unsigned pid);
+		delete filter pid from filter trie.  Returns < 0 on
+		failure.
+
+	int (*dpf_iptr)(unsigned char *msg, unsigned nbytes);
+		demult message (msg, of length nbytes); returns
+		claiming filter id or 0 if all filters reject.
+
+A simple filter:
+        /* 
+         * Create filter to check that the 8th byte in msg is 16 and
+         * the short at offset 10 is 0x1234.
+         */
+	#include <dpf.h>
+	#include <demand.h>
+        int main(void) {
+                struct dpf_ir filter;  /* struct to hold filter. */
+                uint8 msg[128];
+                int pid, res;
+
+                dpf_init(&filter);  /* must be done before use */
+                dpf_eq8(&filter, 8, 16);
+                dpf_eq16(&filter, 10, 0x1234);
+
+                /* insert filter */
+                if((pid = dpf_insert(&filter)) < 0)
+                        fatal(Insertion failed);
+
+		/* print out disassembled code. */
+                dpf_output();
+
+                /* create message */
+                *(uint8 *) ((uint8 *)msg + 8) = 16;
+                *(uint16 *) ((uint8 *)msg + 10) = 0x1234;
+
+                /* test it */
+                if((res = dpf_iptr(msg, sizeof msg)) != pid) {
+                        printf("pid  = %d, res = %d\n", pid, res );
+                        fatal(bogus classification);
+                }
+
+                /* delete filter */
+                if(dpf_delete(pid) < 0)
+                        fatal(Delete failed);
+
+		return 0;
+        }       
+
+
+NOTE:
+	The current system has debugging turned on.  For decent speed,
+	uncomment out the optimization flags (-O3 -DNDEBUG) in the
+	dpf makefile.
+
+To build a standalone system for testing filters, simply include
+dpf.h in your application and link against dpf.lib.a.
+
+Including DPF in a kernel is similar (note that it requires qsort, malloc
+and free).
+
+An example use of dpf to demux a message:
+	if((filter_id = dpf_iptr(msg, nbytes)))
+		/* matched */
+		give message to connection filter_id for processing.
+	else
+		/* did not match */
+		discard message.
+
+Useful site-specific configuration values for minimum message size,
+maximum number of active filters, and other goodies are defined in
+dpf-config.h
+
+Limitations:
+	+ The test suite assumes little-endian (MIPS, Alpha).  
+	+ The new version of DPF requires some vcode modifications 
+		(currently supported on only MIPS and Alpha).  
+If you need other architectures email me.
+
+Since this is a preliminary release I request that you please notify us
+if you are making a comparision to other systems.  The various
+performance bugs in this release are readily fixed.

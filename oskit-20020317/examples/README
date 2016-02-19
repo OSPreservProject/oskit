@@ -1,0 +1,74 @@
+
+Directories: oskit/examples, oskit/examples/x86
+Target: Various (See sub-directory READMEs)
+Documentation: See header of individual examples.
+Original Code Source: Flux Research Group, University of Utah
+Description:
+	Toy example kernels for all the supported platforms.
+
+Here is a brief breakdown of the examples:
+
+Trivial programs good for demonstrating how to build and boot a kernel:
+
+	hello.c
+	multiboot.c
+
+Very simple programs that demonstrate how to use basic components:
+
+	timer.c
+	mouse.c
+	more/gethostbyname.c
+	bmodfs.c
+	timer_com.c
+	video.c
+
+Simple programs that demonstrate the use of more complex components:
+
+	tty.c
+	more/mmap_dev_mem.c
+	diskpart.c
+	blkio.c
+	fsread.c
+	more/diskpart2.c
+
+Slightly more complex programs that use the network components:
+
+	socket_bsd.c
+	socket_com.c
+	pingreply.c
+	fudp.c
+	hpfq_udp.c
+	more/select.c
+
+Slightly more complex programs that use the filesystem components:
+
+	linux_fs_com.c
+	netbsd_fs_com.c
+	more/netbsd_fs_posix.c
+	more/fsbmodmount.c
+
+Slightly more complex programs that use various components:
+
+	anno_test.c
+	smp.c
+	more/timer_com2.c
+	more/socket_com2.c
+	more/dd.c
+	vgatest.c
+
+POSIX threads programs, listed in order of increasing complexity:
+
+	dphils.c
+	quicksort.c
+	disktest.c
+	disknet.c
+	http_proxy.c
+
+Misc programs
+
+	more/memtest.c
+	more/bufio_stream_recv.c
+	more/bufio_stream_send.c
+	more/uspf.c
+	more/spf.c
+	more/stream_netio.c

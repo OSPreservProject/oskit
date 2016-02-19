@@ -1,0 +1,37 @@
+OUTPUT_FORMAT("a.out-arm-netbsd", "a.out-arm-netbsd",
+              "a.out-arm-netbsd")
+OUTPUT_ARCH(arm)
+ SEARCH_DIR(/usr/flux/tools/arm-aout/lib);
+__DYNAMIC = 0;
+PROVIDE (__stack = 0);
+SECTIONS
+{
+  . = 0xF0000020;
+  .text :
+  {
+    CREATE_OBJECT_SYMBOLS
+    __stext_ = .;
+    *(.text)
+    *(.rodata)
+    _etext = .;
+    __etext = .;
+  }
+  . = ALIGN(0x1000);
+  .data :
+  {
+    __sdata_ = .;
+    *(.data)
+    CONSTRUCTORS
+    _edata  =  .;
+    __edata  =  .;
+  }
+  .bss :
+  {
+    __bss_start = .;
+   *(.bss)
+   *(COMMON)
+   _end = ALIGN(4) ;
+   __end = ALIGN(4) ;
+  }
+  /DISCARD/ : { *(.debug*); }
+}

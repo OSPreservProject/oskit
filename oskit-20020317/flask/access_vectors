@@ -1,0 +1,317 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+#
+# Define common prefixes for access vectors
+#
+# common common_name { permission_name ... }
+
+
+#
+# Define a common prefix for file access vectors.
+#
+
+common file
+{
+	read
+	write
+	create
+	getattr
+	setattr
+	lock
+	relabelfrom
+	relabelto
+	transition
+	append
+	access
+	unlink
+	link
+	rename
+	execute
+	pathconf
+}
+
+
+#
+# Define a common prefix for socket access vectors.
+#
+
+common socket
+{
+	read
+	write
+	create
+	getattr
+	setattr
+	lock
+	relabelfrom
+	relabelto
+	transition
+	bind
+	connect
+	getopt
+	setopt
+	shutdown
+	recvfrom
+	sendto
+	recv_msg
+	send_msg
+	name_bind
+}	
+
+
+#
+# Define the access vectors.
+#
+# class class_name [ inherits common_name ] { permission_name ... }
+
+
+#
+# Define the access vector interpretation for file-related objects.
+#
+
+class filesystem
+{
+	mount
+	remount
+	unmount
+	getattr
+	relabelfrom
+	relabelto
+	transition
+	associate
+	lookupi
+}
+
+class dir
+inherits file
+{
+	add_name
+	remove_name
+	reparent
+	search
+	rmdir
+	mounton
+	mountassociate
+}
+
+class file
+inherits file
+
+class lnk_file
+inherits file
+
+class chr_file
+inherits file
+
+class blk_file
+inherits file
+
+class sock_file
+inherits file
+
+class fifo_file
+inherits file
+
+class pipe
+inherits file
+
+
+class fd
+{
+	create
+	getattr
+	setattr
+	inherit
+	receive
+}
+
+
+#
+# Define the access vector interpretation for network-related objects.
+#
+
+class socket
+inherits socket
+
+class tcp_socket
+inherits socket
+{
+	connectto
+	listen
+	accept
+	newconn
+	acceptfrom
+}
+
+class udp_socket
+inherits socket
+
+class rawip_socket
+inherits socket
+
+class node 
+{
+	tcp_recv
+	tcp_send
+	udp_recv
+	udp_send
+	rawip_recv
+	rawip_send
+	enforce_dest
+}
+
+class netif
+{
+	getattr
+	setattr
+	tcp_recv
+	tcp_send
+	udp_recv
+	udp_send
+	rawip_recv
+	rawip_send
+}
+
+class netlink_socket
+inherits socket
+
+class packet_socket
+inherits socket
+
+class unix_stream_socket
+inherits socket
+{
+	connectto
+	listen
+	accept
+	newconn
+	acceptfrom
+}
+
+class unix_dgram_socket
+inherits socket
+
+
+#
+# Define the access vector interpretation for process-related objects
+#
+
+class process
+{
+	execute
+	fork
+	transition
+	sigkill
+	sigstop
+	signal
+	chroot
+	setid
+}
+
+
+#
+# Define the access vector interpretation for the security server. 
+#
+
+class security
+{
+	compute_av
+	notify_perm
+	transition_sid
+	member_sid
+	sid_to_context
+	context_to_sid
+	load_policy
+	get_sids
+	register_avc
+}
+
+
+#
+# Define the access vector interpretation for system operations.
+#
+
+class system
+{
+	reboot
+	net_io_control
+	route_control
+	arp_control
+	rarp_control
+}
+
+
+#
+# Define the access vector interpretation for subjects.
+#
+ 
+class subject  
+{
+        read
+        write  
+        execute
+        create_object
+        specify_client
+        specify_server
+        connect
+        call
+        send
+        thread_scheduler
+        task_keeper
+        map
+}
+ 
+ 
+#
+# Define the access vector interpretation for the AVC.
+#
+ 
+class avc
+{
+        grant
+        try_revoke
+        revoke
+        reset
+        set_auditallow
+        set_auditdeny
+}
+ 
+ 
+#
+# Define the access vector interpretation for mempools and segments.
+#
+ 
+class memory
+{
+        segment_create
+        segment_destroy
+        segment_map
+        segment_getsize
+        segment_setsize
+        segment_createcopy
+        mempool_create
+        mempool_destroy
+        mempool_addsubpool
+        mempool_addsegment
+        mempool_gettickets
+        mempool_settickets
+        segment_associate
+        subpool_associate
+}
+

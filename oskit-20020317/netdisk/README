@@ -1,0 +1,48 @@
+
+Directories: oskit/netdisk
+Target: netdisk
+Documentation: none
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	NetDisk is a kernel that allows you to write data to raw
+	partitions on any disk. You can write either the entire disk,
+	a slice, or a BSD partition inside of a slice.
+
+	This ability is useful for loading disks or partitions with
+	complete disk images (such as filesystems, boot blocks, etc).
+
+	The image must be in the format expected by netdisk, as
+	described in imagehdr.h in this directory. This is a simple
+	format, with a single 1K block prepended to hold the size of
+	the image and a magic number.
+
+	Netdisk optionally (default is on) uses the zlib compression
+	library. In this case, the image data may be compressed, as
+	indicated by the magic number in the header described above.
+
+	Netdisk can be compiled to use either the UDP library or the
+	complete freebsd network stack. This is controlled by the
+	FREEBSD_NET define. The default is the UDP library since the
+	freebsd library makes for a much bigger binary.
+
+	You can use netdisk in either command line or interactive
+	mode. If provided with a command line, netdisk will load the
+	requested partitions and then exit. In interactive mode, you
+	issues load requests and then type "exit" or "quit" to exit
+	the command loop. The format of a command in either case is:
+
+	       <IPaddr|host>:<path> <partition>[:partition]
+	       
+	   For example:
+
+	       155.22.33.44:/home/foo/diskimage wd1
+	   or
+	       myhost:/home/foo/diskimage wd1:b
+
+	Multiple commands can be issued in both interactive and
+	command line mode. The directory containing the image file
+	must be an NFS exported directory.
+
+	In the above example, "myhost" will be passed to the DNS
+	library for hostname lookup. The default domain is the one
+	supplied in the bootp response.

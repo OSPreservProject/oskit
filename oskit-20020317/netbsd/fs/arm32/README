@@ -1,0 +1,10 @@
+Directories: oskit/netbsd/fs/arm32, and all subdirectories
+Target: liboskit_netbsd_fs.a
+Documentation: doc/fs.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	NetBSD v1.4, NetBSD Project
+Description:  
+	This directory contains the ARM specific header files, derived
+	from NetBSD 1.4, but lightly modified to allow building NetBSD
+	1.2 kernel source against it.

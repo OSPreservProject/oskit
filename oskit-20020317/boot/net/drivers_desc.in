@@ -1,0 +1,13 @@
+/*
+ * This produces in the output a line:
+ *	#define foo_description "Foo"
+ * for each driver.
+ */
+
+#define HASH #
+#define PASTE(a,b) PASTE1(a,b)
+#define PASTE1(a,b) a##b
+#define driver(name, description, vendor, author, filename, probe) \
+PASTE(HASH,define) name##_description description
+
+#include <oskit/dev/linux_ethernet.h>

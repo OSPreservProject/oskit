@@ -1,0 +1,8 @@
+
+Directories: oskit/freebsd/shared
+Target: liboskit_freebsd_dev.a & liboskit_freebsd_net.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Shared glue code for the net and fdev libraries.
+

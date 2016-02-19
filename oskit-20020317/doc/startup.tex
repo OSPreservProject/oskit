@@ -1,0 +1,380 @@
+%
+% Copyright (c) 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{startup}
+
+\section{Introduction}
+
+The so-called ``startup'' library, \texttt{liboskit_startup.a},
+contains a variety of convenience functions for initializing common
+subsets of \oskit{} functionality.
+For example the most general function, \texttt{start_world},
+initializes the threading system, all device drivers, the clock,
+the network stack and a disk or memory based filesystem.
+Many of the startup functions can be ``fine tuned'' using environment
+variables.  These variables are discussed where applicable.
+
+While using the startup library can vastly simplify your kernel code,
+you should be aware that it can also greatly increase its size by introducing
+dependencies on many other \oskit{} libraries.
+Start up time for the kernel may also be impacted due to potential inclusion
+of every supported device driver and requisite boot time probe.
+
+{\bf
+Note that \texttt{oskit_clientos_init} or \texttt{oskit_clientos_init_pthreads}
+must be called before any \texttt{start_} function.
+}
+
+The following sections briefly describe the available functions and their
+dependencies.
+
+\apisec{General}
+
+\api{start_world}{initialize everything imaginable}
+\label{start-world}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_world(void); \\
+	\funcproto void start_world_pthreads(void);
+\end{apisyn}
+\begin{apidesc}
+	Sledgehammer of the \oskit{} world.
+
+	Starts the clock
+	and threading system (\texttt{start_world_pthreads} only)
+	and probes all device drivers.
+
+	If the ``root'' environment variable is set to some recognizable
+	device name, that device is used as the root of a filesystem.
+	Any boot modules (BMODs) included in the kernel image are made
+	accessible (mounted) under the \texttt{/bmod} directory unless the
+	environment variable ``no-bmod'' is set.
+
+	If the ``root'' environment variable is not set,
+	a memory-based filesystem is initialized, using any provided
+	BMODs as the root of the filesystem.
+
+	If the ``swap'' environment variable is set to some recognizable
+	device name, that device is opened and used as a paging device for
+	the SVM component (see Section \ref{svm}).
+	Otherwise, the SVM component is initialized (providing stack
+	protection for the threading system) but no paging is done,
+	unless the ``no-svm'' environment variable is set, in which case
+	SVM is not used.
+
+	If the ``no-network'' environment variable is not set, the BSD
+	networking stack is initialized.
+
+	If profiling support is compiled in, it is initialized.
+
+	oskit_clientos_init_pthreads();
+
+\end{apidesc}
+\begin{apidep}
+	\item[start_clock]	\S~\ref{start-clock}
+	\item[start_pthreads]	\S~\ref{start-pthreads}
+	\item[start_devices]	\S~\ref{start-devices}
+	\item[start_fs_on_blkio]	\S~\ref{start-fs-blkio}
+	\item[start_fs_bmod]	\S~\ref{start-fs-bmod}
+	\item[start_svm]	\S~\ref{start-svm}
+%%	\item[start_network]	\S~\ref{start-network}
+%%	\item[start_gprof]	\S~\ref{start-gprof}
+\end{apidep}
+
+\api{start_clock}{initialize and register a default clock object}
+\label{start-clock}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_clock(void);
+\end{apisyn}
+\begin{apidesc}
+	Creates and registers an \texttt{oskit_clock_t} object.
+	A clock object is required by any function that needs the
+	``time of day'' or uses a POSIX-style interval timer.
+
+	First it initializes generic device support (\texttt{start_osenv})
+	and creates a default oskit_clock_t object based on the system-wide
+	clock hardware device.
+
+	Then it reads the current time from the ``real-time clock'' hardware
+	and uses the returned value to set the default clock object's notion
+	of the current time.
+
+	Finally it registers the clock object in the global registry so
+	that lookups using \texttt{oskit_clock_iid} will return it.
+\end{apidesc}
+\begin{apidep}
+	\item[start_osenv]	\S~\ref{start-osenv}
+%%	\item[oskit_clock_init]	\S~\ref{oskit-clock-init}
+%%	\item[oskit_rtc_get]	\S~\ref{oskit-rtc-get}
+\end{apidep}
+
+\api{start_console}{initialize a full POSIX console device}
+\label{start-console}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_console(void); \\
+	\funcproto void start_console_pthreads(void);
+\end{apisyn}
+\begin{apidesc}
+	Switch to a ``real'' tty device for the console.
+	A real tty device is one which support full POSIX features
+	(i.e., \texttt{termios} handling) and is registered as an
+	\texttt{oskit_ttydev_iid} object.
+
+	If such a tty driver is found, its \texttt{termios} state
+	is initialized to a reasonable default, the tty object is
+	wrapped in a thread-safe wrapper (\texttt{start_console_pthreads})
+	and the POSIX code is informed to replace its notion of the
+	console with the new one.
+
+	Note that this call is only used if you need full POSIX semantics
+	for your console.  The base console, which supports rudimentary
+	input/output editing, is initialized at a lower level via the
+	\texttt{base_console} functions in libkern (see Section
+	~\ref{base-console}).
+\end{apidesc}
+
+\api{start_cq_console}{initialize a CQ console interface}
+\label{start-cq-console}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_cq_console(void);
+\end{apisyn}
+\begin{apidesc}
+	\emph{Note: the following is taken from the source code comment.}
+
+	Implements some of the methods for "console" fd's
+	using the CQ console interface implemented by Roland. That interface
+	does not provide enough to do a complete TTY stream interface, but
+	it does provide true interrupt driven I/O, so the asyncio interface
+	can be properly implemented, and so select on the simple console
+	will work.
+
+	We essentially create an oskit_ttystream_t wrapper around an
+	oskit_stream_t, and pass along the stuff that makes sense and
+	don't bother with the stuff that we know we cannot do at this level.
+	If you need more functonality, use the freebsd TTY stuff.
+\end{apidesc}
+%% \begin{apidep}
+%% \end{apidep}
+
+\api{start_osenv}{creates a default ``OS environment'' object}
+\label{start-osenv}
+\begin{apisyn}
+	\cinclude{oskit/startup.h} \\
+	\cinclude{oskit/dev/osenv.h}
+
+	\funcproto oskit_osenv_t *start_osenv(void);
+\end{apisyn}
+\begin{apidesc}
+	Creates the default OS environment object (\texttt{oskit_osenv_iid})
+	and registers it.
+	This \texttt{osenv} object includes default objects for:
+	logging, interrupt control, sleep and wakeup, IRQ control,
+	memory allocation, device driver lookup, device access,
+	and timer and clock functions.  See Section ~\ref{dev} for
+	information about specific \texttt{osenv} functions.
+
+	The important thing to know is that this function needs to be
+	called before doing anything related to hardware devices.
+	Most other startup library functions call it as necessary,
+	but you can call it to be sure; it is designed to be called
+	multiple times, returning the same object on successive calls.
+	Any call requiring an \texttt{oskit_osenv_t} parameter can be
+	satisfied by calling this function.
+\end{apidesc}
+
+\api{start_pthreads}{initialize the threading system}
+\label{start-pthreads}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_pthreads(void);
+\end{apisyn}
+\begin{apidesc}
+	Initialize the pthread implementation.
+	Upon return, the caller is running in a pthread context and
+	any pthread call can be made.
+
+	Note that when \texttt{start_pthreads} has been called, you
+	will need to use the \texttt{_pthreads} version of startup
+	functions where applicable (e.g., \texttt{start_network_pthreads}).
+\end{apidesc}
+\begin{apidep}
+	\item[pthread_init]	\S~\ref{pthread-init}
+\end{apidep}
+
+\api{start_devices}{probe and initialize all device drivers}
+\label{start-devices}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_devices(void);
+\end{apisyn}
+\begin{apidesc}
+	Convenience function to probe and initialize device drivers,
+	using link-time dependencies to select sets to initialize.
+
+	Not intended to be called directly by application code.
+	Used by \texttt{start_blk_devices} and \texttt{start_net_devices}.
+\end{apidesc}
+\begin{apidep}
+	\item[start_osenv]	\S~\ref{start-osenv}
+	\item[oskit_dev_init]	\S~\ref{oskit-dev-init}
+	\item[oskit_dev_probe]	\S~\ref{oskit-dev-probe}
+%%	\item[oskit_linux_init_osenv]	\S~\ref{oskit-linux-init-osenv}
+\end{apidep}
+
+
+\api{start_foox}{the start_foox call}
+\label{start-foox}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_foox(void);
+\end{apisyn}
+\begin{apidesc}
+	Here is what I do.
+\end{apidesc}
+\begin{apidep}
+	\item[depends on]	\S~\ref{startup}
+\end{apidep}
+
+
+\apisec{Disk and Filesystem}
+
+\api{start_fs}{Initialize the root filesystem for a kernel}
+\label{start-fs}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_fs(const~char *diskname, const~char *partname);
+\end{apisyn}
+\begin{apidesc}
+	Setup up a kernel with its root filesystem on the indicated disk
+	and partition.
+\end{apidesc}
+\begin{apidep}
+	\item[start_fs_on_blkio]	\S~\ref{start-fs-blkio}
+\end{apidep}
+
+\api{start_fs_on_blkio}{Initialize the root filesystem for a kernel from a blkio}
+\label{start-fs-blkio}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_fs_on_blkio(oskit_blkio_t *part);
+\end{apisyn}
+\begin{apidesc}
+	Setup up a kernel with its root filesystem on the disk and
+	partition indicated by the given blkio interface.
+\end{apidesc}
+\begin{apidep}
+	\item[oskit_clientos_setfsnamespace]	\S~\ref{oskit-clientos-setfsnamespace}
+\end{apidep}
+
+\api{start_fs_bmod}{Initialize the root filesystem for a kernel from a bmod}
+\label{start-fs-bmod}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto void start_fs_bmod(void);
+\end{apisyn}
+\begin{apidesc}
+	Setup up a default memory-based filesystem for a kernel using the
+	boot modules included in the kernel's multiboot image.
+\end{apidesc}
+\begin{apidep}
+	\item[oskit_create_fsnamespace]	\S~\ref{oskit-create-fsnamespace}
+	\item[oskit_clientos_setfsnamespace]	\S~\ref{oskit-clientos-setfsnamespace}
+\end{apidep}
+
+\begin{verbatim}
+bmod_populate.c
+create_devdir.c
+start_blk_devices.c
+start_bmod.c
+start_disk.c
+start_fs.c
+start_fs_bmod.c
+start_fs_native.c
+start_fs_native_bmod.c
+start_fs_native_pthreads.c
+start_linux_fs.c
+\end{verbatim}
+
+\apisec{Network}
+
+\begin{verbatim}
+start_conf_network.c
+start_conf_network_close_eif.c
+start_conf_network_eif.c
+start_conf_network_eifconfig.c
+start_conf_network_eifdown.c
+start_conf_network_eifname.c
+start_conf_network_host.c
+start_conf_network_init.c
+start_conf_network_open_eif.c
+start_conf_network_router.c
+start_getinfo_network.c
+start_net_devices.c
+start_network.c
+start_network_native.c
+start_network_native_pthreads.c
+start_network_router.c
+start_network_single.c
+\end{verbatim}
+
+\apisec{Misc}
+
+\api{start_svm}{Initialize the SVM subsystem}
+\label{start-svm}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto oskit_error_t start_svm(const~char *disk,
+					const~char *partition);
+\end{apisyn}
+\begin{apidesc}
+	Start the SVM system on a disk/partition specification.
+	Device initialization should already have been done.
+\end{apidesc}
+\begin{apidep}
+	\item[start_svm_on_blkio]	\S~\ref{start-svm-blkio}
+\end{apidep}
+
+\api{start_svm_on_blkio}{Initialize the SVM subsystem from blkio interface}
+\label{start-svm-blkio}
+\begin{apisyn}
+	\cinclude{oskit/startup.h}
+
+	\funcproto oskit_error_t start_svm_on_blkio(oskit_blkio_t *bio);
+\end{apisyn}
+\begin{apidesc}
+	Start the SVM system on a specific oskit_blkio instance.
+	In the pthreads case, the bio should NOT be wrapped;
+	it will be taken care of here.
+\end{apidesc}
+%%\begin{apidep}
+%%	\item[depends on]	\S~\ref{startup}
+%%\end{apidep}
+
+\begin{verbatim}
+start_gprof.c
+start_sound_devices.c
+start_svm.c
+start_tmcp.c
+\end{verbatim}

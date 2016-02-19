@@ -1,0 +1,844 @@
+%
+% Copyright (c) 1997-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{clientos}
+
+\section{Introduction}
+
+The ``clientos'' library is responsible for initializing certain portions
+of the client operating system in an \oskit{} kernel. Specifically, the
+default memory object, the global registry, the C/\posix{} library
+environment, and the default console, must all be initialized in order for
+the application to work properly. These interfaces are then available to
+the various \oskit{} libraries and components, without requiring linktime
+dependencies on them.  The C library in particular is dependent on many
+external interfaces, which are accessed through its services database. That
+services database is given to the C library by the clientos initialization
+function once it has finished creating all the necessary objects. For
+example, before the application can call the \texttt{malloc} routine in the
+C library, the default memory object must be created (see
+Section~\ref{oskit-mem}),
+the global registry must be created (see Section~\ref{glob-reg}), the memory
+object registered in the global registry, and a
+reference to the global registry (an instance of a services database) given
+to the C library so that it can request a reference to the memory
+object. At this point, \texttt{malloc} can now ask the memory object to
+allocate the requested amount of memory. Many other interfaces must also be
+installed. As the \oskit{} kernel continues to initialize devices and
+interfaces, it will hand those objects to the clientos, or in some cases
+the objects will be registered in the global registry directly. This
+approach enables the separation of the kernel intialization from the
+application itself.
+
+\apisec{Initialization}
+The clientos is the first library that must be initialized in the
+application's \texttt{main} program. Any attempts to allocate memory prior
+to this initialization will fail, and the kernel will most likely panic.
+To initialize the clientos library:
+
+\api{oskit_clientos_init}{Initialize the client operating system library}
+\begin{apisyn}
+	\cinclude{oskit/clientos.h}
+
+	\funcproto oskit_error_t oskit_clientos_init(void); \\
+	\funcproto oskit_error_t oskit_clientos_init_pthreads(void);
+\end{apisyn}
+\begin{apidesc}
+	Initialize the Client Operating System library. This routine must
+	be called immediately in the application's main program. In multi
+	threaded applications, use the
+	\texttt{oskit_clientos_init_pthreads} interface instead. As an
+	example, consider the trivial ``Hello World'' program:
+	\begin{codefrag}
+	\begin{verbatim}
+        void main()
+        {
+                oskit_clientos_init();
+
+                printf("Hello, World\n");
+        }
+        \end{verbatim}
+	\end{codefrag}
+
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+Several convenience functions are exported from the clientos library that
+make it easy to initialize the \texttt{oskit_libcenv} object as the
+application continues to initialize devices and interfaces. They are:
+
+\api{oskit_clientos_sethostname}{Set the hostname}
+\begin{apisyn}
+	\cinclude{oskit/clientos.h}
+
+	\funcproto oskit_error_t
+		   oskit_clientos_sethostname(char *hostname, int len);
+\end{apisyn}
+\begin{apidesc}
+	Set the operating system hostname. This is typically called from
+	the network initialization code, once the hostname has been
+	determined. 
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{oskit_clientos_setfsnamespace}{Set the filesystem namespace}
+\label{oskit-clientos-setfsnamespace}
+\begin{apisyn}
+	\cinclude{oskit/clientos.h}
+
+	\funcproto oskit_error_t
+		   oskit_clientos_setfsnamespace(oskit_fsnamespace_t *fsn);
+\end{apisyn}
+\begin{apidesc}
+	Set the filesystem namespce object. This is typically called from
+	the filesystem initialization code, once the root filesystem has
+	been initialized, and the filesystem namespace object created.
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\apisec{C Library Environment}
+
+One of the many COM interfaces that are installed in the services database
+received by the C/\posix{} library, is the \texttt{oskit_libcenv} COM
+interface.  The \texttt{oskit_libcenv} encapsulates a number of external
+interfaces that only the C library needs. For example, before the
+application can use any of the filesystem interface calls, it must request
+a reference to the filesystem namespace object (see Section~\ref{fsnamespace}),
+which handles translation from multi component
+pathnames to \texttt{oskit_file} COM objects. The \texttt{oskit_libcenv}
+COM interface can be described as an ad-hoc collection of interfaces that
+do not belong anyplace else since only the C/\posix{} libraries require
+them.
+
+The {\tt oskit_libcenv} COM interface inherits from {\tt IUnknown}, and has
+the following additional methods:
+\begin{icsymlist}
+\item[getfsnamespace]
+	Return a reference to the filesystem namespace object.
+\item[setfsnamespace]
+	Set the filesystem namespace object.
+\item[gethostname]
+	Return the system hostname.
+\item[sethostname]
+	Set the hostname.
+\item[exit]
+	Call the exit function.
+\item[setexit]
+	Set the exit function.
+\item[getconsole]
+	Return a reference to the console interface object.
+\item[setconsole]
+	Set the console interface object.
+\item[signals_init]
+	Call the signal initialization function.
+\item[setsiginit]
+	Set the signal initialization function.
+\item[sleep_init]
+	Initial a sleep record for a future sleep.
+\item[sleep]
+	Go to sleep until awakened.
+\item[wakeup]
+	Wakeup a sleeping thread.
+\end{icsymlist}
+
+In the descriptions that follow, it should be noted that the accessor
+function are intended to be used by the C/POSIX libraries, while the the
+functions to modify the object are intended to be used by the clientos
+library when setting up the object. 
+
+\api{getfsnamespace}{Get the filesystem namespace}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_getfsnamespace(oskit_libcenv_t *c,
+				oskit_fsnamespace_t **out_fsn);
+\end{apisyn}
+\begin{apidesc}
+	Get the \texttt{oskit_fsnamespace} COM object from the
+	\texttt{oskit_libcenv} COM object. The application initialization
+	code will typically set the \texttt{oskit_fsnamespace} object when
+	it initializes the root filesystem (see
+	\texttt{oskit_clientos_setfsnamespace} above). The \posix{} library
+	then requests a reference to namespace object when the application
+	first tries to use one of the filesystem interface calls in the
+	\posix{} library.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[out_fsn]
+		The \texttt{oskit_fsnamespace} object to return.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setfsnamespace}{Set the filesystem namespace}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_setfsnamespace(oskit_libcenv_t *c,
+				oskit_fsnamespace_t *fsn);
+\end{apisyn}
+\begin{apidesc}
+	Set the \texttt{oskit_fsnamespace} COM object associated with the
+	\texttt{oskit_libcenv} COM object. The application initialization
+	code will typically set the \texttt{oskit_fsnamespace} object when
+	it initializes the root filesystem (see
+	\texttt{oskit_clientos_setfsnamespace} above). The \posix{} library
+	then requests a reference to namespace object when the application
+	first tries to use one of the filesystem interface calls in the
+	\posix{} library.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[fsn]
+		The \texttt{oskit_fsnamespace} object to set.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{gethostname}{Get the system hostname}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_gethostname(oskit_libcenv_t *c,
+				char *hostname, int len);
+\end{apisyn}
+\begin{apidesc}
+	Get the system hostname from the \texttt{oskit_libcenv}
+	COM object. The application initialization code will typically set
+	the hostname when it initializes the network. The \posix{} library
+	will then request the hostname as needed by the C library or the
+	application program.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[hostname]
+		The returned hostname buffer.
+	\item[len]
+		The maximum length of the buffer.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{sethostname}{Set the system hostname}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_sethostname(oskit_libcenv_t *c,
+				char *hostname, int len);
+\end{apisyn}
+\begin{apidesc}
+	Set the system hostname associated with the \texttt{oskit_libcenv}
+	COM object. The application initialization code will typically set
+	the hostname when it initializes the network. The \posix{} library
+	will then request the hostname as needed by the C library or the
+	application program.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[hostname]
+		The hostname to set.
+	\item[len]
+		The length of the hostname buffer.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{exit}{Call the exit function}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto void
+		   oskit_libcenv_exit(oskit_libcenv_t *c,
+					oskit_u32_t status);
+\end{apisyn}
+\begin{apidesc}
+	Call the exit function for the application. This function
+	is default to the \oskit{} kernel exit routine, which causes a
+	reboot.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[status]
+		The exit value. 
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setexit}{Set the exit function}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_setexit(oskit_libcenv_t *c,
+					void (*exitfunc)(int));
+\end{apisyn}
+\begin{apidesc}
+	Set the exit function for the application.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[exitfunc]
+		The new exit function.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getconsole}{Get and the console stream object}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_getconsole(oskit_libcenv_t *c,
+				oskit_ttystream_t **out_ttystream);
+\end{apisyn}
+\begin{apidesc}
+	Get the system console object. The system console object
+	defaults to a trivial stream implementation that uses the kernel
+	console routines.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[out_ttystream]
+		The \texttt{oskit_ttystream} object to return.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setconsole}{Set the console stream object}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_setconsole(oskit_libcenv_t *c,
+				oskit_ttystream_t *ttystream);
+\end{apisyn}
+\begin{apidesc}
+	Set the system console object.
+	Because the console is in use from the moment the
+	kernel starts running, changing the console is more complicated
+	than just using the setconsole method. The reader is encouraged to
+	look at the example kernel in examples/x86/extended/console_tty,
+	and the support code in startup/start_console.c.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[ttystream]
+		The \texttt{oskit_ttystream} object to set.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{signals_init}{Call the signal initialization function}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_signals_init(oskit_libcenv_t *c,
+				int (*func)(int, int, void *));
+\end{apisyn}
+\begin{apidesc}
+	Call the signal initialization function for the \posix{}
+	library. The signal initialization function defaults to the
+	\oskit{} kernel library signal initialization routine (see
+	Section~\ref{kern-signals}). The \posix{} library will call this
+	routine if
+	the application uses any of the \posix{} signal interface
+	functions, passing in a function pointer to the callback in the
+	\posix{} library that should be invoked when a hardware trap should
+	be passed to the application as a signal. The signal initialization
+	function can be changed with the \texttt{setsiginit} method,
+	although that should be done with caution.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[func]
+		The callback routine for the kernel trap code.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setsiginit}{Set the signal initialization function}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_setsiginit(oskit_libcenv_t *c,
+				void (*sigfunc)(int (*func)(int,int,void *)));
+\end{apisyn}
+\begin{apidesc}
+	Set the signal initialization function for the \posix{}
+	library. The signal initialization function defaults to the
+	\oskit{} kernel library signal initialization routine (see
+	Section~\ref{kern-signals}). The \posix{} library will call this
+	routine if
+	the application uses any of the \posix{} signal interface
+	functions, passing in a function pointer to the callback in the
+	\posix{} library that should be invoked when a hardware trap should
+	be passed to the application as a signal.
+	Changing the signal initialization function should be done with caution.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[sigfunc]
+		The new signal initialization function.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{sleep_init}{Initialize a sleep record for the sleep/wakeup interface}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto void
+		   oskit_libcenv_sleep_init(oskit_libcenv_t *c,
+				osenv_sleeprec_t *sleeprec);
+\end{apisyn}
+\begin{apidesc}
+	The sleep/wakeup interface is provided so that the C/\posix{}
+	library uses a standard mechanism for giving up control of the CPU,
+	in both single and multi threaded applications. The
+	\texttt{sleep_init} method initializes a ``sleep record'' structure
+	in preparation for the going to sleep waiting for some event to
+	occur.  The sleep record is used to avoid races between actually
+	going to sleep and the event of interest, and to provide a
+	``handle'' on the current activity by which \texttt{wakeup} can
+	indicate which process to awaken.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[sleeprec]
+		A pointer to a sleep record, allocated by the caller.
+\end{apiparm}
+
+
+\api{sleep}{Sleep until awakened}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_sleep(oskit_libcenv_t *c,
+				osenv_sleeprec_t *sleeprec,
+				struct oskit_timespec *timeout);
+\end{apisyn}
+\begin{apidesc}
+	The \texttt{sleep} method is used to put the caller to sleep.
+	The specified sleep record must have been initialized with
+	\texttt{sleep_init}.
+	An optional \texttt{timeout} value may be supplied. The
+	caller will be woken if the timeout expires, and OSKIT_ETIMEDOUT
+	will be returned to indicate timeout.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[sleeprec]
+		A pointer to a sleep record, allocated by the caller.
+	\item[timeout]
+		A timeout value used to bound the length of the sleep
+		interval. 
+\end{apiparm}
+\begin{apiret}
+	The \texttt{sleep} function returns 0 if woken up normally,
+	otherwise OSKIT_ETIMEDOUT is returned if the timeout expires.
+\end{apiret}
+
+
+\api{wakeup}{Wakeup a sleeping thread}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto void
+		   oskit_libcenv_wakeup(oskit_libcenv_t *c,
+				osenv_sleeprec_t *sleeprec);
+\end{apisyn}
+\begin{apidesc}
+	The \texttt{wakeup} methods is used to initiate a wakeup
+	of any thread which has previously called \texttt{sleep}
+	with the indicated sleep record.
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[sleeprec]
+		A pointer to a sleep record, allocated by the caller.
+\end{apiparm}
+
+
+\api{clone}{Make a copy of an \texttt{oskit_libcenv} object}
+\begin{apisyn}
+	\cinclude{oskit/com/libcenv.h}
+
+	\funcproto oskit_error_t
+		   oskit_libcenv_clone(oskit_libcenv_t *c,
+				oskit_libcenv_t **out_intf);
+\end{apisyn}
+\begin{apidesc}
+	Make a copy of the \texttt{oskit_libcenv} object in \texttt{c}. All
+	of the reference counts on the internal objects are adjusted, and a
+	new \texttt{oskit_libcenv} object is returned in \texttt{out_intf}. 
+	The new object may then modified without affecting the original
+	object. 
+\end{apidesc}
+\begin{apiparm}
+	\item[c]
+		The \texttt{oskit_libcenv} object to operate on.
+	\item[out_intf]
+		The new \texttt{oskit_libcenv} object to return.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apisec{Memory Interface}
+\label{oskit-mem}
+
+The \texttt{oskit_mem} COM interface defines an interface for memory
+allocation and deallocation for oskit libraries. As described above, the C
+libary \texttt{malloc} routines are implemented in terms of an
+\texttt{oskit_mem} object that is created when the clientos is initialized.
+This initial memory object is the lowest level memory allocator that is
+available to the application. All other memory allocators, such as the
+malloc library, the memdebug library (see Section~\ref{memdebug}), and the
+device memory allocators (see Section~\ref{dev}), are implemented in terms
+of the \texttt{oskit_mem} object that is created when the clientos is
+initialized. 
+
+The {\tt oskit_mem} COM interface inherits from {\tt IUnknown}, and has the
+following additional methods:
+\begin{icsymlist}
+\item[alloc]
+	Allocate a chunk of memory.
+\item[realloc]
+	Realloc a chunk of memory.
+\item[alloc_aligned]
+	Allocate a chunk of memory, subject to an alignment constraint.
+\item[free]
+	Free a chunk of memory that was allocated with alloc or
+	alloc_aligned.
+\item[getsize]
+	Inquire about the size of a chunk of memory.
+\item[alloc_gen]
+	Allocate memory with general constraints.
+\item[avail]
+	Return the amount of free memory.
+\end{icsymlist}
+
+\api{alloc}{Allocate a chunk of memory}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto void *oskit_mem_alloc(oskit_mem_t *m, 
+				oskit_u32_t size, oskit_u32_t flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocate a chunk of memory of \texttt{size} bytes, subject to
+	various options specified in \texttt{flags}. If successful, a
+	pointer to the new chunk of memory is returned. Othersize a NULL
+	pointer is returned. The new memory must be deallocated with the
+	\texttt{free} method described below. The options that can be
+	specifed with the \texttt{flags} parameter are:
+	\begin{icsymlist}
+	\item[OSKIT_MEM_AUTO_SIZE]
+		The memory allocator must keep track of the size of
+		allocated blocks allocated using this flag; in this case,
+		the value \emph{size} parameter passed in the corresponding
+		{\tt free} call is meaningless.  For blocks allocated
+		without this flag set, the caller promises to keep track of
+		the size of the allocated block, and pass it back to {\tt
+		free} on deallocation.
+	\item[OSKIT_MEM_NONBLOCKING]
+		If set, this flag indicates that the memory allocator must
+		not block during the allocation or deallocation operation.
+		Any calls to the allocation functions from interrupt
+		handlers \emph{must} specify the {\tt OSKIT_MEM_NONBLOCKING}
+		flag.
+	\item[OSKIT_MEM_PHYS_WIRED]
+		Indicates that the must must be non-pageable.  Accesses to
+		the returned memory must not fault.
+	\item[OSKIT_MEM_PHYS_CONTIG]
+		Indicates the underlying physical memory must be
+		contiguous.
+	\item[OSKIT_MEM_VIRT_EQ_PHYS]
+		Indicates the virtual address must \emph{exactly} equal the
+		physical address so the driver may use them
+		interchangeably.  The {\tt OSKIT_MEM_PHYS_CONTIG} flag must
+		also be set whenever this flag is set.
+	\item[OSKIT_MEM_ISADMA_MEM]
+		This flag applies only to machines with ISA busses or other
+		busses that are software compatible with ISA, such as EISA,
+		MCA, or PCI\@.  It indicates that the memory allocated must
+		be appropriate for DMA access using the system's built-in
+		DMA controller.  In particular, it means that the buffer
+		must be physically contiguous, must be entirely contained
+		in the low 16MB of physical memory, and must not cross a
+		64KB boundary.  (By implication, this means that
+		allocations using this flag are limited to at most 64KB in
+		size.)  The {\tt OSKIT_MEM_PHYS_CONTIG} flag must also be set
+		if this flag is set.
+	\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[size]
+		The size (in bytes) of the chunk to allocate.
+	\item[flags]
+		Allocation options and constraints.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the new chunk of memory on success, or NULL if
+	the request could not be satisfied.
+\end{apiret}
+
+
+\api{realloc}{Reallocate a chunk of memory}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto void *oskit_mem_realloc(oskit_mem_t *m,
+				void *ptr,
+				oskit_u32_t oldsize, oskit_u32_t newsize,
+				oskit_u32_t flags);
+\end{apisyn}
+\begin{apidesc}
+	Change the size of the previously allocated memory chunk referenced
+	by \texttt{ptr}, returning a pointer to the memory chunk. The
+	\texttt{flags} must include \texttt{OSKIT_MEM_AUTO_SIZE} if the
+	original allocation did, otherwise \texttt{oldsize} must properly
+	give the size of the original allocation. If the new size is
+	larger, the contents of the newly allocated portion is
+	undefined. Any other flags specified in the original allocation
+	should necessarily be given as well. If the size of the original
+	chunk cannot be changed in place, a new chunk of the proper size
+	will be allocated, and the contents of the original chunk copied to
+	it.
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[ptr]
+		The original memory.
+	\item[oldsize]
+		The size (in bytes) of the original chunk.
+	\item[newsize]
+		The size (in bytes) of the new chunk.
+	\item[flags]
+		Allocation options and constraints.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the chunk of memory on success, or NULL if
+	the request could not be satisfied.
+\end{apiret}
+
+
+\api{alloc_aligned}{Allocate a chunk of memory subject to
+			alignment constraints}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto oskit_error_t
+		oskit_mem_alloc_aligned(oskit_mem_t *m, 
+				oskit_u32_t size,
+				oskit_u32_t flags, oskit_u32_t align);
+\end{apisyn}
+\begin{apidesc}
+	Allocate a chunk of memory of \texttt{size} bytes, subject to
+	various options specified in \texttt{flags}, and an alignment
+	constraint specifed by \texttt{align}. The alignment constraint is
+	a power of two integer, which indicates the minimum required
+	alignment for the new chunk. If successful, a pointer to the new
+	chunk of memory is returned. Othersize a NULL pointer is
+	returned. The new memory must be deallocated with the \texttt{free}
+	method described below.
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[size]
+		The size (in bytes) of the chunk to allocate.
+	\item[flags]
+		Allocation options and constraints.
+	\item[align]
+		The alignment constraint for the new chunk.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the chunk of memory on success, or NULL if
+	the request could not be satisfied.
+\end{apiret}
+
+
+\api{free}{Free a chunk of memory}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto void oskit_mem_free(oskit_mem_t *m, void *ptr,
+			oskit_u32_t size, oskit_u32_t flags);
+\end{apisyn}
+\begin{apidesc}
+	Deallocate the chunk of memory pointed to by \texttt{ptr}. The
+	\texttt{flags} must include \texttt{OSKIT_MEM_AUTO_SIZE} if the
+	original allocation did, otherwise \texttt{size} must properly give
+	the size of the original allocation.
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[ptr]
+		The chunk to deallocate.
+	\item[size]
+		The size (in bytes) of the original allocation request if
+		the chunk was not allocated with \texttt{OSKIT_MEM_AUTO_SIZE}.
+	\item[flags]
+		Options and constraints.
+\end{apiparm}
+
+\api{getsize}{Inquire about the size of a chunk of memory}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto oskit_u32_t
+		oskit_mem_getsize(oskit_mem_t *m, void *ptr);
+\end{apisyn}
+\begin{apidesc}
+	Return the size of the chunk of memory pointed to by \texttt{ptr}.
+	The chunk must have been allocated with	\texttt{OSKIT_MEM_AUTO_SIZE}
+	for the size to be determined. The returned size may be greater
+	than the original size requested, because of rounding done to
+	satisfy alignment constraints. 
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[ptr]
+		The chunk to inquire about.
+\end{apiparm}
+\begin{apiret}
+	Returns the size of the chunk, or an undefined value if the chunk
+	was not allocated with \texttt{OSKIT_MEM_AUTO_SIZE}.
+\end{apiret}
+
+
+\api{alloc_gen}{Allocate a chunk of memory with general constraints}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto void *oskit_mem_alloc_gen(oskit_mem_t *m,
+				oskit_u32_t size,
+				oskit_u32_t flags, oskit_u32_t align_bits,
+				oskit_u32_t align_ofs);
+\end{apisyn}
+\begin{apidesc}
+	Allocate a chunk of memory meeting various alignment and address
+	constraints. It is similar to \texttt{alloc}, but is intended to
+	provide an interface more like \texttt{lmm_alloc_gen} (see
+	Section~\ref{lmm}).
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[size]
+		The size (in bytes) of the chunk to allocate.
+	\item[flags]
+		Allocation options and constraints.
+	\item[align_bits]
+		The number of low bits of the returned memory chunk address
+		that must match the corresponding bits in \emph{align_ofs}.
+	\item[align_ofs]
+		The required offset from natural power-of-two alignment.
+		If \emph{align_ofs} is zero,
+		then the returned memory block will be naturally aligned
+		on a $2^{align_bits}$ boundary.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the chunk of memory on success, or NULL if
+	the request could not be satisfied.
+\end{apiret}
+
+
+\api{avail}{Return the amount of free memory}
+\begin{apisyn}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto oskit_size_t
+			oskit_mem_avail(oskit_mem_t *m, oskit_u32_t flags);
+\end{apisyn}
+\begin{apidesc}
+	 Return the amount of free space in the memory object pool.  If
+	 \texttt{flags} is non-zero, it should be a memory type flag, which
+	 indicates that the return value should be the amount of free space
+	 of that type.
+\end{apidesc}
+\begin{apiparm}
+	\item[m]
+		The memory object to operate on.
+	\item[flags]
+		Options and constraints.
+\end{apiparm}
+\begin{apiret}
+	Returns the amount of memory available on success.
+\end{apiret}

@@ -1,0 +1,13 @@
+
+Directories: oskit/threads and oskit/threads/x86 and oskit/threads/arm32
+Target: liboskit_threads.a
+Documentation: doc/pthread.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+	FreeBSD 2.2.6, FreeBSD Project
+Description:  
+	The threads library provides a subset of the POSIX Threads Standard
+	(pthreads). This is a preemptive version, SMP version.
+
+	The x86 and arm32 directories contains machine specific
+	context switch code and other minor things.

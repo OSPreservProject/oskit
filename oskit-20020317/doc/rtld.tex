@@ -1,0 +1,161 @@
+%
+% Copyright (c) 1999, 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{rtld}
+
+\section{Introduction}
+
+This section describes the Runtime Linker/Loader (RTLD) support in the
+\oskit.  The library code is derived from the \freebsd{} 3.0 ELF runtime
+link-editor library, and was modified to work in the \oskit. Rather than
+operating as an ``interpreter,'' the RTLD library is linked in directly
+with an \oskit{} kernel, and exports the standard set of interface
+functions that allow shared libraries to be loaded and unloaded. The
+\oskit{} kernel must have been compiled and linked properly so that the
+kernel is in the correct binary format (ELF), and contains the necessary
+information (dynamic symbol table, etc.) in the executable file. The reader
+should consult the demonstration kernel in examples/dyntest, which shows
+how the kernel should be linked, and how to compile, link, and load a
+shared library.  Shared libraries are loaded into the kernel using the
+\texttt{dlopen} function, which is described below.  Once a library is
+loaded, the \texttt{dlsym} function is used to find individual symbols
+inside that library. A shared library is unloaded with the \texttt{dlclose}
+function.
+
+In order to use the RTLD functions, the \oskit{} kernel must first
+initialize the RTLD library. This is done with the \texttt{oskit_boot_rtld}
+function.
+
+\api{oskit_boot_rtld}{Initialize the RTLD library}
+\begin{apisyn}
+	\cinclude{dlfnc.h}
+
+	\funcproto int oskit_boot_rtld(char *aoutname);
+\end{apisyn}
+\begin{apidesc}
+	Initialize the runtime loader library, allowing shared libraries to
+	be loaded. The initialization routine takes an optional pathname,
+	which is the location of the \oskit{} executable image. If the
+	kernel was loaded with netboot (see Section~\ref{netboot}), or any
+	other loader that loads all of the ``loadable'' sections of an ELF
+	binary, the kernel image is not required since all of the necessary
+	information is already available. Otherwise, the path of the
+	\oskit{} kernel image must be specified. The initialization
+	function will interpret the dynamic symbol table information, and
+	create the necessary data structures to allow Shared libraries to
+	be loaded and linked against the \oskit{} kernel.
+\end{apidesc}
+\begin{apiparm}
+	\item[aoutname]
+		Pathname to the oskit kernel image.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success.
+\end{apiret}
+
+
+\api{dlopen}{Load a shared library}
+\begin{apisyn}
+	\cinclude{dlfnc.h}
+
+	\funcproto void *dlopen(const char *name, int mode);
+\end{apisyn}
+\begin{apidesc}
+	Load the shared library named \texttt{name}, returning a descriptor
+	that can be used in subsequent calls to \texttt{dlsym} and
+	\texttt{dlclose}. If the library is already loaded, a new reference
+	to the same object is returned. When a shared library is first
+	loaded, its \texttt{_init()} function, if it exists, is called by
+	the linker. The \texttt{mode} argument is currently ignored.
+\end{apidesc}
+\begin{apiparm}
+	\item[name]
+		Path to the shared library to be loaded.
+	\item[mode]
+		Modify how external references are bound.
+\end{apiparm}
+\begin{apiret}
+	Returns a descriptor that can be used in later references to the
+	object. Returns NULL on failure. 
+\end{apiret}
+
+
+\api{dlsym}{Find the address binding for a symbol}
+\begin{apisyn}
+	\cinclude{dlfnc.h}
+
+	\funcproto void *dlsym(void *handle, const char *name);
+\end{apisyn}
+\begin{apidesc}
+	Return the address binding of the symbol \texttt{name} from the
+	shared library identified by \texttt{handle}. The symbols that are
+	exported from shared libraries loaded with \texttt{dlopen}, can only
+	be accessed with \texttt{dlsym}. The name of the symbol is its
+	assembly language representation, which is not necessarily the same
+	as its representation in the C source code. Be sure to consult your
+	local compiler documentation. If the symbol cannot be found,
+	\texttt{dlsym} returns NULL and and sets an error condition which
+        may be queried with \texttt{dlerror}.
+\end{apidesc}
+\begin{apiparm}
+	\item[handle]
+		The descriptor of the shared library to search.
+	\item[name]
+		The name of the symbol to search for.
+\end{apiparm}
+\begin{apiret}
+	Returns the address binding of the symbol on success, NULL
+	otherwise. 
+\end{apiret}
+
+
+\api{dlclose}{Delete a reference to a shared library}
+\begin{apisyn}
+	\cinclude{dlfnc.h}
+
+	\funcproto int dlclose(void *handle);
+\end{apisyn}
+\begin{apidesc}
+	Delete the reference to the shared library referenced by
+	\texttt{handle}. When the reference count reaches zero, the shared
+	library is removed the \oskit{} kernel's address space, and the
+	descriptor becomes invalid. Subsequent attempts to use the descriptor
+	will result in undefined behavior. When the final reference
+	to a shared library is deleted, the library's finalization
+	function \texttt{_fini()}, if it exists, is called by the linker.
+\end{apidesc}
+\begin{apiparm}
+	\item[handle]
+		The descriptor of the shared library to delete.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success.
+\end{apiret}
+
+
+\api{dlerror}{Return an error message describing the last error}
+\begin{apisyn}
+	\cinclude{dlfnc.h}
+
+	\funcproto const~char *dlerror(void);
+\end{apisyn}
+\begin{apidesc}
+	Return a null-terminated string describing the last error that
+	occurred during a call to \texttt{dlopen}, \texttt{dlsym}, or
+	\texttt{dlclose}. After a call to \texttt{dlerror}, the error
+	status is reset, and a subsequent call will return a NULL pointer. 
+\end{apidesc}
+\begin{apiret}
+	Returns a null-terminated string, or NULL if there is no error to
+	report. 
+\end{apiret}
+
+

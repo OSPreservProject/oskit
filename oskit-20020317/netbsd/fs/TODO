@@ -1,0 +1,25 @@
+* Remove all partition awareness and device number interpretation 
+  from the fs code.  
+
+  [This is DONE but in a different manner than described below (which
+   is retained for future consideration).  The fs_netbsd_mount
+   interface was changed to take a blkio, flags, and an out_fs.  The
+   blkio is usually a blkio_subset and the pointer value is used for
+   the dev_t.  We redefined the major() macro to return 0 and then put
+   "wd" as entry zero of the bdev_sw.  Then all we needed to define
+   was wdopen, wdstrategy, etc, which call the blkio functions.]
+
+  (1) Complete com/blkio_subset.c to support representing
+      partitions with oskit_blkio_t's, as opposed to only
+      representing entire block devices.
+
+  (2) Change the fs_netbsd_mount interface to be of the 
+      form fs_netbsd_mount(type,dev,iop,flags,out_dir),
+      where dev is an _opaque_ device number to use for
+      any stat operations on files within the filesystem,
+      and iop is a oskit_blkio_t* which represents the
+      desired partition.
+
+  (3) Update spec_vnops.c to use blkio operations rather
+      than invoking bdevsw operations.
+

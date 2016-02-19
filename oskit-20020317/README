@@ -1,0 +1,299 @@
+
+		The OSKit - Flux Operating System Toolkit
+		   Version 0.97 - January 15, 1999
+
+		Snapshot 20020317 - March 17, 2002
+		 
+
+
+For major changes since release 0.96 in Dec. 1998 see the file ./ANNOUNCE
+
+INTRODUCTION
+This is the top level directory of the source distribution of the OSKit.  The
+OSKit is a framework and a set of 31 component libraries oriented to operating
+systems, together with extensive documentation.  By providing in a modular way
+not only most of the infrastructure "grunge" needed by an OS, but also many
+higher-level components, the OSKit's goal is to lower the barrier to entry to
+OS R&D and to lower its costs.  The OSKit makes it vastly easier to create a
+new OS, port an existing OS to the x86 (or in the future, to other
+architectures supported by the OSkit), or enhance an OS to support a wider
+range of devices, file system formats, executable formats, or network services.
+The OSKit also works well for constructing OS-related programs, such as boot
+loaders or OS-level servers atop a microkernel.
+
+For language researchers and enthusiasts, the OSKit lets them concentrate on
+the real language issues raised by using advanced languages inside operating
+systems, such as Java, Lisp, Scheme, or ML--- instead of spending six months
+first writing boot loader code, startup code, device drivers, kernel printf and
+malloc code, a kernel debugger, etc.  With the recent addition of extensive
+multithreading and sophisticated scheduling support, the OSKit also provides a
+modular platform for embedded applications, as well as a novel component-based
+approach to constructing entire operating systems.  See doc/html/roadmap.html
+for a quick overview of the components.
+
+
+SOME COOL EXAMPLES
+With the code available from www.cs.utah.edu/projects/flux/oskit/kaffe/
+the highly portable Kaffe JVM from www.transvirtual.com "just works" on the
+bare PC hardware using the OSKit.  Yes, a "Java OS"-- but you can also
+reconfigure the OSKit to run Kaffe/OSKit on top of Unix, which is great for
+debugging.  Almost all the changes are already merged into the mainline Kaffe
+tree.  (Note the restriction that currently the only display support for Kaffe
+kernels is to use the OSKit's xclient support to display on another machine
+that runs an X server.)  On our ftp site in flux/oskit/doom, we also provide
+patches for Doom, to get a "DoomOS."
+
+
+DOCUMENTATION
+See ANNOUNCE for more quick answers.  For the latest versions of
+those files, look at www.cs.utah.edu/projects/flux/oskit/.  Detailed
+instructions on how to install and use the OSKit are contained in Chapter One
+of the document in the `doc' subdir.  Text, Postscript, and 2-up Postscript of
+the 500-page document are in doc/oskit.*.gz.  An HTML version is here at
+doc/html/index.html as well as at www.cs.utah.edu/projects/flux/oskit/doc/.
+
+Don't let the size of the doc scare you!  You probably won't need to read
+practically any of it to use the OSKit for simple things.  We provide some 45
+small example kernels and recommend that you start learning by example and by
+doing (modifying them), like most good hackers do, and read to fill in
+details, for reference, or to cure insomnia.  However, reading Chapter One of
+the doc is a very good idea, especially the roadmap, doc/html/roadmap.html.
+Also, you might scan the top-level directories and the examples.  Each
+directory should have a README.  Finally, the CREDITS file gives just that.
+
+
+--------------------------------------------------------------------------
+
+Requirements:
+
+1) Hardware: The OSKit requires an Intel 486 PC or above, with at least
+   four MB of memory. A floppy or hard disk is required to load OSKit
+   kernels (at least the first one; see "netboot" below), but is not
+   required to run them.
+
+2) Software: native build environment for either Linux or FreeBSD.
+   The latest snapshot has only been tested with the default build
+   environments provided with FreeBSD 4.3/4.5 and Red Hat Linux 7.1/7.2.
+   In particular, we have not done any testing with GCC 3 releases.
+   Cross building is possible and it's been done frequently on HP machines.
+   Build tools required are GNU make, gcc 2.7.x or 2.95.x and binutils 
+   2.8.x or 2.9.x.
+
+3) A boot loader that can load one of Linux, Mach, BSD, or
+   MultiBoot-compliant images.  (Our DOS loader is current broken;
+   see the BUGS file.)
+
+4) The GNU linker is required if creating BSD/Mach boot images on FreeBSD 2.x
+   (available at ftp://flux.cs.utah.edu/flux/oskit/boot/bsd/).
+
+---------------------------------------------------------------------------
+
+Configuring and building step-by-step:
+
+The OSKit follows the GNU conventions for configuration, building, and
+installation. The "configure" script in the top level directory will
+attempt to guess your system type and locate various required tools
+such as the C compiler. You can configure the OSKit to build itself in
+its own source directory, simply by moving to that directory and
+typing ./configure, or you can build the OSKit into a separate object
+directory by changing to that directory and running the configure
+script from there. The introductory section of the OSKit documentation
+describes the OSKit specific options to configure in detail. As an
+example, to configure the OSKit on a FreeBSD machine, generating a.out
+format, you would run configure as follows:
+
+  /somepath/oskit/configure --prefix=/somepath/install \
+	--build=i586-freebsd --host=i386-mach
+
+On Linux, building ELF format, you'd simply do:
+	/somepath/oskit/configure --prefix=/somepath/install
+
+Once the OSKit is configured, you can proceed to build the OSKit by
+going to the directory you have chosen to build it in, and running GNU
+"make" (e.g., just "make" on Linux systems, or "gmake" on BSD
+systems). Once the build completes, you can 'make install' to make the
+OSKit binaries and header files to make it publicly available.
+
+Disk usage:
+
+-Source and doc tree is 7.5M compressed, 30.5M uncompressed.
+-ELF object tree without debug, without profile, without docs: 48M.
+ The examples dir is 20M of that.
+-ELF object tree with debug, without profile, without docs: 221M.
+
+---------------------------------------------------------------------------
+
+Using the OSKit:
+
+The examples/x86 directory contains a number of example kernels that
+you can use to experiment with the OSKit. The simplest example is the
+"hello" kernel, which prints "Hello World" on the console, and then
+reboots. If you have built the entire OSKit tree, the sample kernels
+will have already been built. If not, go to the examples/x86 directory
+and run GNU make.
+
+The resulting hello binary conforms to the "multiboot" standard, and
+is immediately ready to boot with a multiboot compliant loader such as
+GRUB (www.uruk.org/grub/). You can also use the OSKit's "netboot" loader,
+which can directly load multiboot images across the network. 
+
+Other boot formats supported by the OSKit are Linux, Mach, and BSD (MS-DOS is
+currently broken).  The conversion utilities supplied to convert from
+multiboot format are "mklinuximage", "mkbsdimage", and "mkdosimage." These
+utilities are automatically built and installed with the OSKit, when
+configured for the appropriate host.  Due to the extra difficulty and delicacy
+of building them they are also provided in binary form, in
+ftp://flux.cs.utah.edu/flux/oskit/boot/.  As an example, to convert the
+hello kernel into the format required by the BSD and Mach boot loaders:
+
+	/somepath/install/bin/mkbsdimage hello
+
+Note that by default, the resulting image is placed in a file called
+"Image" in the current directory. This image can then be copied to the
+root partition of your machine, and booted like any other kernel. In
+the case of the hello kernel, it will simply print "Hello World",
+exit, and then reset the machine (after waiting for a key press if
+you're on the VGA console).
+
+---------------------------------------------------------------------------
+
+Netboot:
+
+As an alternative, you can use the OSKit's NetBoot loader to load the
+original multiboot image from across the network. The NetBoot loader is
+contained in the boot/net directory, and will have been built along with
+the rest of the OSKit. NetBoot is a small kernel that provides one
+service: fast (re)booting of other multiboot compliant operating systems
+across the network. There are several requirements for using NetBoot:
+
+1) NetBoot itself must be in one of the accepted boot formats described
+   above in order to load, and it must reside in the root directory of
+   the machine being used to boot kernels.
+
+2) NetBoot requires a BOOTP server to be running on the local network in
+   order to obtain the IP address, gateway address, netmask, and
+   hostname of the host it runs on. If no BOOTP server responds when
+   NetBoot is booted, it will ask to retry or exit.
+
+3) The files that NetBoot fetches and boots must reside in a directory
+   that is NFS exported to the host running NetBoot.
+
+If all of these requirements are satisfied, then you can boot the
+hello kernel across the network as follows:
+
+	Netboot: ipaddr:/somepath/examples/x86/hello
+
+--------------------------------------------------------------------------
+
+BSD Boot Support:
+
+The easiest way to get BSD boot image support (boot/bsd) is to have a
+linker on your path that is configured for both ELF and Mach formats.
+That way, you can build your oskit with ELF tools, but write out an
+I386Mach format adaptor that is suitable for the BSD loader. The best
+approach we found is to take a vanilla binutils 2.9.1, and configure
+it as follows (assuming a FreeBSD 3.0 system):
+
+        /build/src/binutils-2.9.1/configure --prefix=/build/tools
+                --target=i386-mach \
+                --enable-targets=i386-mach,i386-unknown-freebsdelf3.0
+
+Then setenv AOUT_LD to:
+
+        /build/tools/bin/i386-mach-ld -m i386mach
+
+Then configure and build your oskit, which will now include a bsd boot
+adaptor directory, built with ELF tools of course. Then you can take an ELF
+version of netboot (from the same build tree) and run it through a modified
+mkbsdimage, which references a new linker script. This linker script does
+the usual munging of sections and such, so that the output image actually
+works. 
+
+--------------------------------------------------------------------------
+
+More sophisticated examples:
+
+There are numerous example kernels, but we highlight just a few that
+demonstrate more useful functionality. Pointers to the relevant sections
+in the documentation are provided as well.
+
+1) examples/x86/socket_com.c: This is a test program for the TCP/IP
+   stack. It first does two fingers and then waits for incoming date
+   requests. It is written to the Component Object Model (COM)
+   interfaces for the TCP/IP stack. See the "OSKit Networking Framework"
+   and "FreeBSD Networking" sections.
+
+2) examples/x86/socket_bsd.c: Same as previous example, but is written
+   to the oskit libc socket interface. See the "Minimal C Library" and
+   "FreeBSD Networking" sections.
+
+3) examples/x86/blkio.c: This is a program that illustrates the use of
+   the block device drivers. It reads blocks of data from a disk, and
+   optionally writes data to the disk. See the "Block I/O Interface"
+   section. 
+
+4) examples/x86/netbsd_fs_com.c: Illustrate the use of the NetBSD 
+   filesystem code using the COM interfaces. An assortment of operations
+   are performed, including reading and writing files, creating
+   directories, looking up files, linking files, and renaming files. See
+   the "Disk Partition Interpreter", "File Interface," "Directory
+   Interface" and "Open File Interface" sections of the documentation.
+
+5) examples/x86/dphils.c: This program illustrates the use of the POSIX
+   threads package, solving the classic dining philosophers problem
+   using monitors. See the "POSIX Threads" section of the documentation.
+
+-------------------------------------------------------------------------
+
+For known problems see the BUGS file.
+
+-------------------------------------------------------------------------
+
+Cross building:
+
+It's been done at least under HPUX and under our BSD for HP's.
+Should work in general.
+	HPUX:
+		config options: --target=i486-linux --host=hppa1.1-hp-hpux
+		gcc 2.7.2, binutils 2.8.1
+		[ had trouble building libgcc as I recall ]
+	
+--------------------------------------------------------------------------
+
+Version Information:
+
+The following is a list of the versions of software from which
+the OSKit derives large chunks of code:
+
+FreeBSD:	2.1.7.x (networking, glue), 2.2.2 (C and math libs)
+NetBSD:		1.2
+Linux:		2.0.29
+x11:		XFree86 3.3.1
+svgalib:	1.3.0
+Mach:		basically what was our "mach4"
+
+--------------------------------------------------------------------------
+
+Contact Information:
+
+Send comments, suggestions, bugs, and fixes to oskit-users@cs.utah.edu.
+
+For messages just to the Utah developers send to oskit@flux.cs.utah.edu.
+
+To be added to appropriate mailing lists, send mail to:
+  oskit-users-request@cs.utah.edu		(oskit users/hackers)
+  oskit-announce-request@cs.utah.edu		(major announcements only)
+You do not have to be on both lists at once; mail to the announce list
+also goes to the users list (but not vice versa, of course.)
+
+Archives of the mailing lists are available in
+  ftp://flux.cs.utah.edu/flux/oskit/mail/html/index.html	(HTML)
+  ftp://flux.cs.utah.edu/flux/oskit/mail/index.html		(mbox)
+
+
+Have fun!
+
+The Flux Research Group
+Department of Computer Science
+University of Utah
+http://www.cs.utah.edu/projects/flux/

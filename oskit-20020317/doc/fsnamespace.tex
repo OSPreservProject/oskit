@@ -1,0 +1,301 @@
+%
+% Copyright (c) 1997-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% -*- LaTeX -*-
+
+\label{fsnamespace}
+
+\section{Introduction}
+
+The \oskit{} filesystem namespace COM interface provides ``namei'' style
+translation for the application, as well as high level mount and unmount
+capabilities. As noted in Section~\ref{fs}, all name parameters to
+\oskit{} directory methods must be a single component entry in one of the
+specified directories. That is, a name with no ``slashes'' in it. On the
+other hand, the POSIX library interface to the filesystem namespace is in
+terms of multi-component absolute and relative pathnames. In addition,
+since a filesystem namespace may consist of multiple independent
+filesystems in a hierarchy, the ability to compose filesystems into a larger
+namespace is also required. The \oskit{} filesystem namespace COM interface
+bridges this gap between the interfaces by providing pathname translation
+from multi-component names to \oskit{} directory and file objects. Also
+included is symbolic link translation, mount and umount operations, and
+mountpoint traversal.
+
+Both single and multithreaded versions of the fsnamespace component are
+provided. Both of these libraries can be found in the lib directory as
+oskit_fsnamespace.a and oskit_fsnamespace_r.a. While pathname lookup is
+nominally thread safe, it should be noted that changing the root or current
+working directory, or mounting and unmounting filesystems in a multithreaded
+application should be done with extreme caution. Unmounting a
+filesystem while another thread is translating a pathname can lead to very
+odd situations!
+
+A filesystem namespace object is created with the following interface
+function:
+
+\api{oskit_create_fsnamespace}{Create a filesystem namespace object}
+\label{oskit-create-fsnamespace}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_create_fsnamespace(struct oskit_dir *rootdir,
+				struct oskit_dir *cwd,
+				oskit_fsnamespace_t **out_fsnamespace);
+\end{apisyn}
+\begin{apidesc}
+	Create a new fileystem namespace object, with the given root and
+	current working directories. Typically, this routine will be called
+	when the client OS is initialized. Once the root filesystem has
+	been opened, the client OS will call this routine to create a
+	namespace object, specifying the root directory of the root
+	filesystem as the root directory and current working directory of
+	the new namespace. Subsequent pathname translation is then
+	``rooted'' at these locations.
+\end{apidesc}
+\begin{apiparm}
+	\item[rootdir]
+		The \oskit{} oskit_dir of the initial root directory.
+	\item[cwd]
+		The \oskit{} oskit_dir of the initial current working
+		directory. 
+	\item[out_fsnamespace]
+		The {\tt oskit_fsnamespace} COM interface for the new object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+The {\tt oskit_fsnamespace} COM interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{icsymlist}
+\item[chroot]
+	Set the root directory for subsequent absolute path translation.
+\item[chcwd]
+	Set the current working directory for subsequent relative path
+	translation. 
+\item[lookup]
+	Convert a multi component pathname into a file or directory object.
+\item[mount]
+	Mount a filesystem at a given point in the namespace.
+\item[unmount]
+	Unmount a filesystem from the namespace.
+\item[clone]
+	Make a duplicate copy of a filesystem namespace object.
+\end{icsymlist}
+
+
+\api{chroot}{Set the root directory for absolute pathname translation}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_chroot(oskit_fsnamespace_t *f, const~char *name);
+\end{apisyn}
+\begin{apidesc}
+	Set the root directory for subsequent absolute pathname translation
+	(lookup). By default, the root directory is established when the
+	filesystem namespace object is created
+	(\texttt{oskit_create_fsnamespace}), and is typically the root
+	directory of the root filesystem. An application may then change
+	the current root directory so that subsequent translation of
+	pathnames starting with '$\backslash$' start at the new directory. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[name]
+		The pathname of the new root directory.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{chcwd}{Set the current directory for relative pathname translation}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_chcwd(oskit_fsnamespace_t *f, oskit_dir_t *cwd);
+\end{apisyn}
+\begin{apidesc}
+	Set the current working directory for subsequent relative pathname
+	translation (lookup). By default, the current working directory is
+	established when the filesystem namespace object is created
+	(\texttt{oskit_create_fsnamespace}), and is typically the root
+	directory of the root filesystem. An application may then change
+	the current working directory so that subsequent translation of
+	pathnames \emph{not} starting with '$\backslash$', start at the new directory.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[cwd]
+		The directory object of the new current directory.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{lookup}{Translate a multi component path to a directory or file object}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_lookup(oskit_fsnamespace_t *f,
+				const~char *pathname, int flags,
+				\outparam oskit_file_t **out_file);
+\end{apisyn}
+\begin{apidesc}
+	Translate a multi component pathname (ie: one with slashes) into an
+	{\tt oskit_file} COM object. The root and current working
+	directories for the pathname translation are a function of the
+	filesystem namespace object (See the \texttt{chroot} and
+	\texttt{chcwd} interface methods). Pathname lookup is subject to
+	certain \texttt{flags}. They are:
+
+	\begin{icsymlist}
+	\item[FSLOOKUP_FOLLOW] Follow symlinks when translating the final
+	component of a pathname. This is the default operation. Note that
+	when translating symlinks, the ``last'' component refers to
+	whatever the \emph{current} last component is. If the last component
+	is a multi componet symlink, that new path will be followed until
+	its last component. If the new last component is again a symlink,
+	it will be followed (or not followed) according to the same flag. 
+
+	\item[FSLOOKUP_NOFOLLOW] Do not follow symlinks when translating
+	the final component of a pathname. Instead, return the {\tt
+	oskit_file} COM object of the symlink itself. For example, the
+	\texttt{lstat} system call uses this option to that it can operate
+	on the symlink itself, rather than the target of the symlink. 
+
+	\item[FSLOOKUP_PARENT] Instead of returning the {\tt oskit_file}
+	COM object of the translated pathname, return the COM object of the
+	parent directory instead. The translation is subject to the same
+	rules as any other translation; the file in question must exist in
+	order to return its parent.
+	\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[pathname]
+		The pathname to be translated.
+	\item[flags]
+		Flags to modify the translation operation.
+	\item[out_file]
+		The {\tt oskit_file} COM interface for the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{mount}{Mount a filesystem at a given point in the namespace}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_mount(oskit_fsnamespace_t *f,
+			const~char *pathname, oskit_file_t *filesystem);
+\end{apisyn}
+\begin{apidesc}
+	The \texttt{mount} method provides the BSD-like ability to compose
+	a filesystem namespace out of individual filesystems. Since the
+	underlying {\tt oskit_dir} COM object does not support mountpoints,
+	this capability must be provided at a higher level. The mount
+	method requires a valid \texttt{pathname} (which must be a
+	directory) in the current filesystem on which to mount the new
+	\texttt{filesystem}. Subsequent pathname translation that crosses
+	the pathname will instead be redirected into the new filesystem.
+	For example, one could mount a BMOD filesystem (see
+	Section~\ref{bmod-fs}) at an arbitrary point in a regular filesystem
+	with the following code fragment:
+	\begin{codefrag}
+	\begin{verbatim}
+        oskit_fsnamespace_mount(fsn, "/bmod", 
+                                (oskit_file_t *) start_bmod());
+        \end{verbatim}
+	\end{codefrag}
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[pathname]
+		The pathname of the directory to mount over.
+	\item[filesystem]
+		The {\tt oskit_file} COM interface for the mounted subtree.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{unmount}{Unmount a filesystem from the filesystem namespace}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_unmount(oskit_fsnamespace_t *f,
+			const~char pathname);
+\end{apisyn}
+\begin{apidesc}
+	Unmount the filesystem that was previously mounted over
+	\texttt{pathname} with the \texttt{mount} method. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[mountname]
+		The pathname of the directory to unmount.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{clone}{Duplicate a filesystem namespace object}
+\begin{apisyn}
+	\cinclude{oskit/fs/fsnamespace.h}
+
+	\funcproto oskit_error_t
+	oskit_fsnamespace_clone(oskit_fsnamespace_t *f,
+			oskit_fsnamespace_t **out_fsnamespace);
+\end{apisyn}
+\begin{apidesc}
+	Duplicate a filesystem namespace object. A new filesystem namespace
+	object is created, with its own references to the root and current
+	working directory. All other state contained within the namespace
+	object is shared with the parent object. For example, the results
+	of mounting and unmounting filesystem will be seen by both the
+	parent and child objects. The only state that is local to the new
+	object are the root and cwd directories. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The \oskit{} filesysem namespace interface object.
+	\item[out_fsnamespace]
+		The {\tt oskit_fsnamespace} COM interface for the new copy.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}

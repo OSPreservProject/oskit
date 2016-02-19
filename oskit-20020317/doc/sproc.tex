@@ -1,0 +1,424 @@
+%
+% Copyright (c) 2001, 2002 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{sproc}
+
+\section{Introduction}
+
+The Simple Process Library (``sproc'') provides a way to implement simple
+\emph{processes} that run in user mode and which have separate address spaces.
+Multiple threads can run in a single process simultaneously.
+The library also provides a mechanism for defining system calls allowing
+process threads to request privileged services.
+The sproc library uses the NetBSD UVM library (See Section~\ref{netbsd-uvm}
+to implement address spaces.
+Currently the sproc library is only implemented on the x86.
+
+Note that this is only a first attempt at a process library.
+Hopefully, this library will be improved in the future.
+
+\section{Example}
+
+A sample kernel in the \texttt{examples/x86/sproc} directory demonstrates
+the use of the Simple Process Library.  That directory contains a sample
+kernel and sample user programs that run on the kernel.
+
+\section{Requirements}
+
+In order to use the sproc library, the kernel implementor must do the
+following:
+
+\begin{itemize}
+        \item Write system call implementation functions.  See
+        Section~\ref{sproc-syscall} for details about system calls.
+
+        \item Make an array of \texttt{oskit_sproc_sysent} structures.
+        Each element of the array contains information about a single
+        system call.  The index of the array will be the system call
+        number.  This array is used as the system call dispatch table.
+
+        \cstruct{oskit_sproc_sysent}{
+          oskit_sproc_syscall_func    entry; /* pointer to a system call function */
+          int                         nargs; /* \# of args in sizeof(int) */
+        };
+
+        \item Create an \texttt{oskit_sproc_desc} process description
+	structure which is defined as:
+
+\begin{verbatim}
+/* process description */
+struct oskit_sproc_desc {
+    /* maximum number of system call number */
+    int                         sd_nsyscall;
+
+    /* system call table */
+    struct oskit_sproc_sysent   *sd_syscalltab;
+
+    /* trap handler that captures all traps while executing user mode code */
+    int                         (*sd_handler)(struct oskit_sproc_thread *sth,
+                                              int signo, int code,
+                                              struct trap_state *frame);
+};
+\end{verbatim}
+
+        This structure is bound to a \emph{process} to deal with all traps
+        such as system calls, protection or page faults.  This 
+        structure is passed to \texttt{oskit_sproc_create} when
+        creating a process.
+
+        \texttt{sd_syscalltab} is a pointer to the system
+        call dispatch table described above.  The size of the table
+        should be stored in \texttt{sd_nsyscall}.  \texttt{sd_handler}
+        is a pointer to a handler function that is called when a trap
+        is received while executing user mode code.  The parameters
+        passed to the handler are:
+        \begin{description}
+        \item[sth] the context information of the thread that caused
+          the trap.  The \texttt{oskit_sproc_thread} structure is defined
+          as follows:
+
+\begin{verbatim}
+/* kernel thread definition */
+struct oskit_sproc_thread {
+    queue_chain_t                       st_thread_chain;
+    struct oskit_sproc                  *st_process;
+    oskit_addr_t                        st_entry;
+    jmp_buf                             st_context;
+
+    struct oskit_sproc_stack            *st_stack;
+    /* machine dependent part */
+    struct oskit_sproc_machdep          st_machdep;
+};
+\end{verbatim}
+
+        \item[signo] The pseudo signal number such as SIGSEGV.  This is
+        a hint only.
+
+        \item[code] The architecture dependent trap code.  On the x86
+        architecture, this number is a hardware trap number.
+
+        \item[frame] The architecture specific trap frame.
+	See Section~\ref{trap-state}.
+
+        \end{description}          
+
+\end{itemize}
+
+\section{System Calls}
+The library uses the \texttt{int 0x60} instruction for implementing
+system calls on the x86 architecture.  0x60 is defined as
+\texttt{SYSCALL_INT} in $<$oskit/machine/sproc.h$>$.
+
+\subsection{System call implementation}
+\label{sproc-syscall}
+
+System call implementing functions (\emph{Syscall function} for short)
+have a type \texttt{oskit_sproc_syscall_func} defined as follows in
+$<$oskit/sproc.h$>$ .
+
+\begin{quote}
+{\tt typedef int (*\csymbol{oskit_sproc_syscall_func})(struct
+oskit_sproc_thread *sth, void *arg, int rval[2]);}
+\end{quote}
+
+Syscall functions are called from the system call trap handler
+provided by the library.  A system call can either succeed or fail.
+On success, the syscall function must return 0.  On an error, it should
+return a non-zero error number.  Please refer to Section~\ref{sproc-stub} for
+how system call errors are handled.
+
+The passed \texttt{sth} parameter conveys the context information of the thread
+that issued the system call.  The {\tt arg} parameter is a pointer to the first
+of the system call arguments, which were already copied to the kernel memory
+space by the system call trap handler.
+
+The return value from the system call can be either 32 or 64 bits
+wide and is returned using {\tt rval}.  The return value is meaningful only
+when the system call succeeded.  On the x86 architecture, the default
+implementation use \%EAX for rval[0] (and \%EDX for rval[1] if 64bit)
+to return the value.  System call stubs will get the value from these
+registers.
+
+\subsection{System call stub}
+\label{sproc-stub}
+A system call stub is a small function placed in the user program to invoke
+a system call.  Below is what a typical stub function does.
+
+\begin{enumerate}
+\item Sets \%EAX to the system call number.
+
+\item Does \texttt{int 0x60}
+
+\item Checks the carry bit.  The carry bit indicates error status.
+If the carry bit is
+cleared, the call succeeded.
+In this case, the return value is stored in the \%EAX
+register (and \%EDX if the return value is 64 bits wide).  If the carry
+bit is set, the call failed.  The error number is stored in the \%EAX
+register.
+\end{enumerate}
+
+A sample syscall stub
+can be seen in \texttt{examples/x86/sproc/user_syscall.S}.
+
+\section{API reference}
+
+\api{oskit_sproc_init}{Initialize the Simple Process Library}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto void            oskit_sproc_init(void);
+\end{apisyn}
+\begin{apidesc}
+        Initialize the Simple Process Library.  Must be called after
+        the UVM library is initialized.  
+
+        On the x86 architecture, this function initializes the system call
+        trap vector by calling \texttt{gate_init}, setting up two GDTs:
+        USER_CS for a user process's code segment and USER_DS for its data
+        segment.  Also this function installs two hook functions: the UVM
+        library's context switch hook to keep track of the currently
+        executing thread and a signal hook to catch signals generated
+        by the processor.
+\end{apidesc}
+
+\api{oskit_sproc_create}{Create a process}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto oskit_error_t   oskit_sproc_create(
+				   const~struct~oskit_sproc_desc *desc,
+                                   oskit_size_t size,
+                                   \outparam struct~oskit_sproc *outproc);
+\end{apisyn}
+\begin{apidesc}
+        Create a process.  
+        This API creates a virtual address space and binds it to the specified 
+        process description.
+\end{apidesc}
+\begin{apiparm}
+        \item[desc]
+                The process description structure.
+
+        \item[size] 
+                Process size in bytes.  The created process resides at
+                the virtual address [$0x40000000 .. 0x40000000+size-1$].
+
+        \item[outproc]
+                The created process structure.  Note that
+                \texttt{oskit_sproc_create} does not allocate memory
+                for this structure.  The memory for this structure
+                should be allocated by caller in advance.
+
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_sproc_destroy}
+\end{apirel}
+
+\api{oskit_sproc_destroy}{Destroy a process}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto oskit_error_t oskit_sproc_destroy(struct~oskit_sproc *proc);
+\end{apisyn}
+\begin{apidesc}
+        Destroy a process.  The virtual address space bound to the process
+        is discarded.
+\end{apidesc}
+\begin{apiparm}
+        \item[proc]
+          The process to destroy.  
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+
+\api{oskit_sproc_stack_alloc}{Allocate a redzone protected stack}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto oskit_error_t oskit_sproc_stack_alloc(
+					struct~oskit_sproc *sproc, 
+                                        \inoutparam oskit_addr_t *base,
+                                        oskit_size_t size,
+                                        oskit_size_t redzonesize,
+                                        \outparam struct~oskit_sproc_stack *out_stack);
+\end{apisyn}
+\begin{apidesc}
+        Allocate a stack within a process's user address space, 
+        that can be used for \texttt{oskit_sproc_switch} later.
+        Information about the created stack is stored in the
+        \texttt{oskit_sproc_stack} structure.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[sproc]
+                The process in which the stack is allocated.
+
+        \item[base]
+                On entry, the value pointed to by this parameter
+                is the preferred virtual address for the
+                stack start address.  Must be a multiple of the 
+                page size.  This is a hint only and can be specified
+                as zero.  On return, it contains the start address of the
+                stack.
+
+        \item[size]
+                Stack size.  Must be a multiple of the page size.
+
+        \item[redzonesize]
+                Redzone size.  Must be a multiple of the page size (or zero).
+
+        \item[out_stack] 
+                The created stack information.  Note that the memory for
+                this structure must be allocated by the caller in advance.
+
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+        \texttt{oskit_sproc_stack_push}
+\end{apirel}
+
+\api{oskit_sproc_stack_push}{push arguments onto a stack}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto oskit_error_t   oskit_sproc_stack_push(struct~oskit_sproc_stack *stack,
+                                       void *arg, oskit_size_t argsize);
+\end{apisyn}
+\begin{apidesc}
+        Push parameters onto a stack allocated by
+        \texttt{oskit_sproc_stack_alloc}.  This function
+        can be called multiple times to stack more parameters.
+        The stacked parameters will be passed to a user program.
+\end{apidesc}
+\begin{apiparm}
+        \item[stack]
+                The stack structure obtained by \texttt{oskit_sproc_stack_alloc}.
+
+        \item[arg]
+                A pointer to the parameter.
+
+        \item[argsize]
+                The size of the parameter in bytes.
+
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_sproc_stack_alloc}
+\end{apirel}
+
+\api{oskit_sproc_switch}{Switch to user mode}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto void            oskit_sproc_switch(struct~oskit_sproc *proc, oskit_addr_t entry,
+                                   struct~oskit_sproc_stack *stack);
+
+\end{apisyn}
+\begin{apidesc}
+        Switch the calling thread to user mode and let it
+        execute from the specified address \texttt{entry}.  The stack pointer
+        is changed to the specified stack.  Multiple threads can be
+        executed within a single process.  This function does not
+        return until the user mode code executes an \texttt{exit}\-like
+        system call.  Refer to the description of
+        \texttt{OSKIT_SPROC_RETURN} for more information.
+
+        When the thread starts execution in user mode, \%CS is set to
+        USER_CS and \%DS, \%ES are set to USER_DS.  \%FS and \%GS are
+        set to zero.  \%ESP points the first parameter on the stack.
+        The frame pointer (\%EBP) is set to zero.  
+
+
+\end{apidesc}
+\begin{apiparm}
+        \item[proc]
+                The process to be called.
+
+        \item[entry]
+                The entry address of the user's program.
+
+        \item[stack]
+                The stack that will be used for the thread.
+
+\end{apiparm}
+\begin{apirel}
+        {\tt oskit_sproc_stack_alloc}, {\tt oskit_sproc_stack_push}
+        {\tt OSKIT_SPROC_RETURN}
+\end{apirel}
+
+\api{OSKIT_SPROC_RETURN}{Return to the kernel mode}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \begin{verbatim}
+        OSKIT_SPROC_RETURN(struct oskit_sproc_thread *sth, int code)
+        \end{verbatim}
+
+\end{apisyn}
+\begin{apidesc}
+ 
+        This is a macro to be used in an \texttt{exit}-like syscall
+        function to terminate the calling thread run in the user
+        program.  This macro does not return.  This macro returns
+        control to \texttt{oskit_sproc_switch}.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[sth]
+                The context information passed as a parameter from
+                the system call trap handler.
+        \item[code]
+                This parameter is currently not used.
+\end{apiparm}
+
+
+\api{oskit_sproc_load_elf}{Map an ELF executable file}
+\begin{apisyn}
+        \cinclude{oskit/sproc.h}
+
+        \funcproto int      oskit_sproc_load_elf(struct~oskit_sproc *proc, const char *file, 
+                                \outparam exec_info_t *info_out);
+
+\end{apisyn}
+\begin{apidesc}
+ 
+       Map an ELF executable file onto a user's address space.  This
+       function uses the \texttt{exec_load} function internally (See
+       Section~\ref{exec}).  The ELF file's header must indicate an
+       address range for the file within the user space address
+       range.  The file is loaded on demand.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[proc]
+                The process to be mapped.
+        \item[file]
+                The filename of the executable.
+        \item[info_out]
+                The information returned from \texttt{exec_load}.
+\end{apiparm}
+\begin{apiret}
+        Returns the value returned from \texttt{exec_load}.
+\end{apiret}
+

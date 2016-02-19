@@ -1,0 +1,495 @@
+%
+% Copyright (c) 1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{hpfq}
+
+\newcommand{\hpfq}{H-PFQ}
+
+
+\section{Introduction}
+
+This short section outlines the Hierarchical Packet Fair Queuing
+(\hpfq) network link-sharing implementation in the \oskit.
+The actual \hpfq{} algorithm implemented is called H-WF$^2$Q and is
+described in the SIGCOMM96 paper by Bennet and Zhang.
+A working understanding of this paper would be useful in understanding
+the use of this library.
+
+Be aware that this is a first-cut implementation and is not thoroughly
+tested nor tuned.
+
+This library allows the user to hierarchically schedule outgoing
+traffic from different sessions through a single link.
+Each session is guaranteed a percentage of its parent's bandwidth,
+relative to its siblings.
+This is done by creating a scheduling tree where interior nodes
+correspond to one-level PFQ schedulers,
+and leaf nodes corresond to \texttt{oskit_netio} objects for the
+sessions they represent (see Section~\ref{oskit-netio}).
+The root node corresponds to the physical link being shared.
+The definition of \emph{session} is up to the user,
+who controls what is sent to the leaf node \texttt{oskit_netio}'s.
+Typical session types are real-time traffic,
+traffic from different organizations,
+or protocol types.
+Note, however, that this more general issue of \emph{packet classification}
+is not part of this library.
+
+Currently, only one link can be managed at a time,
+because of the \texttt{oskit_pfq_root} global variable.
+This will be fixed in a future version.
+
+
+\section{Configuration}
+
+The \hpfq{} library depends on certain modifications to the \oskit{}
+Linux device driver set (Section~\ref{linux-dev}) that are enabled
+only when the \oskit{} is configured with the \texttt{--enable-hpfq}
+configure option.
+This configure option enables \hpfq{}-specific code in the Linux
+driver set.
+
+This library will \emph{not} work correctly with an improperly
+configured Linux driver set.
+Similarly, a Linux driver set configured with \texttt{--enable-hpfq}
+will only work correctly for non-\hpfq{} applications if
+\texttt{oskit_pfq_root} is \texttt{NULL}.
+
+
+\section{Usage}
+\label{hpfq-usage}
+
+The basic procedure of using this library is to first create a
+scheduling hierarchy according to the user's needs,
+and then to retrieve the \texttt{oskit_netio}'s from the leaf nodes
+for use by the various sessions.
+The sessions can then send on these \texttt{oskit_netio}'s and the
+data will flow to the root according to the policies and allocations
+in place.
+
+There are no restrictions on the format of the data sent
+to the leaf \texttt{oskit_netio}'s,
+but it must be what the \texttt{oskit_netio} corresponding to the root
+expects.
+In the common case of \texttt{oskit_netio}'s created by the Linux
+driver library,
+this data will simply be Ethernet frames.
+
+The creation of the hierarchy is done by first creating a root node
+and setting the global variables \texttt{oskit_pfq_root} 
+and \texttt{oskit_pfq_reset_path} appropriately
+(see Section~\ref{hpfq-api}).
+Then various intermediate and/or leaf nodes are created and attached
+to the root with appropriate share values.
+This process is then repeated as needed for the children of any
+intermediate nodes.
+
+In this library, share values are floating point numbers that represent
+a percentage of the parent's bandwidth allocated to the child.
+For example, a child with share value 0.45 is guaranteed 45\% of the
+parent's bandwidth when the child has data to send,
+assuming the parent has not over-subscribed its bandwidth.
+
+On a given level of the hierarchy,
+only the relative differences between share values is important,
+however for simplicity it is recommended that share values on a given
+level add up to 1.
+
+A more subtle implication of this relative-differences fact,
+is that parents can over-subscribe their bandwidth to their children.
+More specifically, there is no guarantee that a session with a share value of,
+say 50\%
+will actually receive that amount of the parent's bandwidth.
+To see this, consider the case of an intermediate node with two children,
+each allocated 50\% of the bandwidth.
+Another child may be added with a share value of 50\%,
+but it will in reality only receive 33\%.
+This is more generally termed a problem of \emph{admission control},
+and is not currently dealt with in this library.
+
+
+\section{API reference}
+\label{hpfq-api}
+
+The following sections describe the functions exported by the \hpfq{}
+library in detail.
+All of these functions, as well as the types necessary to use them,
+are declared in the header file \texttt{<oskit/hpfq.h>}.
+
+This API reference is split into two parts.
+The first part describes the external requirements for the library and the
+actual functions exported,
+which are basically constructors for \texttt{pfq_sched} and
+\texttt{pfq_leaf} objects.
+The second part describes the \texttt{pfq_sched} and
+\texttt{pfq_leaf} COM interfaces.
+
+
+\section{External Requirements and Constructors}
+
+This section describes the external requirements of the library
+and the actual functions exported,
+which consist of ``constructor'' functions to create \texttt{pfq_sched} and
+\texttt{pfq_leaf} COM objects.
+
+
+%%%=====================================================================
+\api{oskit_pfq_root}{the root node scheduler}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\texttt{extern pfq_sched_t *\csymbol{oskit_pfq_root};}
+\end{apisyn}
+\begin{apidesc}
+	This variable is not directly used by the \hpfq{} library but
+	is used to communicate between the Linux driver set and the
+	program using the \hpfq{} library.
+
+	The client of the \hpfq{} library is responsible for setting
+	this variable to point to the root node of its scheduling
+	hierarchy before any sessions attempt to send to their
+	respective leaf \texttt{oskit_netio} objects.
+
+	If this variable is set to the \texttt{NULL} value,
+	then the Linux driver library will not call back to the
+	\hpfq{} code and thus will behave like a Linux driver set not
+	configured for \hpfq{}.
+
+	Note that this implies that only one link can be managed at a time.
+	This will be fixed in a future version.
+\end{apidesc}
+
+\api{oskit_pfq_reset_path}{pointer to the \texttt{reset_path} function}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\texttt{extern void (*\csymbol{oskit_pfq_reset_path})(pfq_sched_t *);}
+\end{apisyn}
+\begin{apidesc}
+	This variable is not directly used by the \hpfq{} library but
+	is used to communicate between the Linux driver set and the
+	program using the \hpfq{} library.
+
+	The client of the \hpfq{} library is responsible for setting
+	this variable to point to the \texttt{pfq_reset_path} function
+	before any sessions attempt to send to their
+	respective leaf \texttt{oskit_netio} objects.
+\end{apidesc}
+
+
+%% Basic functions for creating nodes and leaves in the scheduling hierarchy.
+
+%%%=====================================================================
+\api{pfq_sff_create_root}{create a root node implementing SFF}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_sff_create_root(oskit_netio_t *link,
+				pfq_sched_t **out_sched);
+\end{apisyn}
+\begin{apidesc}
+	Creates a root PFQ node implementing the Smallest Finish time
+	First (SFF) scheduling policy.
+\end{apidesc}
+\begin{apiparm}
+	\item[link]
+		The link that the scheduling tree intends to manage.
+	\item[out_sched]
+		A pointer to the \texttt{pfq_sched} object representing
+		the root of the hierarchy.
+
+		This can be then used with future \texttt{pfq_sched}
+		methods to add children, etc.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_ssf_create_root}{create a root node implementing SSF}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_ssf_create_root(oskit_netio_t *link,
+				pfq_sched_t **out_sched);
+\end{apisyn}
+\begin{apidesc}
+	Creates a root PFQ node implementing the Smallest Start time
+	First (SSF) scheduling policy.
+\end{apidesc}
+\begin{apiparm}
+	\item[link]
+		The link that the scheduling tree intends to manage.
+	\item[out_sched]
+		A pointer to the \texttt{pfq_sched} object representing
+		the root of the hierarchy.
+
+		This can be then used with future \texttt{pfq_sched}
+		methods to add children, etc.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_sff_create}{create an intermediate node implementing SFF}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_sff_create(pfq_sched_t **out_sched);
+\end{apisyn}
+\begin{apidesc}
+	Creates an intermediate PFQ node implementing the Smallest Finish
+	time First (SFF) scheduling policy.
+\end{apidesc}
+\begin{apiparm}
+	\item[out_sched]
+		A pointer to the \texttt{pfq_sched} object representing
+		the the created intermediate node.
+
+		This can be then used with future \texttt{pfq_sched}
+		methods to add children, etc.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_ssf_create}{create an intermediate node implementing SSF}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_ssf_create(pfq_sched_t **out_sched);
+\end{apisyn}
+\begin{apidesc}
+	Creates an intermediate PFQ node implementing the Smallest Start
+	time First (SSF) scheduling policy.
+\end{apidesc}
+\begin{apiparm}
+	\item[out_sched]
+		A pointer to the \texttt{pfq_sched} object representing
+		the the created intermediate node.
+
+		This can be then used with future \texttt{pfq_sched}
+		methods to add children, etc.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_leaf_create}{create a leaf node}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_leaf_create(pfq_leaf_t **out_leaf);
+\end{apisyn}
+\begin{apidesc}
+	Create a leaf PFQ node.
+
+	The \texttt{oskit_netio} that can be used by the session
+	corresponding to this leaf can be retreived by calling
+	\texttt{pfq_leaf_get_netio}, described elsewhere in this document.
+\end{apidesc}
+\begin{apiparm}
+	\item[out_leaf]
+		A pointer to the \texttt{pfq_leaf} object representing
+		the the created intermediate node.
+
+		This can be then used with future \texttt{pfq_leaf}
+		methods to set the share value, etc.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{pfq_sched}{Interface to PFQ Schedulers}
+
+This section describes the \texttt{pfq_sched} COM interface to PFQ
+scheduler objects.
+Note that the \texttt{child} parameter to these methods is declared
+as a \texttt{pfq_sched}.
+However, \texttt{pfq_leaf} inherits from \texttt{pfq_sched} and thus
+may be used as a \texttt{child} parameter when suitably cast.
+
+The \texttt{pfq_sched} interface inherits from \texttt{IUnknown} and
+has the following additional methods:
+\begin{icsymlist}
+	\item[add_child]	Add a child to this node
+	\item[remove_child]	Remove a child from this node
+	\item[set_share]	Set the bandwidth share given to this node
+\end{icsymlist}
+
+%%%=====================================================================
+\api{pfq_sched_add_child}{add a child to a root or intermediate node}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_sched_add_child(pfq_sched_t *sched,
+				pfq_sched_t *child,
+				float share);
+\end{apisyn}
+\begin{apidesc}
+	This method attaches a child \texttt{pfq_sched} object to a
+	parent and assigns it an initial share of the parent.
+	The share can be later adjusted with the \texttt{set_share}
+	method if needed.
+\end{apidesc}
+\begin{apiparm}
+	\item[sched]
+		The parent \texttt{pfq_sched} object.
+	\item[child]
+		The child being added.
+	\item[share]
+		The initial share value of the child.  See
+		Section~\ref{hpfq-usage} for details on share values.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_sched_remove_child}{remove a child from a root or intermediate node}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_sched_remove_child(pfq_sched_t *sched,
+				pfq_sched_t *child);
+\end{apisyn}
+\begin{apidesc}
+	This method removes a child from a parent \texttt{pfq_sched} object.
+\end{apidesc}
+\begin{apiparm}
+	\item[sched]
+		The parent \texttt{pfq_sched} object losing a child.
+	\item[child]
+		The child to be orphaned.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_sched_set_share}{allocate a percentage of the parent's bandwidth}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_sched_set_share(pfq_sched_t *sched,
+				pfq_sched_t *child,
+				float share);
+\end{apisyn}
+\begin{apidesc}
+	This method adjusts the share value of a \texttt{pfq_sched} object.
+	See Section~\ref{hpfq-usage} for details on share values.
+\end{apidesc}
+\begin{apiparm}
+	\item[sched]
+		The parent \texttt{pfq_sched} object.
+	\item[child]
+		The child getting their share adjusted.
+	\item[share]
+		The new share value of the child.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{pfq_leaf}{Interface to PFQ Leaf Nodes}
+
+This section describes the \texttt{pfq_leaf} COM interface to PFQ
+leaf objects.
+
+The \texttt{pfq_leaf} interface inherits from \texttt{pfq_sched} and
+the following additional method:
+\begin{icsymlist}
+	\item[get_netio]
+		Get the \texttt{oskit_netio} corresponding to this leaf
+\end{icsymlist}
+
+Note that since \texttt{pfq_leaf} inherits from \texttt{pfq_sched},
+it may be used in place of a \texttt{pfq_sched} object when suitably cast.
+
+%%%=====================================================================
+\api{pfq_leaf_add_child}{add a child to a root or intermediate node}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_leaf_add_child(pfq_leaf_t *sched,
+				pfq_sched_t *child,
+				float share);
+\end{apisyn}
+\begin{apidesc}
+	This does not make sense for leaf nodes and is thus not implemented.
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}
+
+%%%=====================================================================
+\api{pfq_leaf_remove_child}{remove a child from a root or intermediate node}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_leaf_remove_child(pfq_leaf_t *sched,
+				pfq_sched_t *child);
+\end{apisyn}
+\begin{apidesc}
+	This does not make sense for leaf nodes and is thus not implemented.
+\end{apidesc}
+
+%%%=====================================================================
+\api{pfq_leaf_set_share}{allocate a percentage of the parent's bandwidth}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_leaf_set_share(pfq_leaf_t *sched,
+				pfq_sched_t *child,
+				float share);
+\end{apisyn}
+\begin{apidesc}
+	This does not make sense for leaf nodes and is thus not implemented.
+\end{apidesc}
+
+%%%=====================================================================
+\api{pfq_leaf_get_netio}{get the \texttt{oskit_netio} corresonding to this leaf}
+\begin{apisyn}
+	\cinclude{oskit/hpfq.h}
+
+	\funcproto oskit_error_t pfq_leaf_get_netio(pfq_leaf_t *leaf,
+				oskit_netio_t **out_netio);
+\end{apisyn}
+\begin{apidesc}
+	Retrieves a pointer to an \texttt{oskit_netio} that can be
+	used to send data by the session corresponding to this leaf.
+\end{apidesc}
+\begin{apiparm}
+	\item[leaf]
+		The leaf who's \texttt{oskit_netio} is of interest.
+	\item[out_netio]
+		A pointer to the \texttt{oskit_netio} object that can
+		be used to send data by the session corresponding to
+		this leaf.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	\texttt{<oskit/error.h>}, on error.
+\end{apiret}

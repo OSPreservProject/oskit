@@ -1,0 +1,42 @@
+/*
+ * Run this file through cpp and sh to produce a list of drivers in
+ * a form suitable for using in configure.in macros.
+ * What you get is a bunch of:
+
+DRIVER([set],[class],[name],[description],[vendor],[authors],[filename],[init_func])
+
+ * The []s are used to quote the strings, as is canonical in configure.in.
+ * The "set" is e.g. linux or freebsd (i.e. you are using -loskit_<set>_dev).
+ * The "class" is e.g. scsi or ethernet or isa.
+ * The "name" is the common short name (all lowercase).
+ * The "description" is the human-readable string.
+ * Some sets will have an empty "filename" (drop this?).
+ * The "init_func" is the function of no args called to register the driver.
+ */
+
+ac_macro=${1-DRIVER}
+
+#define NULL
+
+#define linux_driver(class,name,description,vendor,author,filename) \
+echo ${ac_macro}"([linux],["## #class ##"],["## #name ##"],["##description##"],["##vendor##"],["##author##"],["##filename##"],["##oskit_linux_init_##class##_##name##"])"
+
+/* XXX special case */
+echo "${ac_macro}([linux],[],[ide],[IDE controller],[Generic],[Linus Torvalds & others],[ide],[oskit_linux_init_ide])"
+
+#define driver(name, description, vendor, author, filename, template) \
+    linux_driver(scsi,name,description,vendor,author,filename)
+#include <oskit/dev/linux_scsi.h>
+#undef	driver
+
+#define driver(name, description, vendor, author, filename, template) \
+    linux_driver(ethernet,name,description,vendor,author,filename)
+#include <oskit/dev/linux_ethernet.h>
+#undef	driver
+
+#define driver(name,major, count, description, vendor, author) \
+echo ${ac_macro}"([freebsd],[isa],["## #name ##"],["##description##"],["##vendor##"],["##author##"],[],["oskit_freebsd_init_isa_##name##"])"
+#define instance(drivername, port, irq, drq, maddr, msize)
+#include <oskit/dev/freebsd_isa.h>
+#undef	driver
+#undef	instance

@@ -1,0 +1,59 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+# FLASK
+
+#
+# Security contexts for network entities
+# If no context is specified, then a default initial SID is used.
+#
+
+#
+# Port numbers (default = initial SID 'port')
+# 
+# protocol number context
+# protocol low-high context
+#
+tcp 21 nobody:system_r:ftp_t:u
+tcp 23 nobody:system_r:telnet_t:u
+tcp 25 nobody:system_r:smtp_t:u
+tcp 26-36 nobody:user_r:user_t:u
+tcp 8080  nobody:user_r:http_t:u
+
+
+# Network interfaces (default = initial SID 'netif' and 'netmsg')
+#
+# interface netif_context default_msg_context
+#
+lo nobody:system_r:netif_lo_t:u nobody:system_r:netmsg_lo_t:u
+eth0 nobody:system_r:netif_eth0_t:u nobody:system_r:netmsg_eth0_t:u
+eth1 nobody:system_r:netif_eth1_t:u nobody:system_r:netmsg_eth1_t:u
+
+
+# Nodes (default = initial SID 'node')
+#
+# address mask context
+#
+# The first matching entry is used.
+#
+127.0.0.1 255.255.255.255 nobody:system_r:node_lo_t:u
+144.51.25.0 255.255.255.0 nobody:system_r:node_internal_t:u
+144.51.3.0 255.255.255.0 nobody:system_r:node_tycho_t:u
+144.51.0.0 255.255.0.0   nobody:system_r:node_t:u
+
+# FLASK

@@ -1,0 +1,438 @@
+#
+# Copyright (c) 1995-2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#
+# Note: applications that use the Linux dev library need to link
+# in dummy.o to make sure that mem_lock from libkern gets linked in
+# rather than the one from libc.
+# This is because Linux interrupt handlers allocate memory.
+# If you don't do this, you will experience random LMM trashing
+# and other Strange memory bugs.
+#
+
+ifndef _oskit_examples_x86_makerules_
+_oskit_examples_x86_makerules__ = yes
+
+TARGETS = hello multiboot timer timer_com timer_com2 stream_netio \
+	spf uspf pingreply diskpart diskpart2 blkio tty netbsd_fs_com \
+	netbsd_fs_posix fsread socket_com socket_com2 mouse memtest \
+        memfs_com memfstest1 perfmon anno_test
+
+all: $(TARGETS)
+
+prepare::
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/x86 \
+		$(OSKIT_SRCDIR)/examples/x86/more \
+		$(OSKIT_SRCDIR)/examples/x86/shared
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/c	\
+		$(OSKIT_SRCDIR)/examples/x86/shared
+CLEAN_FILES +=	$(TARGETS) *.gdb
+OSKIT_CFLAGS += -DOSKIT
+
+#
+# The C library is made up of several pieces. The core library, the
+# POSIX interface that converts syscalls to COM, and the actual COM 
+# interfaces. Note that the C library is built with the COM library.
+#
+CLIB   = -loskit_c
+CLIB_P = -loskit_c_p -loskit_gprof -loskit_c_p -loskit_kern_p
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+hello: $(OBJDIR)/lib/multiboot.o hello.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+hello_p: $(OBJDIR)/lib/multiboot.o hello.po $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos_p -loskit_startup_p -loskit_memfs_p \
+		-loskit_fsnamespace \
+		-loskit_realtime_p  -loskit_kern_p -loskit_lmm_p \
+		$(CLIB_P) $(OBJDIR)/lib/crtn.o
+
+# XXX requires -lgcc for long long ops
+LIBGCC := `$(CC) --print-libgcc-file-name`
+memtest: $(OBJDIR)/lib/multiboot.o tiny_stack.o direct_console.o memtest.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_kern -loskit_lmm \
+		$(CLIB) $(LIBGCC) $(OBJDIR)/lib/crtn.o
+
+timer_com2: $(OBJDIR)/lib/multiboot.o timer_com2.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) \
+		$(OBJDIR)/lib/crtn.o
+
+timer_com: $(OBJDIR)/lib/multiboot.o timer_com.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+timer: $(OBJDIR)/lib/multiboot.o timer.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+multiboot: $(OBJDIR)/lib/multiboot.o multiboot.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+socket_com2: $(OBJDIR)/lib/multiboot.o socket_com2.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+bufio_stream_recv: $(OBJDIR)/lib/multiboot.o \
+	bufio_stream_recv.o bootp.o dummy.o doprnt-float.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_clientos -loskit_bootp \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+bufio_stream_send: $(OBJDIR)/lib/multiboot.o \
+	bufio_stream_send.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_clientos -loskit_bootp \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+socket_com: $(OBJDIR)/lib/multiboot.o socket_com.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_clientos -loskit_bootp \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+stream_netio: $(OBJDIR)/lib/multiboot.o stream_netio.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+spf: $(OBJDIR)/lib/multiboot.o spf.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+dpf_com: $(OBJDIR)/lib/multiboot.o dpf_com.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm -loskit_dpf_dpf \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+
+uspf: $(OBJDIR)/lib/multiboot.o uspf.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+pingreply: $(OBJDIR)/lib/multiboot.o pingreply.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		-loskit_memdebug \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+pingreply_p: $(OBJDIR)/lib/multiboot.o pingreply.po bootp.po dummy.po \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup_p -loskit_clientos_p -loskit_memfs \
+		-loskit_bootp_p -loskit_fsnamespace \
+		-loskit_linux_dev_p -loskit_realtime_p -loskit_kern_p \
+		-loskit_lmm_p \
+		$(CLIB_P) $(OBJDIR)/lib/crtn.o
+
+pd_ex:	$(OBJDIR)/lib/multiboot.o pd_ex.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		-loskit_memdebug -loskit_dpf_dpf \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+diskpart: $(OBJDIR)/lib/multiboot.o diskpart.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_dev -loskit_diskpart	\
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+diskpart2: $(OBJDIR)/lib/multiboot.o diskpart2.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_dev -loskit_diskpart	\
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+blkio: $(OBJDIR)/lib/multiboot.o blkio.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+blkio_p: $(OBJDIR)/lib/multiboot.o blkio.po $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup_p -loskit_clientos_p -loskit_memfs \
+		-loskit_fsnamespace \
+		-loskit_linux_dev_p -loskit_realtime_p -loskit_kern_p \
+		-loskit_lmm_p \
+		$(CLIB_P) $(OBJDIR)/lib/crtn.o
+
+tty: $(OBJDIR)/lib/multiboot.o tty.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos        \
+		-loskit_freebsd_dev -loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+netbsd_fs_com: $(OBJDIR)/lib/multiboot.o netbsd_fs_com.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_netbsd_fs -loskit_linux_dev -loskit_dev  \
+		-loskit_diskpart -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+memfs_com: $(OBJDIR)/lib/multiboot.o memfs_com.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_memfs -loskit_dev  \
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+memfstest1: $(OBJDIR)/lib/multiboot.o memfstest1.o osenv_memdebug.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup \
+		-loskit_clientos -loskit_kern -loskit_lmm -loskit_memfs \
+		-loskit_dev \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+anno_test: $(OBJDIR)/lib/multiboot.o anno_test.o anno_asm.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+mouse: $(OBJDIR)/lib/multiboot.o mouse.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_unsupp \
+		-loskit_freebsd_dev -loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+linux_fs_com: $(OBJDIR)/lib/multiboot.o linux_fs_com.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_linux_fs -loskit_dev \
+		-loskit_diskpart -loskit_kern -loskit_memdebug -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+fsread: $(OBJDIR)/lib/multiboot.o fsread.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_dev -loskit_fsread -loskit_diskpart\
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+netbsd_fs_posix: $(OBJDIR)/lib/multiboot.o netbsd_fs_posix.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_netbsd_fs -loskit_linux_dev -loskit_dev  \
+		-loskit_diskpart -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+# Note that this uses freebsd_c but could use $(CLIB)
+# FREELIB = -loskit_freebsd_c -loskit_com -loskit_freebsd_c
+FREELIB = -loskit_c
+cat: $(OBJDIR)/lib/multiboot.o cat.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_netbsd_fs -loskit_linux_dev -loskit_dev  \
+		-loskit_diskpart -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+# Note that this uses freebsd_c but could use $(CLIB)
+# FREELIB = -loskit_freebsd_c -loskit_com -loskit_freebsd_c
+FREELIB = -loskit_c
+memfs_cat: $(OBJDIR)/lib/multiboot.o cat.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_memfs -loskit_dev  \
+		-loskit_kern -loskit_lmm \
+		$(FREELIB) $(OBJDIR)/lib/crtn.o
+
+httpd: $(OBJDIR)/lib/multiboot.o httpd_wrap.o micro_httpd.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+                -loskit_fsnamespace -loskit_memfs \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(FREELIB) $(OBJDIR)/lib/crtn.o
+
+FREELIB = -loskit_freebsd_c -loskit_com -loskit_freebsd_c
+nettest: $(OBJDIR)/lib/multiboot.o nettest.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+                -loskit_fsnamespace -loskit_memfs \
+		-loskit_freebsd_net \
+		-loskit_com \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(FREELIB) $(OBJDIR)/lib/crtn.o
+
+memfs_fs_posix: $(OBJDIR)/lib/multiboot.o memfs_fs_posix.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_memfs -loskit_dev  \
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+fudp: $(OBJDIR)/lib/multiboot.o fudp.o dummy.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_clientos -loskit_linux_dev -loskit_fudp -loskit_dev \
+		-loskit_kern -loskit_memdebug -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+fudp_recv: $(OSKIT_SRCDIR)/examples/x86/fudp_recv.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Building build-host program $@"
+	cc -Wall -W -o $@ $^
+
+hpfq_udp: $(OBJDIR)/lib/multiboot.o hpfq_udp.o dummy.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_hpfq -loskit_fudp -loskit_dev \
+		-loskit_kern -loskit_memdebug -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+hpfq_udp_tally: $(OSKIT_SRCDIR)/examples/x86/hpfq_udp_tally.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Building build-host program $@"
+	cc -Wall -W -o $@ $^
+
+perfmon: $(OBJDIR)/lib/multiboot.o perfmon.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+endif

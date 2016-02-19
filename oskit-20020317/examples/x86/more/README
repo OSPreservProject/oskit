@@ -1,0 +1,9 @@
+
+Directories: oskit/examples/x86/more
+Targets: Lots
+Documentation: See the headers of each .c
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	More example kernels.  They are down here because they
+	are the more esoteric of the example kernels.  The ones
+	in .. demonstrate more basic functionality of the oskit.

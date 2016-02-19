@@ -1,0 +1,9 @@
+
+Directories: oskit/lmm
+Target: liboskit_lmm.a
+Documentation: doc/lmm.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	The List Memory Manager, provides a simple, but
+	very generic memory management service, below the
+	level of POSIX malloc().

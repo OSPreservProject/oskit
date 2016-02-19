@@ -1,0 +1,220 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+# Define sensitivities 
+#
+# Each sensitivity has a name and zero or more aliases.
+
+sensitivity unclassified alias u;
+sensitivity confidential alias c;
+sensitivity secret alias s;
+sensitivity top_secret alias ts;
+
+# Define the ordering of the sensitivity levels (least to greatest)
+dominance { u c s ts }
+
+# Define the categories
+#
+# Each category has a name and zero or more aliases.
+#
+
+category nocon;
+category noforn;
+category nato;
+category usuk;
+
+# Identify which categories may be associated with which sensitivities
+#
+# Each MLS level specifies a sensitivity and zero or more categories which may
+# be associated with that sensitivity.
+
+level u; 
+level c;
+level s:nocon, noforn;
+level ts:nocon, noforn, nato, usuk;
+
+#
+# Map each permission to a set of MLS base permissions.
+#
+
+common file
+{
+	read		:	read
+	write		:	write
+	create		:	write
+	getattr		:	read
+	setattr		:	write
+	lock		:	write
+	relabelfrom	:	{ read write }
+	relabelto	:	write
+	transition	:	write
+	append		:	write
+	access		:	read
+	unlink		:	write
+	link		:	write
+	rename		:	write
+	execute		:	read
+}
+
+common socket
+{
+	read		:	read
+	write		:	write
+	create		:	write
+	getattr		:	read
+	setattr		:	write
+	lock		:	write
+	relabelfrom	:	{ read write }
+	relabelto	:	write
+	transition	:	write
+	bind		:	write
+	connect		:	write
+	getopt		:	read
+	setopt		:	write
+	shutdown	:	write
+	recvfrom	:	readby
+	sendto		:	writeby
+	recv_msg	:	readby
+	send_msg	:	writeby
+	name_bind	:	{ readby writeby }
+}	
+
+class filesystem
+{
+	mount		:	none
+	remount		:	none
+	unmount		:	none
+	getattr		:	none
+	relabelfrom	:	none
+	relabelto	:	none
+	transition	:	none
+	associate	:	{ readby writeby }
+}
+
+class dir
+{
+	add_name	:	write	
+	remove_name	:	write
+	reparent	:	write
+	search		:	read
+	rmdir		:	{ read write }
+	mounton		:	{ read write }
+	mountassociate	:	{ read write }
+}
+
+class file
+class lnk_file
+class chr_file
+class blk_file
+class sock_file
+class fifo_file
+class pipe
+
+class fd
+{
+	create		:	write
+	getattr		:	read
+	setattr		:	write
+	inherit		: 	read
+	receive		:	read
+}
+
+class socket
+
+class tcp_socket
+{
+	connectto 	:	{ read write }
+	listen		:	write
+	accept		:	read
+	newconn 	:	{ readby writeby }
+        acceptfrom 	:	{ readby writeby }
+}
+
+class udp_socket
+class rawip_socket
+
+class node 
+{
+	tcp_recv 	:	readby
+	tcp_send	:	writeby
+	udp_recv 	:	readby
+	udp_send	:	writeby
+	rawip_recv	:	readby
+	rawip_send	:	writeby
+	enforce_dest	:	none
+}
+
+class netif
+{
+	getattr		:	read
+	setattr		:	write
+	tcp_recv 	:	readby
+	tcp_send	:	writeby
+	udp_recv 	:	readby
+	udp_send	:	writeby
+	rawip_recv 	:	readby
+	rawip_send	:	writeby
+}
+
+class netlink_socket
+class packet_socket
+class unix_dgram_socket
+
+class unix_stream_socket
+{
+	connectto 	:	{ read write }
+	listen		:	write
+	accept		:	read
+	newconn 	:	{ readby writeby }
+        acceptfrom 	:	{ readby writeby }
+}
+
+
+class process
+{
+	execute		: 	read
+	fork		:	none
+	transition	:	write
+	sigkill		:	write
+	sigstop		:	write
+	signal		:	write
+	chroot		:	none
+	setid		:	none
+
+}
+
+class security
+{
+	compute_av		:	none
+	notify_perm		:	none
+	transition_sid		:	none
+	member_sid		:	none
+	sid_to_context		:	none
+	context_to_sid		:	none
+	load_policy		:	none
+	register_avc		:	none
+}
+
+class system
+{
+	reboot			: 	none
+	net_io_control		:	none
+	route_control		:	none
+	arp_control		: 	none
+	rarp_control		: 	none
+}

@@ -1,0 +1,98 @@
+%
+% Copyright (c) 1997-1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{netbsd-fs}
+
+The NetBSD filesystem library consists of the NetBSD filesystem code
+and a collection of glue code which encapsulates the NetBSD
+code within the \oskit{} filesystem framework.
+
+The NetBSD filesystem library provides two additional interfaces:
+\begin{csymlist}
+\item[fs_netbsd_init]
+	Initialize the NetBSD fs library.
+\item[fs_netbsd_mount]
+	Mount a filesystem via the NetBSD fs library
+\end{csymlist}
+
+\api{fs_netbsd_init}{Initialize the NetBSD fs library}
+\begin{apisyn}
+	\cinclude{oskit/fs/netbsd.h}
+
+	\funcproto oskit_error_t
+		   fs_netbsd_init(void);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This function initializes the NetBSD fs library,
+	and must be invoked prior to the first
+	call to {\tt fs_netbsd_mount}.  This function only
+	needs to be invoked once by the client
+	operating system.
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{fs_netbsd_mount}{Mount a filesystem via the Netbsd fs library}
+\begin{apisyn}
+	\cinclude{oskit/fs/netbsd.h}
+
+	\funcproto oskit_error_t fs_netbsd_mount(oskit_blkio_t *bio,
+						 oskit_u32_t flags,
+						 oskit_filesystem_t **out_fs);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+        This function mounts a FFS filesystem from the partition
+	described by \texttt{bio},
+        and returns a handle to an \texttt{oskit_filesystem_t} for
+        this filesystem.
+
+	This function may be used multiple times by a client
+	operating system to mount multiple file systems.
+
+	Note that this function does not graft the filesystem
+	into a namespace;  {\tt oskit_dir_reparent} or other layers
+	may be used for that purpose.
+
+	Typically, this interface is not exported to clients,
+	and is only used by the client operating system
+	during initialization.
+\end{apidesc}
+\begin{apiparm}
+        \item[bio]
+              Describes the partition containing a filesytem.
+              Can be the whole disk like that returned from
+              \texttt{oskit_linux_block_open},
+              or a subset of one like what is given by
+              \texttt{diskpart_blkio_lookup_bsd_string}.
+
+        \item[flags]
+              The mount flags.
+              These are formed by or'ing the following values:
+              \begin{description}
+                \item[OSKIT_FS_RDONLY] Read only filesystem
+                \item[OSKIT_FS_NOEXEC] Can't exec from filesystem
+                \item[OSKIT_FS_NOSUID] Don't honor setuid bits on fs
+                \item[OSKIT_FS_NODEV]  Don't interpret special files
+              \end{description}
+
+        \item[out_fs]
+              Upon success, is set to point to an \texttt{oskit_filesystem_t}
+              for this filesystem.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}

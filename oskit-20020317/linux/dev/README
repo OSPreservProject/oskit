@@ -1,0 +1,145 @@
+
+Directories: oskit/linux/dev
+Target: liboskit_linux_dev.a
+Documentation: doc/linuxdev.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Linux v2.2.12, Linux Project
+Description:  
+	This directory contains glue code for using
+	the Linux v2.2.12 device driver set under the 
+	OSKit Device Framework.
+
+
+CAVEAT:
+This file was correct as of 11/98 when the Linux 2.0.29 drivers were
+part of the OSKit.  When the drivers were upgraded to Linux 2.2.12
+in 11/99, this file was not updated.
+
+
+Device Drivers Tested:
+======================
+Please send us working/broken feedback for untested drivers,
+and any results that don't agree with these.
+
+device name		driver name	bus	tested configuration
+===========		===========	===	====================
+3COM EtherLink II	3c503		ISA	BNC, pingreply
+3Com Fast EtherLink	3c59x		EISA	100BT, pingreply
+HP Lan+			hp-plus		ISA	BNC, (P-IO) pingreply
+HP Lan+			hp-plus		ISA	BNC, (Mem-mapped) netboot
+NE2000			ne		ISA	BNC, pingreply
+SMC EtherPower 10/100	tulip		PCI	10BT & 100BT, pingreply
+SMC EtherPower 10/combo	tulip		PCI
+	# may need to change #define in driver for 100BT or alternate media
+SMC Ultra		smc-ultra	ISA	BNC, pingreply
+PCNet32/PCI		lance(32)	PCI	netboot
+Intel Pro/100B		eepro100	PCI	[grabbed Donald Becker's driver]
+
+
+Adaptec 1542		aha1542		ISA	1SD, blkio
+Adaptec 2742T		aic7xxx		EISA	1SD, blkio
+Adaptec 2940UW/7880	aic7xxx		PCI	1SD, blkio
+BusLogic 74xC		buslogic	EISA	1SD, blkio
+IDE Disk		ide		N/A	1,2WD, blkio, triton & non
+NCR825			ncr53c8xx	PCI	1SD, blkio
+NCR825			53c7,8xx	PCI	1SD, blkio
+Adaptec 1522		aha152x		ISA	1SD, blkio
+IDE CDROM		ide-cd		N/A
+AM53C974		am53c974	PCI	1SD, R/O test
+
+AT1500			lance		ISA
+SMC EtherPower 10/100	de4x5		PCI
+SMC EtherPower 10	de4x5		PCI
+NCR860			ncr53c8xx
+NCR860			53c7,8xx
+NCR875			ncr53c8xx
+NCR875			53c7,8xx
+
+
+Things haven't tested:
+======================
+non 512-byte sectors (SCSI) (try Optical Disk)
+WD80x3			wd		(OLD 8-bit card)
+80386 machine
+Intel Pro/10+		eepro100	PCI
+
+
+These failed testing:
+=====================
+DEC EtherWorks III	ewrk3		ISA	EISA config (bad packets)
+Ultrastor 34F		u14-34f		VL-Bus	(not found)
+Ultrastor 34F		ultrastor	VL-Bus	(not found)
+	Note: after tweaking the probe, it (?) found the card and CDROM,
+	but not the scsi disk.
+
+
+
+Drivers Not Yet Supported:
+=========================
+SCSI Tape		st
+SCSI CD-ROM		sr
+IDE Tape		ide-tape
+Floppy			fd
+All ISDN
+All Character Devices
+All Sound Devices
+non-x86 drivers
+Proprietary CD-ROM drivers
+Digi Intl. RightSwitch SE-X (dgrs)
+Myrinet driver (from Myricom)
+PCMCIA drivers
+
+
+No Linux (2.0.29) Driver:
+=========================
+BusLogic Flashpoint		PCI	(in 2.0.30)
+(probably anything else)
+[several of the newer ethernet cards are not supported in 2.0.29,
+but should "just work" by adding Becker's driver]
+
+
+Untested Device drivers (we don't have these devices available for testing):
+=======================
+Any of the broken IDE variants (Don't have CMD, RZ1000, etc)
+SEEQ 8005		seeq8005
+HP10/100VG ANY LAN	hp100
+SMC 9000		smc9194
+HP LAN			hp
+Ansel Communications	ac3200		EISA
+Cabletron E2100		e2100
+Allied Telesis AT1700	at1700
+Fujitsu FMV-18x		fmv18x
+ICL EtherTeam 16i/32	eth16i		EISA
+3Com Etherlink		3c501
+3Com Etherlink Plus	3c505
+3Com Etherlink 16	3c507
+3COM EtherLink III	3c509
+Zenith Z-Note		znet
+Intel EtherExpress	eexpress
+Intel EtherExpress Pro/10	eepro
+DEC DEPCA & EtherWORKS	depca
+Apricot 82596		apricot
+SK G16			sk_g16
+NI5210			ni52
+NI6510			ni65
+
+NCR53c406a		ncr53c406a
+AdvanSys		advansys
+Adaptec 174x		aha1740		EISA
+DTC 3180/3280		dtc
+
+EATA/DMA 2.0x		eata
+EATA HBA		eatadma
+EATA PIO		eatapio
+
+Always IN2000		in2000
+Pro Audio Spectrum-16	pas16
+Qlogic FAS408		qlogicfas
+QLogic ISP1020		qlogicisp	PCI
+Future Domain TMC-16x0	fdomain
+Seagate ST01/ST02, FD TMC-885	seagate
+Trantor T128/T128F/T228	t128
+Western Digital WD-7000	wd7000
+Ultrastor 24F		ultrastor	EISA
+

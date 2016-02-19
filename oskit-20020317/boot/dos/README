@@ -1,0 +1,17 @@
+
+Directories: oskit/boot/dos
+Target: mkdosimage dosboot.exe
+Documentation: some in doc/intro.tex
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	This directory implements a MultiBoot->DOS boot-adaptor.
+	It allows the user to create a DOS-bootable image from a
+	MultiBoot-compliant kernel plus any arbitrary boot-modules.
+
+	mkdosimage is a script that generates an image
+	that will boot a kernel under DOS.
+
+	dosboot.exe is a DOS boot loader that understands
+	multiboot compliant images.
+	It requires a GNU linker built with the msdos output
+	target (binutils configured with i386-msdos).

@@ -1,0 +1,42 @@
+Directories: oskit/examples/unix, oskit/examples/unix/extended,
+	oskit/examples/unix/threads
+Targets: Lots
+Documentation: See the READMEs and source in this directory and
+	in oskit/unix.
+Original Code Source: Flux Research Group, University of Utah
+Description:
+
+This directory is used to build certain OSKit example programs in
+FreeBSD user-mode (or with some tweaking and for some programs, on Linux).
+It depends on the support code contained in the base oskit/unix directory. 
+
+This directory links the simple examples from ../x86, the extended
+subdirectory links examples from ../x86/extended (those requiring the
+FreeBSD C library).  You can guess what threads is for.
+
+Re the filesytem tests:
+	You can create a filesystem-in-a-file to run the fs test
+	programs on using regular unix tools (on Linux at least).
+	First use dd to create a big file:
+		dd if=/dev/zero bs=1024 count=2000 of=ext2fsinafile
+	Second run mkfs on it:
+		mkfs -V -t ext2 ext2fsinafile
+
+
+Re debugging, you may see errors like
+	Cannot insert breakpoint 0:
+	Error accessing memory address 0xe: Invalid argument.
+when single stepping in code after an itimer has been setup.
+Note that 0xe == 14 == SIGALRM (on FreeBSD at least).
+
+To work around this you can set a breakpoint before the itimers are setup
+which does "handle SIGALRM pass" and then set one after the itimer stuff
+which does "handle SIGALRM ignore".  (I.e., set the breakpoint and then use
+the gdb "commands" command.)
+
+By default, programs are compiled and linked against the oskit headers,
+and linked against the oskit C library (rather than the system headers
+in /usr/include and system libraries in /usr/lib).  This allows more
+complete oskit kernels to be run in user mode.  This requires an
+additional library that contains the syscall stubs, renamed to avoid
+name collision.

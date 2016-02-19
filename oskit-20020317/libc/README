@@ -1,0 +1,12 @@
+
+Directories: oskit/libc
+Target: liboskit_c.a
+Documentation: doc/libc.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	FreeBSD v??, FreeBSD Project
+	Mach Projet, Carnegie Mellon University
+Description:  
+	The OSKit Minimal C library.  Provides an environment
+	very similar to (though a small subset of) the one 
+	standard C libraries provide.

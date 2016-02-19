@@ -1,0 +1,105 @@
+%rename link		native_link
+%rename predefines	native_predefines
+*oskit_incdir:
+@INSTALL_INCDIR@
+
+*oskit_libdir:
+@INSTALL_LIBDIR@
+
+*endfile:
+%{!hosted-oskit:%(oskit_libdir)/oskit/crtn.o} %{hosted-oskit:%(oskit_libdir)/oskit/unix/crtn.o}
+
+*link:
+%{!hosted-oskit:%{rtld:-export-dynamic					\
+                  -T %(oskit_libdir)/oskit/ldscript.rtld}		\
+		%{!rtld:-Ttext 100000}					\
+                %{pthread:-u pthread_init}}				\
+%{hosted-oskit:%(native_link)}
+
+*lib:									\
+-L%(oskit_libdir)							\
+%{pg:-loskit_startup_p -loskit_clientos_p				\
+	%{pthread:-loskit_threads_p					\
+		-loskit_svm_p -loskit_amm_p}}				\
+%{!pg:-loskit_startup -loskit_clientos					\
+	%{pthread:-loskit_threads					\
+		%{!hosted-oskit: -loskit_svm}				\
+		 -loskit_amm}}						\
+%{hosted-oskit:-loskit_unix}						\
+%{rtld:-loskit_rtld}							\
+%{pg:									\
+	-loskit_gprof							\
+	%{realtime:-loskit_realtime_p}					\
+	%{!realtime:-loskit_dev_p}					\
+	-loskit_freebsd_m_p						\
+	%{posix-oskit:							\
+		%{pthread:-loskit_freebsd_c_r_p}			\
+		%{!pthread:-loskit_freebsd_c_p}				\
+		-loskit_com_p}						\
+	%{!posix-oskit:-loskit_c_p}					\
+	%{!hosted-oskit:-loskit_kern_p}					\
+	%{posix-oskit:							\
+		%{pthread:-loskit_freebsd_c_r_p}			\
+		%{!pthread:-loskit_freebsd_c_p}				\
+		-loskit_com_p}						\
+	%{!posix-oskit:-loskit_c_p}					\
+	%{pthread:-loskit_threads_p					\
+		%{!hosted-oskit:-loskit_svm_p}				\
+		 -loskit_amm_p}						\
+	-loskit_lmm_p}							\
+%{!pg:									\
+	%{realtime:-loskit_realtime}					\
+	%{!realtime:-loskit_dev}					\
+	-loskit_freebsd_m						\
+	%{posix-oskit:							\
+		%{pthread:-loskit_freebsd_c_r}				\
+		%{!pthread:-loskit_freebsd_c}				\
+		-loskit_com}						\
+	%{!posix-oskit:-loskit_c}					\
+	%{!hosted-oskit:-loskit_kern}					\
+	%{posix-oskit:							\
+		%{pthread:-loskit_freebsd_c_r}				\
+		%{!pthread:-loskit_freebsd_c}				\
+		-loskit_com}						\
+	%{!posix-oskit:-loskit_c}					\
+	%{pthread:-loskit_threads					\
+		%{!hosted-oskit:-loskit_svm}				\
+		 -loskit_amm}						\
+	-loskit_lmm}
+
+*startfile:								\
+%{!hosted-oskit:%{rtld:%(oskit_libdir)/oskit/multiboot_dyn.o}		\
+                %{!rtld:%(oskit_libdir)/oskit/multiboot.o}}		\
+%{hosted-oskit:%(oskit_libdir)/oskit/unix/crt1.o			\
+	%(oskit_libdir)/oskit/unix/crti.o				\
+	%{pthread:%(oskit_libdir)/oskit/unix_support_pthreads.o}	\
+	%{!pthread:%(oskit_libdir)/oskit/unix_support.o}}
+
+*predefines:
+-DOSKIT -D__ELF__ -Dunix -Asystem(posix)
+
+*cpp:
+	%(cpp_cpu)				\
+	%{posix:-D_POSIX_SOURCE}		\
+	-nostdinc				\
+	%(oskit_includes)			\
+	%(oskit_defs)
+
+*oskit_includes:						\
+	%{posix-oskit:-isystem %(oskit_incdir)/oskit/freebsd}	\
+	-isystem %(oskit_incdir)/oskit/c			\
+	%{pthread:-isystem %(oskit_incdir)/oskit/threads}	\
+	-isystem %(oskit_incdir)				\
+	%(oskit_sysinclude)
+
+*oskit_defs:
+%{hosted-oskit:%(hosted_oskit_predefines)}%{!hosted-oskit:%(oskit_predefines)}
+
+*hosted_oskit_predefines:
+-DOSKIT_UNIX -D__OSKIT_UNIX__ %(native_predefines)
+
+*oskit_predefines:
+-Di386 -Acpu(i386) -Amachine(i386)
+
+*oskit_sysinclude:
+-iwithprefix include

@@ -1,0 +1,11 @@
+
+Directories: oskit/oskit/c/
+Target: Part of libc/
+Documentation: 
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	The header files that correspond to libc/, this
+	is where POSIX-ish, familiar looking headers
+	reside.  
+	

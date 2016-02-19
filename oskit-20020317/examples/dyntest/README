@@ -1,0 +1,15 @@
+Directories: oskit/examples/dyntest
+Target: dyntest dummy.so dopey.so
+Original Code Source:
+	Flux Research Group, University of Utah
+Description: 
+	This directory contains a demonstration of how to use the
+	runtime linker/loader (RTLD) library. The example kernel
+	(dyntest) will load dummy.so, find a symbol in it, and then
+	call that function. The loaded file (dummy.so) contains a
+	trivial function that calls printf.
+
+	See the extensive comments in the GNUmakerules file on how to
+	link the kernel, and build shared libraries for it. See the
+	comments in dyntest.c and dummy.c that explain what is
+	happening.

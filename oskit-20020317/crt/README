@@ -1,0 +1,9 @@
+
+Directories: oskit/crt, oskit/crt/x86, oskit/crt/arm32
+Target: multiboot.o dos.o crtn.o
+Documentation:  
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	The C RunTime, various bit of machine specific
+	setup, and the multiboot C RunTime (the magic
+	that calls "main".)

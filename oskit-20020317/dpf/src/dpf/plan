@@ -1,0 +1,124 @@
+Levels of optimization:
+	0. none - simple, fast, should always win
+
+	1. hard-wire some jumps - requires SMC (and hence a bit of cache
+		flushing), but should only add a constant overhead to 
+		new filter insertion.  Cost is insensitive to number of
+		protocols or filters.
+
+	2. adjacency: blt code into a contigious vector: cost grows
+		with number of filters
+
+	3. does inter-atom scheduling: cost grows with number of filters.
+		fastest.
+
+	4. naive opt: regen from whole trie.  is as efficient as 2 and 
+		uses less space than 2 or 3, but has high overhead.
+
+Base code generation:
+---------------------
+
+The major overhead with filter insertion/deletion is updating jumps
+whose targets have changed as a result of adding additional code.  This
+cost can, in bad cases, be proportional to the number of filters.  To
+control this, we dynamically compute the nodes to jump too on success
+and failure of a given boolean (i.e., computation is done on every
+demux).  This trades demux overhead for more efficient trie
+modification.  A sketch of the algorithm follows.
+
+Each atom is associated with a chunk of code.  This code computes the
+expression the atom represents.  At a high-level this code is augmented
+in two ways: on failure it jumps to a pc given by the ``failure pc
+register'' and, on success, jumps to a pc it has computed.  In some
+cases, it also contains code to both save the current pc to jump too on
+failure and load it with a pointer a new failure pc.  At a low-level,
+this later code is different in four cases: (1) if the current node has
+a pid, (2) if the current node is part of an or list, and (3) if the
+current node is a shift.  We discuss each in turn.
+
+Current node has a pid:
+-----------------------
+
+If the atom contains a pid and has subsequent children we load the
+``failure return register'' with a pointer to code to return this pid.
+The original pc does not need to be saved since, from this point
+forward, we will always succeed.
+
+Current node is a shift:
+------------------------
+The ``failure return register'' is saved, and a pointer to restore the
+message pointer is loaded.  This later code is necessary since shift's
+destructively alter the msg pointer (which may be needed by other
+filters).
+
+Current node is an or:
+----------------------
+
+The first or will save failure reg.  Both it and all middle ors
+overwrite it with the pc of the subsequent or node's code.  The last
+node will reload the failure reg.
+
+Whenever a new or is added to the tail or head of the or list, the
+previous tail/head must be demoted.
+
+Handling success:
+------------------
+
+The pc to jump to is the pc of the first child's code.  This is loaded
+using the kid pointer.
+
+Both code and data are unified into a single piece of memory.  This
+allows pc computations do be done using the data pointers already in
+place (the pc is computed by adding a constant offset to these
+pointers).  When code is regenerated it must be recopied into this
+area.  To save hassle of resituating atoms we overallocate.
+  
+The failure register values are saved on the stack in a pre-allocated
+array.  Offsets are computed:
+ 	(reg_area_offset + filter_depth * sizeof(void *)) (sp)
+
+Code forms:
+-----------
+
+The code for an eq looks something like:
+	load success pointer
+	[ compute boolean ]
+	bool == true goto l
+		# failed: jump out
+		j failure_register
+	l:
+		j success_register
+
+The prologue code for the first or is the code to save failure_reg:
+	store failure_reg, (reg_offset + filter_depth * sizeof(void *)) (sp)
+The prologue code to compute new failure reg loads the next code pointer
+	using the next pointer already in place and adding the required
+	offset:
+	load failure_reg, (pc - offset(code) + offset(lh_first))
+	add failure_reg, offset(code)
+The epilogue code of the last or node:
+	load failure_reg, (reg_offset + filter_depth * sizeof(void *)) (sp)
+
+If the current node has a pid:
+	load failure_reg, l
+	
+	[ code for atom goes here ]
+
+	l: 
+		return pid;
+
+Code gen issues:
+------------------
+
+This method requires incremental linking:
+	+ the epilogue label cannot be killed during linking.
+
+	+ register context must stay ok across links.
+
+	+ first time dpf is started up we generate prologue and
+		epilogue code.  must have a jump in this code to
+		the first code fragment.
+  Can special case a bunch of stuff with added complexity, but no real
+	runtime overhead.
+  Should probably think about treating the hash tables in a more 
+	sophisticated way.

@@ -1,0 +1,8 @@
+
+Directories: oskit/freebsd/libm
+Target: liboskit_freebsd_m.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory contains makefiles that compile the
+	src/lib/ math library from FreeBSD v2.1.7.1.

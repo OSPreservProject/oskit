@@ -1,0 +1,317 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Time
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype RTC_T =
+{ include "${BUILDDIR}/oskit/machine/pc/rtc.h",
+  rtcin,
+  rtcout,
+} with flags kern
+
+bundletype OSEnvRTC_T =
+{ include "${BUILDDIR}/oskit/machine/pc/dev.h",
+  oskit_rtc_get,   // why not use osenv prefix?
+  oskit_rtc_set,
+} with flags libc
+
+/*#
+A COM wrapper for things in OSEnvRTC_T.
+#*/
+bundletype OSEnvRTCObj_T =
+{ osenv_rtc_object
+}
+  
+bundletype OSEnvTimer_T = 
+{ include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_timer_pit_init,        // hide?
+  osenv_timer_pit_read,        // hide?
+  osenv_timer_pit_shutdown,    // hide?
+  osenv_timer_register,
+  osenv_timer_unregister,
+  osenv_timer_spin,
+} with flags osenv
+
+bundletype OSEnvClock_T = 
+{ include "${OSKITDIR}/oskit/dev/clock.h",
+  oskit_clock_init   // not an initialiser (anymore)
+} with flags osenv
+
+bundletype PosixTime_T =
+{ include "${OSKITDIR}/oskit/c/sys/time.h",
+  gettimeofday,
+} with flags libc
+
+bundletype PosixTimer_T = 
+{ include "${OSKITDIR}/oskit/c/sys/time.h",
+  getitimer,
+  setitimer,
+} with flags libc
+
+bundletype CTime_T = 
+{ asctime,
+  ctime,
+}
+
+bundletype SomeTime_T = // not the most inspired name
+{ extends CTime_T,
+  difftime,
+  gmtime,
+  localtime,
+  mktime,
+  offtime,
+  posix2time,
+  time2posix,
+  timegm,
+  timelocal,
+  timeoff,
+  tzname,
+  tzset,
+  tzsetwall,
+}
+
+bundletype FreeBSDTime_T =
+{ extends CTime_T,
+  _C_time_locale,
+  __time_load_locale,
+  _time_localebuf,
+  _time_using_locale,
+  asctime_r,
+  ctime_r,
+  difftime,
+  gmtime,
+  gmtime_r,
+  localtime,
+  localtime_r,
+  mktime,
+  offtime,
+  posix2time,
+  strftime,
+  strptime,
+  time,
+  time2posix,
+  timegm,
+  timelocal,
+  timeoff,
+  tzname,
+  tzset,
+  tzsetwall,
+}
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+// mk_unit -o -n rtclock kern/rtc.o
+unit rtclock = {
+  imports[];
+  exports[ rtc : RTC_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/rtc.c" }
+   with flags kern;
+}
+
+// mk_unit -o -nosenv_rtc    dev/rtclock.o
+unit osenv_rtc = {
+  imports[ intr : OSEnvIntr_T,
+            log  : OSEnvLog_T, // rtc is subjected to minor consistency checks
+            rtc : RTC_T,
+         ];
+  exports[ osenv_rtc : OSEnvRTC_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/rtclock.c"
+  } with flags osenv;
+}
+
+// mk_unit -o -nosenv_rtcobj dev/osenv_rtc.o 
+unit osenv_rtcobj = {
+  imports[ osenv_rtc : OSEnvRTC_T,
+           iids : { 
+               oskit_iunknown_iid,
+               oskit_osenv_rtc_iid,
+             },
+         ];
+  exports[ osenv_rtcobj : OSEnvRTCObj_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/osenv_rtc.c" 
+  } with flags osenv;
+}
+
+// mk_unit -o -nosenv_timer  dev/timer.o dev/timer_pit.o 
+unit osenv_timer = {
+  imports[ intr  : OSEnvIntr_T,
+           irq   : OSEnvIRQ_T,
+           log   : OSEnvLog_T,
+           panic : OSEnvPanic_T,
+         ];
+  exports[ out : OSEnvTimer_T ];
+  constraints{ context exports <= context imports };
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "dev/x86/timer.c",
+    "dev/x86/timer_pit.c",
+    "knit/c/timer_init.c",
+  }  with flags osenv;
+}
+
+// mk_unit -o -n osenv_clock dev/clock.o 
+
+unit osenv_clock = {
+  imports[ string : String_T,
+           intr   : OSEnvIntr_T,
+           mem    : OSEnvMem_T,
+           timer  : OSEnvTimer_T,
+           iids   : {
+               oskit_clock_iid,
+               oskit_iunknown_iid,
+               oskit_timer_iid,
+             },
+         ];
+  exports[ out : OSEnvClock_T ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/clock.c",
+  } with flags osenv;
+}
+
+// mk_unit -o -n posix_timer posix/sys/setitimer.o
+unit posix_timer = {
+  imports[ string   : String_T,
+           errno    : Errno_T,
+           signals  : PosixSignals_T,
+           listener : CreateListener_T,
+           clock    : OSEnvClock_T,
+         ];
+  exports[ out : PosixTimer_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "posix/sys/setitimer.c",
+  } with flags posix;
+}
+
+
+// not finished, need to remove use of posic/sys/clock_init.c
+//
+// // mk_unit -o -n posixtime posix/sys/gettimeofday.o
+// 
+// // ToDo: this contains sys_clock which is also used by itimers.
+// // (But we don't want to drag them in because they need signals...)
+// unit gettimeofday_fromosenvclock = {
+//   imports[ clock : { osenv_clock_object } ];
+//   exports[ out : PosixTime_T ];
+//   depends{ exports + inits + finis needs imports };
+//   files{ "posix/sys/gettimeofday.c" 
+//   } with flags posix;
+// }
+
+/*#
+This version of gettimeofday has the advantage of having less
+dependencies (no interrupts, no memory allocation, etc) but
+each call takes about 40uS to complete.  (This is largely
+independent of CPU speed.)
+
+One other problem is that it doesn't give time of day - it gives
+time since Jan 1 1970.
+#*/
+unit gettimeofday_fromrtc = {
+  imports[ osenv_rtc : OSEnvRTC_T ];
+  exports[ out       : PosixTime_T ];
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/gettimeofday_from_rtc.c"
+  } with flags osenv;
+}
+
+// /*#
+// osenv timers using itimers
+// #*/
+// mk_unit -o -nstdio unix/pit.o
+
+// {get,set}timeofday -> oskit_rtc
+// mk_unit -o -noskit_rtc unix/rtclock.o
+
+// // mk_unit -o -nfreebsd_asctime freebsd/libc/asctime.o 
+// unit freebsd_asctime = {
+//   imports[ in : { sprintf,
+//               }
+//          ];
+//   exports[ out : { asctime,
+//                 asctime_r,
+//               }
+//          ];
+//   files{ "freebsd/libc/asctime.o",
+//   } with flags freebsd;
+// }
+
+
+/*#
+And this year's prize for most uninspired name goes to...
+#*/
+
+// mk_unit -o -nfreebsd_sometime freebsd/libc/asctime.o freebsd/libc/localtime.o freebsd/libc/difftime.o 
+
+unit freebsd_sometime = {
+  imports[ getenv  : GetEnv_T,
+           string  : String_T,
+           sprintf : Sprintf_T,
+           fds     : PosixFD_T,
+           files   : PosixFiles_T,
+           issetugid : { issetugid },
+         ];
+  exports[ out : SomeTime_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/stdtime/asctime.c",
+         "freebsd/3.x/src/lib/libc/stdtime/difftime.c",
+         "freebsd/3.x/src/lib/libc/stdtime/localtime.c",
+  } with flags freebsd_libc;
+}
+
+
+// ToDo: fix to link with freebsd_sometime (instead of duplicating the files)
+// mk_unit -o -nfreebsd_stdtime freebsd/libc/time.o freebsd/libc/timelocal.o freebsd/libc/strftime.o freebsd/libc/strptime.o
+
+unit freebsd_stdtime = {
+  imports[ time      : PosixTime_T,
+           locale    : FreeBSDLocale_T,
+	   string    : String_T,
+           sprintf   : Sprintf_T,
+	   files     : PosixFiles_T,
+	   cfiles    : FreeBSDFiles_T,
+	   fds       : PosixFD_T,
+	   getenv    : GetEnv_T,
+	   malloc    : Malloc_T,
+	   issetugid : { issetugid } ];
+  exports[ freebsdtime : FreeBSDTime_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "freebsd/3.x/src/lib/libc/stdtime/asctime.c",
+    "freebsd/3.x/src/lib/libc/stdtime/difftime.c",
+    "freebsd/3.x/src/lib/libc/stdtime/localtime.c",
+    "freebsd/3.x/src/lib/libc/stdtime/timelocal.c",
+    "freebsd/3.x/src/lib/libc/stdtime/strftime.c",
+    "freebsd/3.x/src/lib/libc/stdtime/strptime.c",
+    "freebsd/3.x/src/lib/libc/gen/time.c",
+  } with flags freebsd_libc;
+}
+
+/************************************************************/
+// End
+/************************************************************/

@@ -1,0 +1,120 @@
+%
+% Copyright (c) 1997-1998, 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{libfdev}
+
+\emph{This chapter is extremely incomplete;
+it is basically only a bare skeleton.}
+
+% Left in for amusement.
+% \emph{Implementation is in progress and an initial snapshot
+% should be available in August.}       % the year is yet to be determined
+
+\section{Introduction}
+
+This library provides default implementations
+of various functions needed by device drivers
+under the \oskit{} device driver framework.
+These default implementations can be used by the host OS, if appropriate,
+to make it easier to adopt the driver framework.
+The facilities provided include:
+\begin{itemize}
+\item	Hardware resource management and tracking functions
+	to allocate and free IRQs, I/O ports, DMA channels, etc.
+\item	Device namespace management
+\item	Memory allocation for device drivers
+\item	Data buffer management
+\end{itemize}
+
+\com{XXX should be stated in the particular sections that do the assuming.
+The library makes the following assumptions:
+\begin{itemize}
+\item	Device I/O ports can be directly accessed.
+\item	The library has sole responsibility for management of I/O ports
+	and DMA channels 
+\item	Virtual to physical mappings are \emph{exactly} the same
+\item	Poll and yield operations are supported
+\item	Unix style naming
+\end{itemize}
+}
+
+XXX: oskit_dev_init()
+	call this to init libdev
+
+XXX: oskit_dev_probe()
+	call this after init to probe for devices
+
+
+
+\section{Device Registration}
+\label{fdev-default-reg}
+
+XXX Builds a hardware tree.
+An example hardware tree is shown in Figure~\ref{fig-fdev-hw-tree}.
+
+\psfigure{fdev-hw-tree}{Example Hardware Tree}
+
+Roughly\ldots{}
+the library is initialized through a call to {\tt oskit_dev_init}.
+It first does auto-configuration by calling the
+initialization and probe routines of the different driver sets.  
+After auto-configuration, it builds a device tree representing
+the topology of the machine.  While building the tree, it also
+organizes the drivers into ``driver sets.''  A driver set consists
+of driver that share a common set of properties.  After initialization,
+the library is ready to perform I/O requests for the OS.
+
+\label{oskit-dev-init}
+\funcproto void oskit_dev_init(void);
+
+This function initializes the library.
+
+\label{oskit-dev-probe}
+\funcproto void oskit_dev_probe(void);
+
+This function probes for devices.
+
+\section{Naming}
+\label{fdev-naming}
+
+\emph{To be done.}
+
+\com{%
+   This doesn't exist as such.
+   The given fxn name takes an iid, not a string.
+
+The library provides a convenient function to search the hardware tree
+and find specific device nodes given Unix-style device names.
+For example, given the string `{\tt hd0}' (BSD-style)
+or `{\tt hda}' (Linux-style),
+this function returns a pointer to the device node
+for the first IDE hard disk it finds in the hardware tree.
+
+\funcproto oskit_error_t *osenv_device_lookup(const~char *name);
+
+XXX describe
+}%com
+
+\section{Memory Allocation}
+
+Default implementation uses the LMM.
+
+\section{Buffer Management}
+
+Provides a ``simple buffer'' implementation,
+in which buffers are simply regions
+of physically- and virtually-contiguous physical memory.
+
+\section{Processor Bus Resource Management}
+
+XXX to allocate and free IRQs, I/O ports, DMA channels, etc.
+
+

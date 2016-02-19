@@ -1,0 +1,1470 @@
+%
+% Copyright (c) 1996-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{amm}
+
+\section{Introduction}
+
+The \emph{Address Map Manager} (AMM) library manages collections of resources
+where each element of a collection has a name (address) and some set of
+attributes.
+These collections are described by \emph{address maps}.
+Examples of resources which might be managed by address maps include:
+
+\begin{itemize}
+\item	Swap space.
+	An OS might use a disk partition as backing store for memory.
+	Here the names are disk block (sector) numbers and the single
+	attribute of a block is either ``free'' or ``allocated.''
+
+\item	A process address space.
+	An OS keeps track of which portions of a process's virtual
+	address space are allocated and what access permissions are allowed
+	to the allocated regions.
+	Here the names are virtual addresses or virtual page numbers and
+	the attributes include ``read,'' ``write,'' and ``execute'' as well
+	as ``allocated'' or ``free.''
+\end{itemize}
+
+Logically, an address map is an array of attribute values indexed by address.
+However, such an implementation would be impractical for all but the smallest
+address ranges so the AMM coalesces ranges of contiguous addresses with
+identical attributes and describes each such range with an
+\emph{address map entry}.
+Hence address maps are collections of map entries with every possible
+address contained in exactly one entry.
+
+The AMM library includes routines to create and destroy address maps,
+lookup addresses within a map,
+modify the attributes of addresses within a map,
+and iterate over all entries in a map.
+The library is responsible for maintaining a consistent and efficient
+representation of the map.
+The complete set of routines is described in Section~\ref{amm-api}.
+
+The AMM is a \emph{pure} component:
+it uses no static or global variables,
+so clients can freely make concurrent AMM calls
+on different address maps without synchronization.
+However, in interruptible or multithreaded environments,
+the client is responsible for synchronizing calls
+that manipulate a single AMM pool.
+Section~\ref{pure-env} describes the pure execution environment
+supported by the AMM in more detail.
+
+\section{Addresses and attributes}
+
+The AMM attempts to be general by making very few assumptions about
+addresses or attributes.
+An address is defined as an arbitrary unsigned integer of some reasonable size
+(typically 32 or 64 bits).
+The value of the integer is not interpreted by AMM in any way.
+The only assumption that the AMM makes about addresses is that
+two addresses are considered \emph{contiguous}
+(i.e., represent adjacent pieces of a resource)
+if their integer values are consecutive.
+This is an intuitive assumption and not likely to be a restriction for
+many (any?) uses.
+
+Attributes are represented using an opaque flag word (again, an integer
+of reasonable size).
+The only assumption that AMM makes about attributes is that the attributes
+of two addresses are \emph{identical} if their flag words have the same
+integer value.
+This again is a fairly obvious assumption.
+Note that though the flag word appears to limit the number of possible
+attributes to 32 or 64 single-bit values,
+the user can actually define arbitrary attributes for an address by
+associating additional state with the address.
+Section~\ref{amm-generic-if} explains how this is done.
+
+\section{Address maps and entries}
+
+Each address map is represented by an {\tt amm_t} structure.
+This structure is allocated by the user and initialized once at startup
+via a library routine.
+After initialization, a pointer to the structure is used as an opaque handle
+for all subsequent AMM calls.
+
+Many of the library routines take map entries as parameters or pass them
+back as return values.
+Thus the AMM defines an opaque {\tt amm_entry_t} type and includes routines
+to obtain the starting and ending addresses, size and attributes associated
+with the entry.
+
+Implementing an address map as a collection of map entries requires
+that the AMM be able to \emph{split} and \emph{join} map entries
+as the attributes of addresses change.
+An entry is split into two entries when some sub-range of the entry changes
+attributes.
+Analogously, two entries which are adjacent may be joined when
+the attributes of one change to be identical to those of the other.
+
+The AMM library provides hooks to allow the user to associate additional
+state with map entries.
+These hooks include explicit map entry parameters to some routines as
+well as callback interfaces to handle allocation, deallocation, splitting
+and joining map entries.
+Section~\ref{amm-generic-if} contains complete details.
+
+\section{Simple interface}
+\label{amm-simple-if}
+
+Though the AMM is general enough to allow the user to associate arbitrary
+attributes with address map entries, one of the most common uses of address maps
+involves keeping track of which elements of a resource are free and which
+are available.
+
+The AMM library provides an interface to make this ``simple'' use more
+convenient and, to some extent, more efficient.
+It is important to note that the simple interfaces are just wrappers for
+the generic interfaces described in Section~\ref{amm-generic-if}.
+They are not a separate implementation.
+Thus, simple and generic routines can be called for the same map.
+
+In the simple interface, the AMM pre-defines three attribute values:
+{\tt AMM_ALLOCATED}, {\tt AMM_FREE}, and {\tt AMM_RESERVED},
+and provides a set of routines that knows their semantics.
+Addresses that are {\tt AMM_ALLOCATED} represent resources that are in use
+and unavailable until freed.
+Addresses that are {\tt AMM_FREE} represent resources that are available
+for allocation.
+{\tt AMM_RESERVED} addresses represent ``out of range'' resources that can
+not be allocated or freed.
+
+{\tt amm_init} performs the one-time initialization of an address map
+including restricting the ``valid'' range of addresses.
+Addresses within the specified range are marked as free and all others
+marked as reserved.
+{\tt amm_reserve} allows additional areas of the address map to be reserved.
+This can be used to represent ``holes'' within an otherwise contiguous
+address map.
+{\tt amm_allocate} allocates a range of a given size from the valid portion
+of the address map.
+This routine includes a ``hint'' address indicating where to start searching
+for free space in which to locate the range.
+Finally, {\tt amm_deallocate} can be used to free a range of allocated space.
+
+This set of routines is sufficient to implement basic resource management
+similar to that provided by UNIX resource maps.
+For example:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+#include <oskit/amm.h>
+#include <assert.h>
+
+struct simple_rmap {
+    amm_t amm;
+};
+
+void simple_rminit(struct simple_rmap *smap, oskit_addr_t saddr, oskit_addr_t eaddr)
+{
+    assert(saddr != 0);    /* zero is used to indicate allocation errors */
+    amm_init(&smap->amm, saddr, eaddr);
+}
+
+oskit_addr_t simple_rmalloc(struct simple_rmap *smap, oskit_size_t size)
+{
+    oskit_addr_t addr = 0;
+
+    return amm_allocate(&smap->amm, &addr, size, 0) ? 0 : addr;
+}
+
+void simple_rmfree(struct simple_rmap *smap, oskit_addr_t addr, oskit_size_t size)
+{
+    (void)amm_deallocate(&smap->amm, addr, size);
+}
+\end{verbatim}
+\end{codefrag}
+
+Three additional routines enable the simple interface to be used for another
+common OS usage: managing process/task address spaces.
+{\tt amm_protect} changes the attributes associated with a range of the map.
+Attributes are restricted to whatever can be described in the flag word and
+should not clash with the {\tt AMM_ALLOCATED}, {\tt AMM_FREE},
+and {\tt AMM_RESERVED} bits,
+but there are typically only a small number of address space protection bits
+anyway so this isn't likely to be a problem.
+{\tt amm_find_addr} looks up an address, returning a pointer to the entry
+containing the address.
+A final function,
+{\tt amm_iterate} takes a function pointer and calls that function for every
+entry in the map, passing the map and map entry pointers as arguments.
+This allows the user to traverse the map, examining each entry in turn.
+
+When using the simple AMM interface,
+map entries are allocated with {\tt malloc}, deallocated with {\tt free},
+and the default library routines are used to split and join entries based
+on the attributes in the flag word.
+
+\section{Generic interface}
+\label{amm-generic-if}
+
+The more general AMM interface routines provide the same basic capability
+as the simple interface.
+{\tt amm_init_gen} provides the one-time initialization of a map,
+{\tt amm_find_gen} locates an address range in a map,
+{\tt amm_modify} changes the attributes of an address range, and
+{\tt amm_iterate_gen} allows a user-provided function to be called for
+selected entries in a map.
+
+The primary differences between the two interfaces are that
+the generic interface allows fine-grained control over the selection
+of addresses and attributes within a map and
+it permits user-directed allocation and management of address map entries.
+
+Fine-grained control of address selection
+enables the user to specify exact alignment and offset criteria
+when attempting to find a range of addresses in a map using {\tt amm_find_gen}.
+For example, an address space manager can allocate arbitrary-sized,
+page-aligned address ranges using this technique.
+
+Similarly, fine-grained control of attribute selection
+enables inexact attribute matches when locating an address range using
+{\tt amm_find_gen}.
+In the address space manager example, this would allow an address space
+deallocation routine to match any allocated map entry regardless of its
+additional protection bits.
+These mask and match parameters are also used in {\tt amm_iterate_gen}
+to selectively iterate over entries in a map.
+
+User-directed allocation and management of entries
+allows the user to embed the standard {\tt amm_entry_t} structure in a
+larger application specific structure thus associating additional state
+with each entry.
+Allocation control is addressed in two ways.
+First, is by providing explicit map entry parameters
+to {\tt amm_init_gen} and {\tt amm_modify},
+the two routines that result in an entry being added to a map.
+In this way,
+the caller can pass in the wrapped {\tt amm_entry_t} structure to use.
+Second, as part of the {\tt amm_init_gen} call,
+the user can register a routine to be called when a map entry is to be
+split.
+Since entry splitting results in one or two new entries being created,
+this routine allows the user to provide the wrapped entries to use.
+
+User-directed management is attained through the above allocation hooks
+as well as additional initialization-time registered callback routines for
+joining and deallocation of map entries.
+The join routine permits the user to determine if two entries which are
+adjacent in address and have equivalent attributes flags can be coalesced
+into a single entry.
+If they can be joined,
+this routine is responsible for merging the extended attribute information
+and returning a new entry with this state.
+The deallocation routine
+enables user control over situations where the AMM library destroys
+map entries,
+either left over entries from a join operation or entries that are
+completely replaced by a single entry in {\tt amm_modify}.
+This routine is responsible for freeing the extended attribute information.
+
+\section{Generic interface example}
+
+As an example of a non-trivial use of AMM,
+consider a Fluke address space manager which maintains
+a map to describe the address space in which threads run.
+In Fluke,
+an address space is populated with memory by mapping memory from other
+address spaces into the space using kernel-managed mapping objects.
+Hence each allocated area of the address space would be described by
+a composite entry consisting of an {\tt amm_entry_t} structure and
+a Fluke mapping object:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+#include <oskit/amm.h>
+#include <fluke/mapping.h>
+
+struct as {
+    amm_t map;
+    ...
+}
+
+struct as_entry {
+    amm_entry_t entry;
+    fluke_mapping_t mapping;
+};
+\end{verbatim}
+\end{codefrag}
+
+Note that
+unallocated ({\tt AMM_FREE}) entries don't need to have mapping objects
+associated with them and could just be standard {\tt amm_entry_t} structures.
+Thus, a user-provided entry allocation routine can create and return the
+appropriate structure depending on whether it is for an allocated or free
+entry.
+In the case of allocated map entries, the Fluke mapping object can be created
+at this time.
+Similarly, a user-provided deallocation routine can free an entry appropriately,
+destroying mapping objects as necessary:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+amm_entry_t *as_entry_alloc(amm_t *amm, oskit_addr_t addr, oskit_size_t size, int flags)
+{
+    struct as_entry *aentry;
+
+    if (flags == AMM_FREE)
+        return malloc(sizeof(amm_entry_t));
+    if ((aentry = malloc(sizeof *aentry)) == 0)
+        return 0;
+    if (fluke_mapping_create(&aentry->mapping)) {
+        free(aentry);
+        return 0;
+    }
+    return &aentry->entry;
+}
+
+void as_entry_free(amm_t *amm, amm_entry_t *entry)
+{
+    struct as_entry *aentry;
+
+    if (amm_entry_flags(entry) == AMM_FREE)
+        free(sizeof *entry);
+    else {
+        aentry = (struct as_entry *)entry;
+        fluke_mapping_destroy(&aentry->mapping);
+        free(sizeof *aentry);
+    }
+}
+\end{verbatim}
+\end{codefrag}
+
+Address space is allocated, freed, or the protections changed, using
+{\tt amm_modify}.
+Here the address space manager first creates an entry of the correct type,
+creating and initializing the mapping object as necessary.
+It then calls {\tt amm_modify} with that entry:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+int as_allocate(struct as *map, oskit_addr_t addr, oskit_size_t size, int prot)
+{
+    struct as_entry *aentry;
+    int rc;
+
+    /* check range to ensure it is available, etc. */
+    ...
+
+    aentry = (struct as_entry *)as_entry_alloc(&map->amm, addr, size, prot|AMM_ALLOCATED);
+
+    /* setup Fluke mapping state */
+    ...
+    fluke_mapping_set_state(&aentry->mapping, ...);
+
+    rc = amm_modify(&map->amm, addr, size, prot|AMM_ALLOCATED, &aentry->entry);
+    ...
+}
+
+int as_deallocate(struct as *map, oskit_addr_t addr, oskit_size_t size)
+{
+    int rc;
+
+    /* as_entry_free will destroy all Fluke mappings */
+    rc = amm_modify(&map->amm, addr, size, AMM_FREE, 0);
+    ...
+}
+
+int as_protect(struct as *map, oskit_addr_t addr, oskit_size_t size, int prot)
+{
+    struct as_entry *aentry;
+    int rc;
+
+    /* check range to ensure it is allocated, etc. */
+    ...
+
+    aentry = (struct as_entry *)as_entry_alloc(&map->amm, addr, size, prot|AMM_ALLOCATED);
+
+    /* setup Fluke mapping state */
+    ...
+    fluke_mapping_set_state(&aentry->mapping, ...);
+
+    rc = amm_modify(&map->amm, addr, size, prot|AMM_ALLOCATED, &aentry->entry);
+    ...
+}
+\end{verbatim}
+\end{codefrag}
+Note that since AMM_FREE entries are just standard {\tt amm_entry_t} structures,
+it is not necessary to pass {\tt amm_modify} an explicit entry parameter when
+freeing address space.
+In this situation,
+{\tt amm_modify} will call the user-provided allocation routine which will
+allocate a basic map entry structure based on the fact that the flag parameter
+is {\tt AMM_FREE}.
+This works since no user initialization of the {\tt amm_entry_t} is required.
+In general,
+the parameters passed to the allocation routine do not provide sufficient
+information to initialize user-extended attributes and thus these entries
+must be initialized and passed to {\tt amm_modify}.
+
+In {\tt amm_modify},
+if the modification results in an entry being split,
+the user-provided split routine is called with the entry and an address
+at which the entry is to be broken.
+The split routine will create a new entry of the appropriate type,
+creating and initializing a Fluke mapping object if necessary.
+It then adjusts any Fluke mapping object associated with the existing entry
+to reflect the split and returns both objects.
+
+After isolating the range identified by the address and size parameters,
+{\tt amm_modify} discards it by calling the user-provided deallocation routine
+for every entry within the range.
+The deallocation routine will destroy any Fluke mapping object associated
+with an entry.
+
+Once the address range has been cleared,
+{\tt amm_modify} inserts the user-provided entry in the map.
+The newly inserted entry may now be compatible with one or both of its
+neighbors in which case the user-provided join routine is called (possibly
+twice) with the entries to join as parameters.
+If the entries can be merged,
+the join routine modifies one of the existing entries to cover the joined
+range and returns a pointer to that entry.
+Note that, even though the map entry addresses and attributes are compatible
+to join, the user-provided join routine may choose not to join them.
+In this example, it is possible that the source addresses of the two mapping
+objects are not adjacent and hence the two mappings cannot be combined into
+one.
+Thus, the join function will fail and the two entries will remain separate.
+
+The following code illustrates the split and join functions described:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+int as_entry_split(amm_t *amm, amm_entry_t *entry, oskit_addr_t addr,
+                   amm_entry_t **head, amm_entry_t **tail)
+{
+    amm_entry_t *nentry;
+    struct as_entry *aentry;
+    int flags = amm_entry_flags(entry);
+
+    nentry = as_entry_alloc(amm, addr, amm_entry_end(entry) - addr, flags);
+    if (nentry == 0)
+        return ENOMEM;
+    *head = entry;
+    *tail = nentry;
+    if (flags == AMM_FREE)
+        return 0;
+
+    /* Modify existing Fluke mapping for first half of range */
+    aentry = (struct as_entry *)entry;
+    ...
+    fluke_mapping_set_state(&aentry->mapping, ...);
+
+    /* Setup new Fluke mapping for last half of range */
+    aentry = (struct as_entry *)nentry;
+    ...
+    fluke_mapping_set_state(&aentry->mapping, ...);
+
+    return 0;
+}
+
+int as_entry_join(amm_t *amm, amm_entry_t *head, amm_entry_t *tail, amm_entry_t **new)
+{
+    struct as_entry *aentryh, *aentryt;
+    int flags = amm_entry_flags(head);
+
+    *new = head;
+
+    /* Basic entries are always joined */
+    if (flags == AMM_FREE)
+        return 0;
+
+    /* Sources of mappings must be adjacent to join */
+    aentryh = (struct as_entry *)head;
+    aentryt = (struct as_entry *)tail;
+    if (mapping_source(&aentryh->mapping) + amm_entry_size(entry) !=
+        mapping_source(&aentryt->mapping))
+        return 1;
+
+    /* Collapse range of two Fluke mappings into head mapping */
+    ...
+    fluke_mapping_set_state(&aentryh->mapping, ...);
+
+    /* Caller will deallocate tail mapping via as_entry_free */
+    return 0;
+}
+\end{verbatim}
+\end{codefrag}
+
+Finally, the address space manager may want to perform some operation on
+only selected parts of the address space.
+For example, assume it wants to write-protect some arbitrary subset of the
+address space.
+Write protecting should only be done to the parts of the address space which
+are actually allocated (i.e., not free or reserved) and, for efficiency,
+only on those parts which currently allow write access
+(i.e., include FLUKE_PROT_WRITE in their attributes).
+Here it could use {\tt amm_iterate_gen} to process the map matching only
+those entries which are allocated and have write permission.
+{\tt Amm_modify} can then be used on those entries to write-protect them
+as follows:
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+int as_write_protect(struct as *map, oskit_addr_t addr, oskit_size_t size)
+{
+    return amm_iterate_gen(&map->amm, as_wp_func, 0, addr, size,
+                           AMM_ALLOCATED|FLUKE_PROT_WRITE,
+                           AMM_ALLOCATED|FLUKE_PROT_WRITE);
+}
+
+int as_wp_func(amm_t *amm, amm_entry_t *entry, void *arg)
+{
+    struct as_entry *aentry = (struct as_entry *)entry;
+
+    /* Tweak permission of Fluke mapping to remove write permission */
+    ...
+    fluke_mapping_set_state(&aentry->mapping, ...);
+
+    /* Modify the existing AMM entry, removing write permission */
+    rc = amm_modify(&map->amm, amm_entry_start(entry), amm_entry_size(entry),
+                    amm_entry_flags(entry) & ~FLUKE_PROT_WRITE, entry);
+    ...
+
+    return 0;
+}
+\end{verbatim}
+\end{codefrag}
+
+\section{External dependencies}
+
+The AMM library requires only four external routines.
+AMM uses {\tt smalloc} and {\tt sfree} (Section~\ref{memalloc})
+to allocate and free entries 
+for maps which don't specify an allocator (see {\tt amm_init_gen}).
+The {\tt amm_dump} routine uses {\tt printf} (Section~\ref{printf})
+to generate output.
+Various routines use {\tt panic} (Section~\ref{panic}) when an internal
+consistency check fails.
+
+\section{API reference}
+\label{amm-api}
+
+The following sections describe the functions exported by the AMM in detail.
+All of these functions, as well as the types necessary to use them,
+are defined in the header file {\tt <oskit/amm.h>}.
+
+\api{amm_alloc_func}{Allocate an AMM map entry (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto amm_entry_t *amm_alloc_func(amm_t *amm,
+				oskit_addr_t addr, oskit_size_t size, int flags);
+\end{apisyn}
+\begin{apidesc}
+	User-provided function called whenever an AMM entry needs to be
+	allocated in the given map \emph{amm}.
+	The allocation function for an AMM is set at initialization time
+	by passing a pointer to it as a parameter to {\tt amm_init_gen}.
+
+	The parameters to {\tt amm_alloc_func}
+	provide information about the entry being
+	created; i.e., the entry will cover the range
+	[\emph{addr} - \emph{addr}+\emph{size}-1] and have the attributes
+	specified in \emph{flags}.
+
+	If the map is using extended map entries,
+	this routine should initialize the extended portion of the entry.
+	No initialization of the AMM-private portion is necessary.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the range being created.
+	\item[size]
+		Size of the range being created.
+	\item[flags]
+		Attributes of the range being created.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the uninitialized,
+	AMM-private part of the allocated entry,
+	or zero if no memory can be allocated.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_init_gen}
+\end{apirel}
+
+
+\api{amm_allocate}{Allocate an address range in an AMM (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_allocate(amm_t *amm,
+			\inoutparam oskit_addr_t *addrp,
+			oskit_size_t size, int prot);
+\end{apisyn}
+\begin{apidesc}
+	Looks for a range of the indicated size with flags {\tt AMM_FREE}
+	and modifies it to have the attributes {\tt AMM_ALLOCATED}$|$\emph{prot}.
+
+	On call,
+	\emph{*addrp} specifies a hint address at which to start searching
+	for a range of the desired size.
+	The search will progress toward higher addresses from that point.
+	If no range is found before the maximum possible address
+	the search ``wraps around,'' starting from the lowest address
+	and searching forward until it reaches the original hint address.
+	If no free range of sufficient size is found, {\tt ENOMEM}
+	is returned.
+
+	{\tt Amm_allocate} is a simplified interface to {\tt amm_modify}
+	intended to be used with {\tt amm_init}, {\tt amm_deallocate},
+	{\tt amm_protect}, and {\tt amm_reserve}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addrp]
+		On call, a pointer to the address at which to start searching.
+		On return, the address chosen.
+	\item[size]
+		Size of the desired range.
+	\item[prot]
+		Additional attribute flags to associate with the range.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if successful, an error code otherwise.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_deallocate}, {\tt amm_init}, {\tt amm_modify},
+	{\tt amm_protect}, {\tt amm_reserve}
+\end{apirel}
+
+
+\api{amm_deallocate}{Deallocate an address range in an AMM (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_deallocate(amm_t *amm,
+			oskit_addr_t addr, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Marks a range of address space as {\tt AMM_FREE}.
+	Only pieces of the range marked as {\tt AMM_ALLOCATED}
+	(e.g., allocated with {\tt amm_allocate})
+	are ``freed,'' all other regions are ignored.
+
+	{\tt Amm_Deallocate} is a simplified interface to {\tt amm_modify}
+	intended to be used with {\tt amm_init}, {\tt amm_allocate},
+	{\tt amm_protect}, and {\tt amm_reserve}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the range.
+	\item[size]
+		Size of the range.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if successful, an error code otherwise.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_allocate}, {\tt amm_init}, {\tt amm_modify},
+	{\tt amm_protect}, {\tt amm_reserve}
+\end{apirel}
+
+
+\api{amm_destroy}{Destroy an AMM}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto void amm_destroy(amm_t *amm);
+\end{apisyn}
+\begin{apidesc}
+	Free all the address map entries associated with the map \emph{amm}.
+	The user-provided free function is called for every entry in the
+	map.
+	If no free function is associated with the map,
+	the standard libc {\tt free} function is used.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+\end{apiparm}
+\begin{apirel}
+	{\tt amm_free_func}
+\end{apirel}
+
+
+\api{amm_dump}{display the AMM-private data for every entry in an AMM}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto void amm_dump(amm_t *amm);
+\end{apisyn}
+\begin{apidesc}
+	This routine is primarily used for debugging the AMM
+	and the code that uses it.
+	It scans through the AMM
+	and calls {\tt printf} to display the AMM-private data for each
+	entry in it.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+\end{apiparm}
+
+
+\api{amm_entry_\emph{field}}{Accessor macros for AMM-private data members}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto oskit_addr_t amm_entry_start(amm_entry_t *entry);
+
+	\funcproto oskit_addr_t amm_entry_end(amm_entry_t *entry);
+
+	\funcproto oskit_size_t amm_entry_size(amm_entry_t *entry);
+
+	\funcproto int amm_entry_flags(amm_entry_t *entry);
+\end{apisyn}
+\begin{apidesc}
+	Macros provided to access AMM-private data members.
+	Currently defined are macros to
+	return the starting and ending virtual addresses of the entry
+	as well as the size and attributes of the range covered by the entry.
+\end{apidesc}
+\begin{apiparm}
+	\item[entry]
+		A pointer to a valid {\tt amm_entry_t} structure.
+\end{apiparm}
+\begin{apiret}
+	Returns a data member of the appropriate type.
+\end{apiret}
+
+
+\api{amm_find_addr}{Locate the map entry containing a specific address}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto amm_entry_t *amm_find_addr(amm_t *amm, oskit_addr_t addr);
+\end{apisyn}
+\begin{apidesc}
+	Locates the map entry describing the given address in the map \emph{amm}
+	and returns a pointer to it.
+	Since AMM maps contain every possible address in some entry,
+	this routine will always succeed; i.e., it will always return
+	a valid {\tt amm_entry_t} pointer.
+
+	AMM-private fields of the returned entry can be queried with the
+	amm_entry_\emph{field} macros.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Address to locate.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the entry containing the desired address.
+\end{apiret}
+
+
+\api{amm_find_gen}{Locate a map entry matching specified criteria}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto amm_entry_t *amm_find_gen(amm_t *amm,
+			       \inoutparam oskit_addr_t *addrp,
+			       oskit_size_t size, int flags, int flagmask,
+			       int align_bits, oskit_addr_t align_off,
+			       int find_flags);
+\end{apisyn}
+\begin{apidesc}
+	Returns a pointer to a map entry in the map \emph{amm} with
+	the indicated attributes which contains
+	an address range of the given size and alignment.
+	If no range can be found, {\tt amm_find_gen} returns zero.
+
+	On call, \emph{*addrp} contains a ``hint'' at which to start
+	searching for the range.
+	On a successful return, \emph{*addrp} contains the address chosen;
+	i.e., [\emph{*addrp} - \emph{*addrp}+\emph{size}-1] is the desired range.
+	This address may \emph{not} be the same as the start address of the
+	chosen map entry.
+
+	\emph{Flags} and \emph{flagmask} specify the attributes that the
+	returned range must match.
+	Only entries which satisfy
+	((entry-$>$flags \& \emph{flagmask}) == \emph{flags})
+	are considered when looking for a range.
+
+	\emph{Align_bits} and \emph{align_off} specify the alignment of the
+	returned range.
+	\emph{Align_bits} specifies an alignment boundary as a power of two,
+	and \emph{align_ofs} specifies an offset from ``natural'' alignment;
+	i.e., the lowest \emph{align_bits} bits of the returned address
+	must match the lowest \emph{align_bits} of \emph{align_ofs}.
+	For example, align_bits == 12 and align_ofs == 8 would return a
+	range starting 8 bytes past a 4096 byte boundary.
+
+	{Find_flags} can be used to modify the behavior of the lookup:
+
+	{\tt AMM_EXACT_ADDR}.
+		Range must start at the specified address.
+		If that address is unsuitable, {\tt amm_find_gen} returns zero.
+
+	{\tt AMM_FORWARD}.
+		Search forward from the hint address looking for a match.
+		This is the default behavior.
+
+	{\tt AMM_BACKWARD}.
+		Search backward from the hint address looking for a match.
+		{\bf Not implemented.}
+
+	{\tt AMM_FIRSTFIT}.
+		Return the first entry found that contains a suitable range.
+		This is the default behavior.
+
+	{\tt AMM_BESTFIT}.
+		Of all entries containing a suitable range,
+		return the entry which is the closest fit.
+		{\bf Not implemented.}
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addrp]
+		On call, pointer to a search hint address.
+		On return, the actual address found.
+	\item[size]
+		Size of the desired address range.
+	\item[flags]
+		Attribute flags that an entry must possess after masking
+		with \emph{flagmask}.
+	\item[flagmask]
+		Attribute mask to bitwise-AND with when matching an entry.
+	\item[align_bits]
+		The number of low bits of the returned address
+		that must match the corresponding bits in \emph{align_ofs}.
+	\item[align_ofs]
+		The required offset from natural power-of-two alignment.
+		If \emph{align_ofs} is zero,
+		then the returned address will be naturally aligned
+		on a $2^{align_bits}$ boundary.
+	\item[find_flags]
+		Flags modifying the behavior of the address space search.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the entry containing the desired range,
+	or zero if no suitable range could be found.
+\end{apiret}
+
+
+\api{amm_free_func}{Free an AMM map entry (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto void amm_free_func(amm_t *amm, amm_entry_t *entry);
+\end{apisyn}
+\begin{apidesc}
+	User-provided function called whenever an AMM entry needs to be
+	deallocated from the given map \emph{amm}.
+	The free function for an AMM is set at initialization time
+	by passing a pointer to it as a parameter to {\tt amm_init_gen}.
+
+	The range and attributes of the entry can be obtained using the
+	amm_entry_\emph{field} macros.
+
+	If the map is using extended map entries,
+	this routine should clean up any map-private data before deallocating
+	the entry.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[entry]
+		The entry to be destroyed.
+\end{apiparm}
+\begin{apirel}
+	{\tt amm_entry_\emph{field}}, {\tt amm_init_gen}
+\end{apirel}
+
+
+\api{amm_init}{initialize an address map (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto void amm_init(amm_t *amm, oskit_addr_t lo, oskit_addr_t hi);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes an address map as it would be used
+	in most ``simple'' applications.
+	The caller must provide a pointer to an {\tt amm_t} structure;
+	the AMM system uses this structure to keep track
+	of the state of the address map.
+	In subsequent AMM operations,
+	the caller must pass a pointer to the same {\tt amm_t} structure,
+	which acts as a handle for the address map.
+
+	The address range [\emph{lo} - \emph{hi}-1]
+	forms the valid area of the map.
+	A single map entry is created for that range with
+	attribute {\tt AMM_FREE} so that all addresses within the range
+	are eligible for allocation with {\tt amm_allocate}.
+	If necessary, entries are created for the ranges
+	[{\tt AMM_MINADDR} - \emph{lo}-1] and
+	[\emph{hi} - {\tt AMM_MAXADDR}]
+	with attribute {\tt AMM_RESERVED} so that addresses within those ranges
+	are ignored by other simple interface routines.
+
+	{\tt Amm_Init} is a simplified interface to {\tt amm_init_gen}
+	intended to be used with {\tt amm_allocate}, {\tt amm_deallocate},
+	{\tt amm_protect} and {\tt amm_reserve}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to an uninitialized structure of type {\tt amm_t}
+		which is to be used to represent the address map.
+	\item[lo]
+		The first address to be marked {\tt AMM_FREE}.
+	\item[hi]
+		The last address + 1 to be marked {\tt AMM_FREE}.
+\end{apiparm}
+\begin{apirel}
+	{\tt amm_allocate}, {\tt amm_deallocate}, {\tt amm_modify},
+	{\tt amm_protect}, {\tt amm_reserve}
+\end{apirel}
+
+
+\api{amm_init_gen}{initialize an address map}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto void amm_init_gen(amm_t *amm, int flags, amm_entry_t *entry,
+		amm_entry_t *(*amm_alloc_func)(), void (*amm_free_func)(),
+		int (*amm_split_func)(), int (*amm_join_func)());
+\end{apisyn}
+\begin{apidesc}
+	This function initializes an address map.
+	The caller must provide a pointer to an {\tt amm_t} structure;
+	the AMM system uses this structure to keep track
+	of the state of the address map.
+	In subsequent AMM operations,
+	the caller must pass a pointer to the same {\tt amm_t} structure,
+	which acts as a handle for the address map.
+
+	The map is initialized to contain a single entry describing the
+	maximum possible address range [{\tt AMM_MINADDR} - {\tt AMM_MAXADDR}]
+	and have the attributes specified in \emph{flags}.
+	If the \emph{entry} parameter is non-zero,
+	it is used as the initial entry.
+	This allows the caller to allocate a structure larger than the
+	basic {\tt amm_entry_t} and store additional attribute data in
+	the extended structure.
+	If the caller supplies such an entry
+	they must have initialized any caller-private data in that entry,
+	but {\tt amm_init_gen} will initialize the AMM-private part
+	(the actual {\tt amm_entry_t}).
+	If \emph{entry} is zero, a standard entry will be allocated using
+	the default or caller-provided entry allocation routine
+	(described below).
+
+	The four function pointer parameters permit the caller to
+	customize AMM entry management on a per-AMM basis.
+	If non-zero,
+	\emph{amm_alloc_func} and \emph{amm_free_func} specify routines that
+	the AMM library will callout to whenever an AMM entry is to be
+	created or destroyed.
+	If zero,
+	{\tt malloc} and {\tt free} are used to manage basic {\tt amm_entry_t}
+	structures.
+
+	If non-zero,
+	\emph{amm_split_func} and \emph{amm_join_func} specify routines that
+	the AMM library will callout to whenever an AMM entry needs to be
+	split or two entries need to be joined.
+	If zero,
+	default split and join calls are used.
+	Split and join calls only occur as a side-effect of an
+	{\tt amm_modify} call.
+
+	When using extended AMM structures,
+	the caller needs to provide free, split and join functions.
+	The alloc function is not strictly necessary since the two AMM
+	functions which create entries,
+	{\tt amm_init_gen} and {\tt amm_modify},
+	have explicit entry parameters,
+	and the third function which can create an entry,
+	{\tt amm_split_func},
+	will be caller-provided.
+	The allocation hook is primarily provided to allow the caller
+	control over the placement of AMM entry storage.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to an uninitialized structure of type {\tt amm_t}
+		which is to be used to represent the address map.
+	\item[flags]
+		Initial attribute flags to assign to the entry representing
+		the entire address range.
+	\item[entry]
+		Initial entry to associate with the map.
+	\item[amm_alloc_func]
+		If non-zero, the function called whenever the AMM library
+		needs to allocate a new map entry.
+	\item[amm_free_func]
+		If non-zero, the function called whenever the AMM library
+		needs to destroy a map entry.
+	\item[amm_split_func]
+		If non-zero, the function called whenever the AMM library
+		needs to split an existing map entry into two entries.
+	\item[amm_join_func]
+		If non-zero, the function called whenever the AMM library
+		needs to join adjacent map entries.
+\end{apiparm}
+\begin{apirel}
+	{\tt amm_alloc_func}, {\tt amm_free_func},
+	{\tt amm_join_func}, {\tt amm_split_func}
+\end{apirel}
+
+
+\api{amm_iterate}{Call a user-defined function for every entry in an AMM (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_iterate(amm_t *amm,
+		int (*amm_iterate_func)(), void *arg);
+\end{apisyn}
+\begin{apidesc}
+	Calls a user-provided function \emph{amm_iterate_func} for every
+	entry of \emph{amm}.
+
+	\emph{Arg} is an opaque value which is passed to every instance of
+	{\tt amm_iterate_func} along with \emph{amm} and the entry itself.
+
+	{\tt amm_iterate} continues until the function has been called
+	for all entries in the AMM or until one instance of the function
+	returns non-zero.
+	In the latter case,
+	that non-zero value will be returned from {\tt amm_iterate}.
+
+	Since the iteration function may modify or even destroy the entry
+	passed in, {\tt amm_iterate} uses the following technique for
+	locating the ``next'' entry.
+	At the beginning of each iteration, {\tt amm_iterate} records the
+	last address covered by the current entry.
+	After the specified iteration function returns,
+	{\tt amm_find_addr} is called with this address to ``relocate''
+	the current entry.
+	From this entry, {\tt amm_iterate} derives the next entry.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[amm_iterate_func]
+		Function to be called for every entry.
+	\item[arg]
+		Argument to be passed to every instance of the iteration
+		function.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if {\tt amm_iterate_func} returned zero for all entries.
+	Returns the first non-zero value returned from any
+	{\tt amm_iterate_func} call.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_iterate_func}
+\end{apirel}
+
+
+\api{amm_iterate_func}{Function to call with every AMM entry (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_iterate_func(amm_t *amm, amm_entry_t *entry,
+			void *arg);
+\end{apisyn}
+\begin{apidesc}
+	Function called successively by {\tt amm_iterate} and
+	{\tt amm_iterate_gen} with each selected entry from the map {\tt amm}.
+	The iteration function may modify or destroy the entry passed in.
+
+	If this function returns non-zero,
+	the iterator will stop and {\tt amm_iterate} or {\tt amm_iterate_gen}
+	will return that non-zero value.
+	Returning zero will continue the iteration.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[entry]
+		The selected entry in the map.
+	\item[arg]
+		The opaque argument provided to
+		{\tt amm_iterate} and {\tt amm_iterate_gen}
+		and passed to each instance of {\tt amm_iterate_func}.
+\end{apiparm}
+\begin{apiret}
+	Should return zero if the iteration is to continue,
+	non-zero otherwise.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_iterate}, {\tt amm_iterate_gen}
+\end{apirel}
+
+
+\api{amm_iterate_gen}{Call a user-defined function for select entries in an AMM}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_iterate_gen(amm_t *amm,
+		int (*amm_iterate_func)(), void *arg,
+		oskit_addr_t addr, oskit_size_t size, int flags, int flagmask);
+\end{apisyn}
+\begin{apidesc}
+	Calls a user-provided function \emph{amm_iterate_func} for every
+	entry of \emph{amm} which falls partially or completely in the range
+	[\emph{addr} - \emph{addr}+\emph{size}-1] and matches the given
+	attribute criteria.
+
+	\emph{Arg} is an opaque value which is passed to every instance of
+	{\tt amm_iterate_func} (along with \emph{amm} and the entry itself).
+
+	\emph{Flags} and \emph{flagmask} specify the attributes that an entry
+	in the range must match for {\tt amm_iterate_func} to be invoked.
+	Only entries with
+	((entry-$>$flags \& \emph{flagmask}) == \emph{flags})
+	are considered.
+
+	{\tt amm_iterate_gen} continues until the function has been called
+	for all appropriate entries in the range or until one instance of
+	the function returns non-zero.
+	In the latter case,
+	that non-zero value will be returned from {\tt amm_iterate_gen}.
+
+	Since the iteration function may modify or even destroy the entry
+	passed in, {\tt amm_iterate_gen} uses the following technique for
+	locating the ``next'' entry.
+	At the beginning of each iteration, {\tt amm_iterate_gen} records the
+	last address covered by the current entry.
+	After the specified iteration function returns,
+	{\tt amm_find_addr} is called with this address to ``relocate''
+	the current entry.
+	From this entry, {\tt amm_iterate_gen} derives the next entry.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[amm_iterate_func]
+		Function to be called for every matching entry.
+	\item[arg]
+		Argument to be passed to every instance of the iteration
+		function.
+	\item[addr]
+		Address at which to start iterating.
+	\item[size]
+		Size of the desired range over which to iterate.
+	\item[flags]
+		Attribute flags that an entry must possess after masking
+		with \emph{flagmask}.
+	\item[flagmask]
+		Attribute mask to bitwise-AND with when matching an entry.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if {\tt amm_iterate_func} returned zero for all entries.
+	Returns the first non-zero value returned from any
+	{\tt amm_iterate_func} call.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_iterate_func}
+\end{apirel}
+
+
+\api{amm_join_func}{Join two adjacent map entries (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_join_func(amm_t *amm,
+			amm_entry_t *head, amm_entry_t *tail,
+			\outparam amm_entry_t **new);
+\end{apisyn}
+\begin{apidesc}
+	User-provided function called whenever the AMM thinks that
+	two map entries for the map \emph{amm}
+	can be joined, based on comparison of the their flag words.
+	The join function for an AMM is set at initialization time
+	by passing a pointer to it as a parameter to {\tt amm_init_gen}.
+
+	\emph{Head} and \emph{tail} are the two entries to join.
+	If the join is successful, a pointer to the joined entry
+	is returned in \emph{new}.
+	The returned entry may be one of the two entries passed in
+	or it may be an entirely new entry.
+	The AMM will call the entry free function for any ``left-over''
+	entries on return from a successful join call.
+
+	This routine is responsible for merging the map-private attributes
+	of the two entries if they can be joined.
+
+	If the map-private attributes of the two entries are incompatible,
+	the call should return non-zero to prevent the caller from reflecting
+	the join in the map.
+	Failure to join two entries is not an error,
+	and the return code will not be propagated up through the call chain.
+
+	{\tt amm_join_func} is only called by {\tt amm_modify}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[head,tail]
+		The two entries to be joined.
+	\item[new]
+		A pointer to the new, joined entry.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if the join was successful, non-zero if not.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_init_gen}, {\tt amm_modify}
+\end{apirel}
+
+
+\api{amm_modify}{Modify the attributes of an address range}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_modify(amm_t *amm, oskit_addr_t addr, oskit_size_t size,
+			int flags, amm_entry_t *entry);
+\end{apisyn}
+\begin{apidesc}
+	Creates a new map entry in \emph{amm} describing the range
+	[\emph{addr} - \emph{addr}+\emph{size}-1]
+	with the attributes indicated in \emph{flags}.
+
+	Any existing map entries wholly within the range are deleted,
+	any that partly overlap the range are split as necessary.
+	After adding the new entry,
+	the AMM may attempt to join it with adjacent already-existing entries
+	if the flag words are compatible.
+
+	If \emph{entry} is zero, a standard {\tt amm_entry_t} structure is
+	allocated for the new range.
+	If \emph{entry} is non-zero,
+	the caller must have already allocated and initialized any extra
+	attribute data in the extended entry.
+	In either case,
+	the AMM will initialize the private part of the	new entry,
+	including setting its attribute flags to \emph{flags}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the range being modified.
+	\item[size]
+		Size of the range being modified.
+	\item[flags]
+		New attributes for the range being modified.
+	\item[entry]
+		If non-zero, the entry structure to use in the map.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if the modification was successful,
+	non-zero if an entry split failed.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_alloc_func}, {\tt amm_free_func},
+	{\tt amm_join_func}, {\tt amm_split_func}
+\end{apirel}
+
+
+\api{amm_protect}{Modify the attribute flags of an address range in an AMM (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_protect(amm_t *amm,
+			oskit_addr_t addr, oskit_size_t size, int prot);
+\end{apisyn}
+\begin{apidesc}
+	Modifies the attribute flags associated with with all
+	{\tt AMM_ALLOCATED} entries within the specified address range.
+	The resulting attributes are {\tt AMM_ALLOCATED}$|$\emph{prot}.
+	{\tt AMM_RESERVED} and {\tt AMM_FREE} areas within the range
+	are ignored.
+
+	{\tt Amm_Protect} is a simplified interface to {\tt amm_modify}
+	intended to be used with {\tt amm_init}, {\tt amm_allocate},
+	{\tt amm_deallocate}, and {\tt amm_reserve}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the desired range.
+	\item[size]
+		Size of the desired range.
+	\item[prot]
+		New attribute flags to associate with the range.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if successful, an error code otherwise.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_allocate}, {\tt amm_deallocate}, {\tt amm_init},
+	{\tt amm_modify}, {\tt amm_reserve}
+\end{apirel}
+
+
+\api{amm_reserve}{Mark as unavailable an address range in an AMM (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_reserve(amm_t *amm,
+			oskit_addr_t *addr, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Mark the specified address range as {\tt AMM_RESERVED}.
+	All entries within the range are effected
+	regardless of existing attributes.
+
+	{\tt Amm_Reserve} is a simplified interface to {\tt amm_modify}
+	intended to be used with {\tt amm_init}, {\tt amm_allocate},
+	{\tt amm_deallocate}, and {\tt amm_protect}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the desired range.
+	\item[size]
+		Size of the desired range.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if successful, an error code otherwise.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_allocate}, {\tt amm_deallocate}, {\tt amm_init},
+	{\tt amm_modify}, {\tt amm_protect}
+\end{apirel}
+
+
+\api{amm_select}{Returns an entry describing an address range exactly}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto amm_entry_t *amm_select(amm_t *amm,
+			oskit_addr_t addr, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Return a map entry in \emph{amm} describing the range
+	[\emph{addr} - \emph{addr}+\emph{size}-1].
+	If either the start or end address is contained within an entry,
+	the entry is split to create one starting or ending at the desired
+	address.
+
+	Note that the desired range may still be described by multiple entries.
+	{\tt Amm_select} only guarantees that there is an entry starting at
+	\emph{addr} and an entry ending at \emph{addr}+\emph{size}-1.
+
+	This function returns a pointer to the selected entry.
+	In the event that the desired range is described by multiple entries,
+	{\tt amm_select} returns the first entry.
+	Successive entries may be obtained using {\tt amm_find_addr} using
+	the end address of the current entry ({\tt amm_entry_end}).
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[addr]
+		Start address of the desired range.
+	\item[size]
+		Size of the desired range.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the first entry describing the range.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_split_func},
+	{\tt amm_find_addr}, {\tt amm_entry_\emph{field}}
+\end{apirel}
+
+
+\api{amm_split_func}{Split a map entry into two entries (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/amm.h}
+
+	\funcproto int amm_split_func(amm_t *amm, amm_entry_t *entry,
+			oskit_addr_t split_addr,
+			\outparam amm_entry_t **head,
+			\outparam amm_entry_t **tail);
+\end{apisyn}
+\begin{apidesc}
+	User-provided function called whenever the AMM needs to split
+	an entry in map \emph{amm} due to conflicting flags.
+	The split function for an AMM is set at initialization time
+	by passing a pointer to it as a parameter to {\tt amm_init_gen}.
+
+	\emph{Entry} is the entry to be split and \emph{split_addr}
+	is the address at which to split it.
+	If the split is successful,
+	\emph{head} and \emph{tail} are pointers to the resulting entries
+	describing the ranges
+	[{\tt amm_entry_start}(\emph{entry}) - \emph{split_addr}-1]
+	and
+	[\emph{split_addr} - {\tt amm_entry_end}(\emph{entry})-1]
+	respectively.
+	Both may be entirely new entries allocated in this routine,
+	or one may point to the modified original entry.
+	The AMM will call the entry free function for the original
+	entry if it is not one of the returned values.
+
+	This routine is responsible for initializing the map-private
+	attributes of the resulting new entries.
+
+	If the split cannot be done, e.g., due to lack of resources,
+	a non-zero value indicating the error should be returned.
+	A non-zero return value is propagated on to whoever performed
+	the action which triggered the split request.
+
+	{\tt amm_split_func} is only called by {\tt amm_modify}.
+\end{apidesc}
+\begin{apiparm}
+	\item[amm]
+		A pointer to the {\tt amm_t} structure
+		representing the address map.
+	\item[entry]
+		The map entry to be split.
+	\item[split_addr]
+		The address at which to split the entry.
+	\item[head,tail]
+		Pointers to the the resulting new entries.
+\end{apiparm}
+\begin{apiret}
+	Returns zero if the split was successful, non-zero if not.
+\end{apiret}
+\begin{apirel}
+	{\tt amm_init_gen}
+\end{apirel}
+

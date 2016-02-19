@@ -1,0 +1,12 @@
+Directories:  oskit/gprof
+Target: liboskit_gprof.a
+Documentation:  doc/gprof.tex
+Original Code Source:
+	NetBSD 1.1, NetBSD Project
+	(BSD, The University of California)
+	Flux Research Group, University of Utah
+Description:
+	The gprof profiling routines and program.  Allows for
+	profiling of oskit kernels.  Prints profiling information
+	at kernel exit.  Includes other files in other oskit/
+	directories - see gprof.tex for more information.

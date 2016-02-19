@@ -1,0 +1,348 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Interrupts, Traps and Signals
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+/*#
+Interrupt Descriptor Table (interrupt vectors).
+See also IRQ_T and Trap_T.
+#*/
+bundletype IDT_T =
+{ include "${BUILDDIR}/oskit/machine/base_idt.h",
+  base_idt,
+  base_idt_load,
+} with flags kern
+
+/*#
+Traps are "software interrupts" (or "processor exceptions") of
+various kinds.  Depending on implementation, interrupts may or may
+not be disabled while they run.
+
+ToDo: base_trap_handlers (and base_trap_inittab?) should possibly be
+separate since they can be replaced independently of base_trap_init
+and friends.
+#*/
+bundletype Trap_T =
+{ include "${BUILDDIR}/oskit/machine/base_trap.h",
+  base_trap_inittab,
+// , initializer base_trap_init // loads base_trap_inittab into x86 trap vector
+  base_trap_init,
+  base_trap_handlers,         // the interrupt vector (for C functions)
+  base_trap_default_handler,
+  base_trap_ignore_handler,
+  base_trap_gdb_handler,
+  trap_dump,
+  trap_dump_panic,
+} with flags kern
+
+/*#
+The Programmable Interrupt Controller (PIC).
+#*/
+bundletype PIC_T =
+{ include "${BUILDDIR}/oskit/machine/pc/pic.h",
+  pic_disable_irq,
+  pic_enable_irq,
+  pic_test_irq,
+  pic_get_irqmask,
+  pic_set_irqmask,
+  pic_init,           // not an initialiser
+} with flags kern
+
+/*#
+Turn interrupts on/off at CPU level.
+#*/
+bundletype OSEnvIntr_T = 
+{ include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_intr_disable,
+  osenv_intr_enable,
+  osenv_intr_enabled,
+  osenv_intr_save_disable, //- Needed by dev/x86/timer and dev/x86/timer_pit
+} with flags osenv
+
+bundletype OSEnvIntrObj_T =
+{ osenv_intr_object
+}
+
+bundletype SoftInt_T = 
+{ include "${BUILDDIR}/oskit/machine/base_irq.h",
+  base_irq_softint_handler 
+} with flags kern
+
+bundletype OSEnvSoftIRQ_T =
+{ include "${OSKITDIR}/oskit/dev/softirq.h",
+  osenv_softintr_disable,
+  osenv_softintr_enable,
+  osenv_softintr_enabled,
+  osenv_softirq_alloc,
+  osenv_softirq_alloc_vector,
+  osenv_softirq_free,
+  osenv_softirq_free_vector,
+  osenv_softirq_schedule,
+} with flags osenv
+
+bundletype IRQ_T =
+{ include "${BUILDDIR}/oskit/machine/base_irq.h",
+  base_irq_default_handler,
+  base_irq_handlers,
+  base_irq_init,     // initialiser?
+  base_irq_inittab,
+  base_irq_nest,
+  irq_master_base,
+  irq_slave_base,
+  oskit_base_irq_handler,
+} with flags kern
+
+bundletype OSEnvIRQ_T =
+{ include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_irq_alloc,
+  osenv_irq_free,
+  osenv_irq_enable,
+  osenv_irq_disable,
+  osenv_irq_pending,
+} with flags osenv           
+
+bundletype OSEnvRealtimeIRQ_T =
+{ extends OSEnvIRQ_T,
+  include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_irq_schedule,
+} with flags osenv          
+
+bundletype OSEnvIRQObj_T =
+{ osenv_irq_object
+}
+
+bundletype SignalDump_T = 
+{ include "${BUILDDIR}/oskit/machine/c/signal.h",
+  sigcontext_dump,
+  sigcontext_dump_stack_trace, // not exported?
+} with flags libc
+
+bundletype Signal_T = { 
+  include "${OSKITDIR}/oskit/c/signal.h",
+  signal, 
+  siginterrupt,  // not exported?
+} with flags libc
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+// mk_unit -o -n idt kern/base_idt.o kern/base_idt_load.o
+unit base_idt = {
+  imports[ segments : Segments_T ];
+  exports[ idt : IDT_T ];
+  depends{ {idt.base_idt_load} needs {idt.base_idt} + imports };
+  files{ "kern/x86/base_idt.c",
+         "kern/x86/base_idt_load.c",
+  } with flags kern;
+}
+
+// ToDo: split this up - almost every part is supposed to be independently
+//       replaceable.
+// mk_unit -o -n base_irq kern/base_irq_default_handler.o kern/base_irq_inittab.o kern/base_irq.o kern/base_irq_init.o
+unit base_irq = {
+  imports[ anno    : Anno_T, // anno_find_lower, anno_intr
+           idt     : { base_idt },
+           gate    : { gate_init },
+           pic     : { pic_init },
+           panic   : Panic_T,
+           stdout  : Stdout_T,
+           softint : SoftInt_T,
+         ];
+  exports[ irq : IRQ_T ];
+  constraints{ context exports <= NoContext; // ToDo: probably too weak
+	       context softint >= NoContext;
+               context anno    >= NoContext;
+             };
+//  depends{ exports + inits + finis needs anno + idt + gate + pic + panic + stdout + softint };
+  depends{ {irq.base_irq_default_handler} needs stdout };
+  depends{ {irq.base_irq_inittab, irq.oskit_base_irq_handler} 
+           needs {anno.anno_find_lower,anno.anno_intr,irq.base_irq_handlers,irq.base_irq_nest} + softint };
+  depends{ {irq.base_irq_handlers,irq.base_irq_nest,irq.irq_master_base,irq.irq_slave_base}
+           needs {irq.base_irq_default_handler} };
+  depends{ {irq.base_irq_init}
+           needs {irq.base_irq_inittab,irq.irq_master_base,irq.irq_slave_base} + idt + gate + panic + pic };
+  files{ 
+    "kern/x86/pc/base_irq_default_handler.c",
+    "kern/x86/pc/base_irq.c",
+    "kern/x86/pc/base_irq_init.c",
+  } with flags kern;
+  files{ 
+    "kern/x86/pc/base_irq_inittab.S",
+  } with flags { flags kern, flags asm }; 
+}
+
+// mk_unit -o -n base_pic kern/pic.o
+unit base_pic = {
+  imports[ panic : Panic_T ];
+  exports[ pic : PIC_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/pic.c" }
+    with flags kern;
+}
+
+// ToDo: split this up - almost very part is supposed to be independently
+//       replaceable.
+// mk_unit -o -n base_trap kern/base_trap_default_handler.o kern/base_trap_inittab.o kern/base_trap.o kern/base_trap_ignore_handler.o kern/trap_dump_panic.o kern/trap_dump.o kern/base_trap_init.o
+unit base_trap = {
+  imports[ anno   : Anno_T, // anno_find_exact, anno_trap
+           idt    : { base_idt },
+           gate   : { gate_init },
+           panic  : Panic_T,
+           stdout : Stdout_T,
+         ];
+  exports[ trap : Trap_T ];
+//  initializer base_trap_init for {idt.base_idt};
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/base_trap_default_handler.c",
+         "kern/x86/base_trap.c",
+         "kern/x86/base_trap_ignore_handler.c",
+         "kern/x86/trap_dump_panic.c",
+         "kern/x86/trap_dump.c",
+         "kern/x86/base_trap_init.c",
+  } with flags kern;
+  files{ "kern/x86/base_trap_inittab.S",
+  } with flags { flags kern, flags asm }; 
+}
+
+
+// mk_unit -o -nosenv_intr  dev/synch.o
+unit osenv_intr = {
+  imports[];
+  exports[ out : OSEnvIntr_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/synch.c"
+  } with flags osenv;
+}
+
+// COM wrapper for osenv_intr
+// mk_unit -o -nosenv_introbj dev/osenv_intr.o   
+unit osenv_introbj = {
+  imports[ osenv_intr : OSEnvIntr_T,
+           iids : { oskit_iunknown_iid,
+                    oskit_osenv_intr_iid,
+                  },
+         ];
+  exports[ out : OSEnvIntrObj_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/osenv_intr.c"
+  } with flags osenv;
+}
+
+// mk_unit -o -nosenv_irq dev/irq.o dev/pic.o
+unit osenv_irq = {
+  imports[ base_irq : { base_irq_default_handler
+                       , base_irq_handlers
+                       },
+           log : OSEnvLog_T,
+           mem : OSEnvMem_T,   // alloc/free
+           pic : PIC_T,
+         ];
+  exports[ out : OSEnvIRQ_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/irq.c",
+         "dev/x86/pic.c",
+  } with flags osenv;
+}
+
+// COM wrapper for osenv_irq
+// mk_unit -o -nosenv_irqobj dev/osenv_irq.o 
+unit osenv_irqobj = {
+  imports[ osenv_irq : OSEnvIRQ_T,
+           iids : {
+                oskit_iunknown_iid,
+                oskit_osenv_irq_iid,
+              }
+         ];
+  exports[ out : OSEnvIRQObj ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/osenv_irq.c",
+  } with flags osenv;
+}
+
+
+// mk_unit -o -nosenv_softirq dev/softirq.o 
+unit osenv_softirq = {
+  imports[ intr  : OSEnvIntr_T,
+           log   : OSEnvLog_T,
+           mem   : OSEnvMem_T,
+           panic : Panic_T,   // ToDo: should be osenvPanic
+           softint : SoftInt_T,
+           irq   : IRQ_T, // just base_irq_nest
+         ];
+  exports[ out : OSEnvSoftIRQ_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/softirq.c",
+  } with flags osenv;
+}
+
+// ToDo: sendsig_init could be turned into an initialiser but (may) need
+// to take care that it is not run until _after_ all traps are registered or
+// that it is run before any traps are registered but with signal delivery
+// turned off.
+
+// Killed this because I moved sendsig into posix_signals and they had complex
+// initialisation behaviour.  This unit was only used as an argument to
+// clientos (RIP).
+
+// // mk_unit -o -n base_sendsig kern/sendsig.o
+// unit base_sendsig = {
+//   imports[ trap  : { base_trap_default_handler, base_trap_handlers },
+//            panic : Panic_T,
+//          ];
+//   exports[ out
+//            : { oskit_sendsig
+//              , oskit_sendsig_init // not an initialiser
+//              , sendsig_trap_handler
+//              },
+//          ];
+//   depends{ exports + inits + finis needs imports };
+//   files{ "kern/x86/sendsig.c" }
+//    with flags kern;
+// }
+
+
+// mk_unit -o -nfreebsd_signals freebsd/libc/signal.o 
+unit freebsd_signals = {
+  imports[ signal : PosixSignals_T ];
+  exports[ out : Signal_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/gen/signal.c",
+         "freebsd/3.x/src/lib/libc/gen/siginterrupt.c",
+  } with flags freebsd_libc;
+}
+
+
+// mk_unit -o -n signal_dump freebsd/libc/sigcontext_dump.o 
+unit signal_dump = {
+  imports[ stdout : Stdout_T ];
+  exports[ out : SignalDump_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/libc/x86/glue/sigcontext_dump.c",
+  } with flags freebsd_libc;
+}
+
+// omitted: freebsd/libc/siginterrupt.o 
+
+/************************************************************/
+// End
+/************************************************************/

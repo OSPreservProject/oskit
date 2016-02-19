@@ -1,0 +1,209 @@
+#
+# Copyright (c) 1997-2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+### XXX --- Building sys.bib (Utah only)
+###
+### We want to use the Flux sys.bib file but we don't want to 
+### distribute it.  Rather than just editing sys.bib by hand,
+### we generate it automatically using aux2bib which extracts
+### just the bits we need out of the Flux sys.bib into a local 
+### copy of sys.bib.  The command to do this is in yoru build tree:
+###
+###   BIBINPUTS=/n/fast/usr/lsrc/flux/doc: \
+###   BSTINPUTS=/home/reid/local/bibtools: \
+###   /home/reid/local/bin/aux2bib -c oskit.aux
+###
+### and then copy it into your source tree:
+###
+###   cp references.bib ../../oskit/doc/sys.bib
+
+###
+### XXX --- Notable notes about the WWW version:
+###
+### + `make oskit-www.html' builds the WWW version of the document.  This is
+###   *not* done by `make all'.
+###
+### + To install the WWW version somewhere, do: cp *.html *.css *.gif dest-dir
+###
+
+# Tell LaTeX to look in the source directory for input files.
+TEXINPUTS = .:$(OSKIT_SRCDIR)/doc::
+export TEXINPUTS
+# Tell LaTeX to look in the source directory for a `texmf.cnf'.
+TEXMFCNF = $(OSKIT_SRCDIR)/doc::
+export TEXMFCNF
+# Tell BibTeX to look in the source directory for a `sys.bib'.
+BIBINPUTS=$(OSKIT_SRCDIR)/doc:
+export BIBINPUTS
+# Tell `tex4ht' to look in the source directory for a `tex4ht.env'.
+TEX4HTENV=$(OSKIT_SRCDIR)/doc/tex4ht.env
+export TEX4HTENV
+
+vpath %.fig $(OSKIT_SRCDIR)/doc
+vpath %.tex $(OSKIT_SRCDIR)/doc
+
+# The set of document ``root files''.
+ROOT_TEXFILES = oskit.tex oskit-www.tex
+
+# TEXFILES: the set of non-root LaTeX files.
+TEXFILES := $(wildcard $(OSKIT_SRCDIR)/doc/*.tex)
+TEXFILES := $(filter-out $(ROOT_TEXFILES),$(TEXFILES))
+
+FIGFILES := $(wildcard $(OSKIT_SRCDIR)/doc/*.fig)
+EPSFILES := $(patsubst $(OSKIT_SRCDIR)/doc/%.fig,%.eps,$(FIGFILES))
+
+.SUFFIXES: .fig .eps
+
+# all: oskit.ps oskit-www.html
+all: oskit.ps
+
+install: all
+
+###############################################################################
+
+###
+### Rules for the DVI/PS version of the document.
+###
+
+# Will need to iterate by hand.
+oskit.dvi: oskit.ind
+	latex oskit || (rm -f oskit.dvi && echo Nuked oskit.dvi && false)
+# these next two are because latex produces a newer .idx file
+# this prevents additional `make' from always redoing everything
+	touch oskit.ind
+	touch oskit.dvi
+
+# brute-force a fixed-point.  Might need a third go.
+oskit.ind: oskit.idx
+	makeindex oskit.idx
+	latex oskit.tex
+	bibtex oskit
+	makeindex oskit.idx
+	latex oskit.tex
+
+oskit.idx: oskit.tex $(TEXFILES) $(EPSFILES)
+	latex oskit
+
+oskit.txt: oskit.dvi
+	dvi2tty -w130 oskit >oskit.txt
+
+## 'perl-reform' is the reform.pl, an example from the Perl book. 
+## It's in this directory now, copied from Pat's ~/bin.
+txt-right: oskit.dvi
+	rm -f oskit.txt
+	dvi2tty -w132 oskit.dvi | perl -pe 's/-\s*\n$$//' | perl-reform > oskit.txt
+
+# Generic rule to make the standalone versions of various chapters
+sa-%.dvi: %.tex sa-%.tex
+	latex sa-$*.tex
+	latex sa-$*.tex
+
+sa-%.tex: defs.tex
+	echo '\documentclass{article}'  >$(@F)
+	echo '\input{conf}' >>$(@F)
+	echo '\input{defs}' >>$(@F)
+	echo '\begin{document}' >>$(@F)
+	echo '\maketitle' >>$(@F)
+	echo '\input{$*}' >>$(@F)
+	echo '\end{document}' >>$(@F)
+
+# Explicit dependencies for imported PostScript figures
+# Note: .dvi files, not the .ps files, depend on .eps figures since
+# the latex psfig package tries to read the bounding box info from
+# the .eps file
+sa-dev.dvi: fdev-org.eps fdev-user-mode.eps
+sa-com.dvi: com-interface.eps
+sa-fs.dvi:  fs-hier.eps
+sa-libdev.dvi: fdev-hw-tree.eps
+sa-env.dvi: pure-model.eps
+sa-pd.dvi: pd-bw.eps
+
+# So can force iteration to a fixed point.
+dvi redo retex:	FRC
+	makeindex oskit.idx
+	latex oskit
+
+###############################################################################
+
+###
+### Rules for the WWW version of the document.
+###
+
+oskit-www.html: oskit-www.dvi
+	tex4ht $(basename $@)
+	t4ht $(basename $@)
+
+# XXX --- The `fgrep' trick doesn't really work.  TeX4ht doesn't always say
+# ``rerun'' when a second run is required to get its files in order.
+#
+oskit-www.dvi: oskit-www.tex $(TEXFILES) $(EPSFILES)
+	latex $<
+	bibtex $(basename $@)
+# Instead of:
+#	makeindex $(basename $@)
+# TeX4ht tells one to do the next two commands:
+	tex '\def\filename{{$(basename $@)}{ind}{idx}{in}{out}} \input idxmake.4ht'
+	makeindex -o $(@:.dvi=.out) $(@:.dvi=.in)
+# Note that the above `makeindex' doesn't produce a working index.  We could
+# skip the above run, *except* that we need to run `latex' twice after making
+# any index, so that the index will appear in the TOC.  So either we run
+# `makeindex' early, or we run `latex' twice after the *next* invocation of
+# `makeindex'.  `makeindex' is faster than `latex'.
+	latex $<
+	tex '\def\filename{{$(basename $@)}{ind}{idx}{in}{out}} \input idxmake.4ht'
+	makeindex -o $(@:.dvi=.out) $(@:.dvi=.in)
+	latex $<
+
+#oskit-www.dvi: oskit-www.tex $(TEXFILES) $(EPSFILES)
+#	latex $<
+#	if fgrep -q -i -e 'rerun to get' $(@:.dvi=.log) ; then \
+#		makeindex $(basename $<) ; \
+#		latex $< ; \
+#	fi; true
+#	if fgrep -q -i -e 'rerun to get' $(@:.dvi=.log) ; then \
+#		makeindex $(basename $<) ; \
+#		latex $< ; \
+#	fi; true
+
+###############################################################################
+
+%.eps: %.fig
+	fig2dev -L ps $? $@
+
+%.ps: %.dvi
+	dvips -Z $(basename $<) -o $@
+
+%.2up.ps: %.ps
+	-psnup -n 2 -r $< > $@
+
+###############################################################################
+
+dist: oskit.ps oskit.2up.ps oskit.txt distclean
+
+clean: FRC
+	rm -f \
+		*.ps *.dvi *.aux *.idx *.ind *.ilg *.log *.toc *.txt *.eps \
+		*.bbl *.blg sa-* \
+		*.css *.html *.gif *.4ct *.4tc *.idv *.in *.lg *.out *.tmp \
+		*.xref
+
+distclean: FRC
+	rm -f oskit.log oskit.ilg
+
+depend:
+
+FRC:

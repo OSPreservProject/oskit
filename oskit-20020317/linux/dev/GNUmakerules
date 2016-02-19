@@ -1,0 +1,191 @@
+#
+# Copyright (c) 1996-2002 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Glue Libraries, which are free
+# software, also known as "open source;" you can redistribute them and/or
+# modify them under the terms of the GNU General Public License (GPL),
+# version 2, as published by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+ifndef _oskit_linux_dev_makerules_
+_oskit_linux_dev_makerules_ = yes
+
+TARGET	= liboskit_linux_dev.a
+
+all: $(TARGET)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/linux/dev			\
+		$(OSKIT_SRCDIR)/linux/src/drivers/block		\
+		$(OSKIT_SRCDIR)/linux/src/drivers/pci		\
+		$(OSKIT_SRCDIR)/linux/src/drivers/sound
+
+ifeq ($(HOST_ARCH),arm32)
+# XXX hack for dma code
+SRCDIRS +=	$(OSKIT_SRCDIR)/linux/src/arch/arm/kernel
+else
+SRCDIRS +=	$(OSKIT_SRCDIR)/linux/src/drivers/cdrom
+endif
+
+MOSTLY_SRCDIRS += $(OSKIT_SRCDIR)/linux/src/drivers/net		\
+		  $(OSKIT_SRCDIR)/linux/src/drivers/scsi
+
+#
+# Add these if you like:
+#
+# -DINLINED_FLAGS	- Inline cli/sti calls instead of osenv calls
+# -DDEVICE_POLLING	- Add receive polling support (tulip,eepro100)
+#
+DEFINES += -DOSKIT_DEV # -DDEVICE_POLLING
+
+# Implicitly include the dev global.h header file at the top of _all_ sources.
+# This header #defines a bunch of global Linux symbols
+# to ensure linker namespace cleanliness and avoid conflicts.
+OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/linux/dev/global.h
+
+# Define SCSIDRIVERS and ETHERDRIVERS.
+-include scsidrivers
+-include etherdrivers
+
+# Build individual glue files for the SCSI and Ethernet drivers; see below.
+SCSIGLUE_CFILES := $(addsuffix _scsiglue.c,$(SCSIDRIVERS))
+OBJFILES += $(addsuffix _scsiglue.o,$(SCSIDRIVERS))
+CLEAN_FILES += scsidrivers $(addsuffix _scsiglue.c,$(SCSIDRIVERS))
+ETHERGLUE_CFILES := $(addsuffix _etherglue.c,$(ETHERDRIVERS))
+OBJFILES += $(addsuffix _etherglue.o,$(ETHERDRIVERS))
+CLEAN_FILES += etherdrivers $(addsuffix _etherglue.c,$(ETHERDRIVERS))
+
+.PRECIOUS: $(SCSIGLUE_CFILES)
+.PRECIOUS: $(ETHERGLUE_CFILES)
+
+# Figure out which driver and shared files to actually compile.
+# This mostly depends on the contents of $(ETHERDRIVERS), etc; see below.
+ETHEROBJS := net_init.o 8390.o
+ETHEROBJS += $(addsuffix .o,$(ETHERDRIVERS))
+OBJFILES += $(ETHEROBJS)
+SCSIOBJS := constants.o g_NCR5380.o hosts.o \
+		scsi_obsolete.o scsi_error.o scsi_queue.o \
+		scsi.o scsi_debug.o scsi_ioctl.o scsicam.o sd.o sd_ioctl.o
+SCSIOBJS += $(addsuffix .o,$(SCSIDRIVERS))
+ifneq ($(HOST_ARCH),arm32)
+OBJFILES += $(SCSIOBJS)
+endif
+
+## The aha152x driver requires a compile-time define.
+## We just use AUTOCONF.  Look at the driver for more info.
+## This isn't used by other drivers, so we are safe (for now).
+DEFINES += -DAUTOCONF
+
+## Hack to keep aic7xxx_proc.c and the assembler from being compiled,
+## along with several other files that aren't intended to be
+## separately compiled.
+OSKIT_EXCLUDE += $(addprefix $(OSKIT_SRCDIR)/linux/src/drivers/scsi/, \
+		   aic7xxx_proc.c aic7xxx_asm.c \
+		   qlogicisp_asm.c NCR5380.c \
+		   eata_dma_proc.c eata_pio_proc.c)
+
+ifeq ($(HOST_ARCH),arm32)
+OSKIT_EXCLUDE += $(OSKIT_SRCDIR)/linux/dev/init_scsi.c \
+		 $(OSKIT_SRCDIR)/linux/dev/scsi_glue.c
+endif
+
+## We also need to run the sequencer compiler on the local
+## machine to get the bytes to download when the kernel runs.
+
+# This compiler needs to run on the local machine, not the target.
+#aic7xxx_asm:	aic7xxx_asm.c
+#	cc -o $@ $(OSKIT_SRCDIR)/linux/src/drivers/scsi/aic7xxx_asm.c
+
+# aic7xxx.o:  aic7xxx_seq.h aic7xxx_reg.h
+
+# The horrible kludge here just adds a "#define linux"
+# to the top of the sequencer assembly language file,
+# so that it'll include "aic7xxx_reg.h" properly.
+# We can't just use a -D option because,
+# although the assembler supports such an option,
+# it doesn't pass it to the preprocessor
+# but just uses it as an internal symbol.
+#aic7xxx_seq.h:	aic7xxx_asm aic7xxx_reg.h \
+#		$(OSKIT_SRCDIR)/linux/src/drivers/scsi/aic7xxx.seq
+#	ln -fs $(OSKIT_SRCDIR)/linux/src/drivers/scsi/aic7xxx_reg.h aic7xxx_reg.h
+#	echo "#define linux" >aic7xxx.seq
+#	cat  $(OSKIT_SRCDIR)/linux/src/drivers/scsi/aic7xxx.seq >>aic7xxx.seq
+#	./aic7xxx_asm -o $@ aic7xxx.seq
+
+## Linux NCR script compiler (53c7,8xx driver)
+## Scripts come pre-compiled; this is only if you change them
+## Comes from the Linux Makefile  (Updates 53c8xx_u.h and 53c8xx_d.h)
+## XXX: Broken makerules for OSKit environ
+53c8xx_d.h 53c8xx_u.h : 53c7,8xx.scr script_asm.pl
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating header file $@"
+	ln -sf 53c7,8xx.scr fake.c
+	$(CPP) -traditional -DCHIP=810 fake.c | grep -v '^#' | perl script_asm.pl
+	mv script.h 53c8xx_d.h
+	mv scriptu.h 53c8xx_u.h
+	rm fake.c
+
+# These have broken dependencies
+# prepare:: 53c8xx_d.h 53c8xx_u.h 
+
+## Clean up the `extra' files we created.
+CLEAN_FILES += aic7xxx.seq aic7xxx_asm aic7xxx_seq.h aic7xxx_reg.h
+
+# These have broken dependencies too
+# prepare:: aic7xxx.seq aic7xxx_asm aic7xxx_seq.h aic7xxx_reg.h
+
+
+### Include other appropriate make rules files ###
+include $(OSKIT_SRCDIR)/linux/shared/GNUmakerules
+
+
+# Extract the list of SCSI device drivers from <dev/linux_scsi.h>;
+# the list will appear as a makefile variable called SCSIDRIVERS.
+# for each driver, we'll need to build a <driver>_scsiglue.o stub file.
+GNUmakefile: scsidrivers
+scsidrivers: $(OSKIT_SRCDIR)/oskit/dev/linux_scsi.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating makefile fragment $@"
+	(echo "#define driver(n,d,v,a,f,t) f"; echo "#include \"$<\"") \
+	| $(CC) -E - $(DEFINES) \
+	| sed '/^#/d;s/"//g' \
+	| awk 'BEGIN { printf "SCSIDRIVERS ="; } { printf " %s", $$1; }' >$@
+
+%_scsiglue.c: $(OSKIT_SRCDIR)/oskit/dev/linux_scsi.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	echo '#define HOSTS_C' >$@
+	echo '#include "scsi_glue.h"' >>$@
+	grep 'driver.*"$(patsubst %_scsiglue.c,%,$@)",' $< | \
+		sed -e 's/"[^"]*$$//g' | \
+		sed -e 's/^.*"/#include "/g' | \
+		sed -e 's/$$/.h"/g' >>$@
+	grep 'driver.*"$(patsubst %_scsiglue.c,%,$@)",' $< >>$@
+
+
+# Extract the list of Ethernet device drivers from <dev/linux_ethernet.h>;
+# the list will appear as a makefile variable called ETHERDRIVERS.
+# for each driver, we'll need to build a <driver>_etherglue.o stub file.
+GNUmakefile: etherdrivers
+etherdrivers: $(OSKIT_SRCDIR)/oskit/dev/linux_ethernet.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating makefile fragment $@"
+	(echo "#define driver(n,d,v,a,f,p) f"; echo "#include \"$<\"") \
+	| $(CC) -E - $(DEFINES) \
+	| sed '/^#/d;s/"//g' \
+	| awk 'BEGIN { printf "ETHERDRIVERS ="; } { printf " %s", $$1; }' >$@
+
+%_etherglue.c: $(OSKIT_SRCDIR)/oskit/dev/linux_ethernet.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	echo '#include "ethernet.h"' >$@
+	grep 'driver.*"$(patsubst %_etherglue.c,%,$@)",' $< >>$@
+
+# When using Knit, we generate all the stub files up-front by
+# making these targets.  (This is ok because the files are tiny.)
+scsi_gluefiles:  $(addsuffix _scsiglue.c, $(SCSIDRIVERS))
+ether_gluefiles: $(addsuffix _etherglue.c,$(ETHERDRIVERS))
+
+prepare:: scsi_gluefiles
+prepare:: ether_gluefiles
+
+endif

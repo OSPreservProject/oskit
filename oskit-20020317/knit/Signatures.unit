@@ -1,0 +1,703 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Signatures
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+
+/*#
+Functions which invoke any initialisers/finalisers provided by linker
+format (e.g., ELF's .init and .fini sections).
+#*/
+bundletype OskitSymbols_T = { 
+	__oskit_init, __oskit_fini,
+}
+
+/*#
+Imports of pretty much every OSKit kernel in existence
+Symbols provided by the multiboot crt or by the linker.
+#*/
+bundletype LDSymbols_T = { 
+	extends OskitSymbols_T,
+	_start_of_kernel, end, edata,
+	__ANNO_START__, __ANNO_END__
+}
+
+// a progress indicator called during initialisation
+bundletype Progress_T =
+{ knit_progress
+}
+
+bundletype LockMgr_T = 
+{ include "${OSKITDIR}/oskit/com/lock_mgr.h",  // YYY
+  oskit_lock_mgr 
+} with flags com
+
+bundletype ListenerMgr_T =
+{ include "${OSKITDIR}/oskit/com/listener_mgr.h",
+  oskit_create_listener_mgr,
+  oskit_destroy_listener_mgr,
+  oskit_listener_mgr_add,
+  oskit_listener_mgr_count,
+  oskit_listener_mgr_notify,
+  oskit_listener_mgr_remove,
+} with flags com
+  
+bundletype CreateListener_T =
+{ include "${OSKITDIR}/oskit/com/listener.h",
+  oskit_create_listener 
+} with flags com
+
+bundletype CreatePrincipal_T =
+{ include "${OSKITDIR}/oskit/principal.h",
+  oskit_principal_create 
+} with flags libc
+
+bundletype CallContext_T =
+{ include "${OSKITDIR}/oskit/com.h",
+  oskit_get_call_context
+} with flags com
+
+bundletype StackTrace_T =
+{ include "${OSKITDIR}/oskit/debug.h",
+  dump_stack_trace,
+  dump_stack_trace_bis,
+  dump_stored_stack_trace,
+  store_stack_trace,
+} with flags kern
+
+bundletype Version_T =
+{ include "${OSKITDIR}/oskit/version.h",
+  oskit_version,
+  oskit_version_string,
+} with flags kern
+
+bundletype VersionPrint_T =
+{ include "${OSKITDIR}/oskit/version.h",
+  oskit_print_version
+} with flags kern
+
+/*#
+A global lock typically implemented by disabling interrupts.
+
+ToDo: I'd like to rename base_critical_{enter,leave} but that would
+require renamings in every single atomic unit that uses them so
+it's not obviously a good thing.
+#*/
+bundletype Critical_T = { 
+  include "${OSKITDIR}/oskit/base_critical.h",
+
+  base_critical_enter,
+  base_critical_leave,
+} with flags kern
+
+// should this be merged with _exit?
+bundletype Reset_T = {
+  include "${OSKITDIR}/oskit/x86/pc/reset.h",
+  pc_reset
+} with flags kern
+
+// ToDo: make Exit_T extend AtExit_T
+bundletype Exit_T =
+{ include "${OSKITDIR}/oskit/c/stdlib.h",
+
+  exit,
+} with flags libc
+
+bundletype AtExit_T = {
+  include "${OSKITDIR}/oskit/c/stdlib.h",
+
+  abort,
+  atexit,
+} with flags libc
+
+bundletype LongJmp_T = {
+  include "${OSKITDIR}/oskit/c/setjmp.h",
+
+  longjmp,
+  setjmp,
+} with flags libc
+
+bundletype OSEnvDevice_T = {
+  include "${OSKITDIR}/oskit/dev/device.h",
+
+  osenv_device_lookup,
+  osenv_device_register,
+  osenv_device_unregister,
+  osenv_device_lookup_etherdev, // fake to make the dependency show up
+} with flags osenv
+
+bundletype OSEnvDriver_T = {
+  include "${OSKITDIR}/oskit/dev/driver.h",
+
+  osenv_driver_lookup,
+  osenv_driver_register,
+  osenv_driver_unregister,
+} with flags osenv
+
+bundletype OSEnvDump_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+
+  oskit_dump_devices,
+  oskit_dump_drivers,
+} with flags osenv
+
+bundletype OSEnvIOPort_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+
+  osenv_io_alloc,
+  osenv_io_avail,
+  osenv_io_free,
+} with flags osenv
+
+bundletype OSEnvISA_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+
+  osenv_isabus_addchild,
+  osenv_isabus_remchild,
+  osenv_isabus_getbus,
+  osenv_isadma_alloc,
+  osenv_isadma_free,
+  osenv_rootbus_addchild,
+  osenv_rootbus_remchild,
+  osenv_rootbus_getbus,
+  oskit_dev_probe,              
+} with flags osenv
+
+bundletype OSEnvLog_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+
+  osenv_log,
+  osenv_vlog,
+} with flags osenv
+
+// ToDo merge with panic
+bundletype OSEnvPanic_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_panic,
+  osenv_vpanic, 
+} with flags osenv
+
+bundletype OSEnvPCI_T = {
+  include "${OSKITDIR}/oskit/dev/dev.h",
+
+  osenv_pci_config_init,
+  osenv_pci_config_read,
+  osenv_pci_config_write,
+} with flags osenv
+
+/*#
+The OSEnv maintains a registry of known devices/drivers.
+#*/
+bundletype OSEnvRegistry_T =  
+{ include "${OSKITDIR}/oskit/dev/osenv.h",
+
+  oskit_osenv_create_default   
+} with flags osenv
+ 
+bundletype OSEnvDeviceObj_T = { osenv_device_object }
+bundletype OSEnvDriverObj_T = { osenv_driver_object }
+bundletype OSEnvIOPortObj_T = { osenv_ioport_object }
+bundletype OSEnvISAObj_T    = { osenv_isa_object }
+bundletype OSEnvLogObj_T    = { osenv_log_object }
+bundletype OSEnvPCIObj_T    = { osenv_pci_config_object }
+bundletype OSEnvSleepObj_T  = { osenv_sleep_object }
+
+bundletype Stack_T = 
+{ include "${BUILDDIR}/oskit/machine/base_stack.h",
+
+  base_stack_end, 
+  base_stack_start,
+}
+
+/************************************************************/
+
+/************************************************************/
+
+bundletype String_T =
+{ include "${OSKITDIR}/oskit/c/stdlib.h",
+  include "${OSKITDIR}/oskit/c/string.h",
+
+  atol,
+  bcmp,
+  bcopy,
+  bzero,
+  memchr,
+  memcmp,
+  memcpy,
+  memmove,
+  memset,
+  rindex,
+  strcasecmp,
+  strcat,
+  strchr,
+  strcmp,
+  strcpy,
+  strcspn,
+  strlen,
+  strncasecmp,
+  strncat,
+  strncmp,
+  strncpy,
+  strpbrk,
+  strrchr,
+  strsep,
+  strspn,
+  strstr,
+  strtok,
+  strtok_r,
+  strtol,
+  strtoul,
+} with flags libc
+
+bundletype Sprintf_T =
+{ include "${OSKITDIR}/oskit/c/stdio.h",
+  snprintf,
+  sprintf,
+  vsnprintf,
+  vsprintf,
+} with flags libc
+
+bundletype Sscanf_T = {
+  include "${OSKITDIR}/oskit/c/stdio.h",
+  sscanf,
+  vsscanf,
+} with flags libc
+
+bundletype Errno_T =
+{ include "${OSKITDIR}/oskit/c/errno.h",
+  errno
+} with flags libc
+
+bundletype Error_T = 
+{ extends Errno_T,
+
+  include "${OSKITDIR}/oskit/c/stdio.h",
+  perror,
+
+  include "${OSKITDIR}/oskit/c/string.h",
+  strerror,
+} with flags libc
+
+bundletype AMM_T =
+{ // include "${OSKITDIR}/oskit/amm.h", // XXX: Knit's C parser chokes on this
+  amm_alloc_entry,
+  amm_allocate,
+  amm_deallocate,
+  amm_destroy,
+  amm_dump,
+  amm_find_addr,
+  amm_find_gen,
+  amm_free_entry,
+  amm_init,         // not an initializer - this is a pure component
+  amm_init_gen,
+  amm_iterate,
+  amm_iterate_gen,
+  amm_join,
+  amm_modify,
+  amm_protect,
+  amm_reserve,
+  amm_select,
+  amm_split,
+} with flags libc
+
+bundletype Anno_T =
+{ include "${OSKITDIR}/oskit/anno.h",
+  anno_find_exact,
+  anno_find_lower,
+
+  // include "${BUILDDIR}/oskit/machine/anno.h", // XXX: these are assembly
+  anno_intr,
+  anno_trap,
+} with flags libc
+
+/************************************************************/
+
+bundletype DefaultConsole_T = 
+{ default_console_stream    // XXX: no prototype available
+}
+
+bundletype ClientOS_T =
+{ extends DefaultConsole_T,
+  fs_cmask,
+  initial_clientos_libcenv,
+
+// The clientos presents most of its functionality through one big COM object:
+  libc_environment,
+
+// This makes it hard to tell what is going on because I can't tell
+// what parts of the object they actually need.  Fortunately, most uses
+// of the clientos are via macros like these:
+// 
+// #define oskit_clientos_sethostname(name, len) \
+//         oskit_libcenv_sethostname(initial_clientos_libcenv, (name), (len))
+// 
+// #define oskit_clientos_setconsole(ttystrm) \
+//         oskit_libcenv_setconsole(initial_clientos_libcenv, (ttystrm))
+// 
+// #define oskit_clientos_setfsnamespace(fsn) \
+//         oskit_libcenv_setfsnamespace(initial_clientos_libcenv, (fsn))
+// 
+// So we provide those functions as "virtual symbols" and any unit
+// that uses these macros can declare a dependency on the the virtual symbol
+// instead of on libc_environment.
+
+// ToDo: CpU doesn't directly support virtual symbols - but it also doesn't
+// check that non-virtual symbols exist - so we just have to avoid a clash.
+  oskit_clientos_sethostname,
+  oskit_clientos_gethostname,
+  oskit_clientos_setconsole,
+  oskit_clientos_getconsole,
+  oskit_clientos_setfsnamespace,
+  oskit_clientos_getfsnamespace,
+
+// It's a similar story with libc_services_object
+  libc_services_object,
+
+// These are the names of macros in <oskit/c/environment.h>
+  oskit_libcenv_getclock,
+
+  my_termios,
+//, oskit_load_libc
+}
+
+// In theory, this should be split in two but it doesn't work too well
+// because the implementations are mutually dependent.
+bundletype Services_T =
+{ include "${OSKITDIR}/oskit/com/services.h",
+  oskit_get_services,   // deprecated (apparently)
+// , oskit_global_registry_create
+  oskit_unregister,
+
+// These are the most heavily used functions but, in practice,
+// we tend not to declare dependencies on them because the resulting
+// dependencies are not precise enough.  Instead, we create dependencies
+// on the virtual symbols oskit_{get,set}_*
+  oskit_lookup,
+  oskit_lookup_first,
+  oskit_register,
+
+// The following virtual symbols correspond to macros in oskit/com/services.h
+  oskit_set_osenv,
+  oskit_get_osenv,
+  oskit_set_mem,
+  oskit_get_mem,
+  oskit_set_libcenv,
+  oskit_get_libcenv,
+  oskit_set_clock,
+  oskit_get_clock,
+  oskit_set_socket_factory,
+  oskit_get_socket_factory,
+  oskit_set_safe,
+  oskit_get_safe,
+  oskit_set_lock_mgr,
+  oskit_get_lock_mgr,
+
+
+// I think I should split here
+  oskit_services_create,
+  services_addservice,
+  services_remservice,
+  services_clone,
+  services_lookup,
+  services_lookup_first,
+} with flags com
+
+// Notice that this _doesn't_ contain phys_mem_{min,max}.
+// They are in PhysLMM_T.
+bundletype VM_T =
+{ include "${BUILDDIR}/oskit/machine/base_vm.h",
+  phys_mem_va
+} with flags kern
+
+
+bundletype SVM_T =
+{ extends VM_T,
+
+  include "${OSKITDIR}/oskit/svm.h",
+  svm_init,
+  svm_alloc,
+  svm_dealloc,
+  svm_protect,
+  svm_incore,
+} with flags libc
+
+bundletype Segments_T =
+{ include "${BUILDDIR}/oskit/machine/base_vm.h",
+  linear_base_va
+} with flags kern
+
+bundletype Quad_T = // XXX: no prototypes (internal to gcc)
+{ __adddi3,
+  __anddi3,
+  __ashldi3,
+  __ashrdi3,
+  __cmpdi2,
+  __divdi3,
+  __fixdfdi,
+  __fixsfdi,
+  __fixunsdfdi,
+  __fixunssfdi,
+  __floatdidf,
+  __floatdisf,
+  __floatunsdidf,
+  __iordi3,
+  __lshldi3,
+  __lshrdi3,
+  __moddi3,
+  __muldi3,
+  __negdi2,
+  __one_cmpldi2,
+  __qdivrem,
+  __subdi3,
+  __ucmpdi2,
+  __udivdi3,
+  __umoddi3,
+  __xordi3,
+}
+
+bundletype Math_T = // XXX: prototypes internal to freebsd's math.h
+{ __infinity,
+  isinf,
+  isnan,
+  acos,
+  acosf,
+  acosh,
+  acoshf,
+  asin,
+  asinf,
+  asinh,
+  asinhf,
+  atan,
+  atan2,
+  atan2f,
+  atanf,
+  atanh,
+  atanhf,
+  cabs,
+  cabsf,
+  cbrt,
+  cbrtf,
+  ceil,
+  ceilf,
+  copysign,
+  copysignf,
+  cos,
+  cosf,
+  cosh,
+  coshf,
+  drem,
+  dremf,
+  erf,
+  erfc,
+  erfcf,
+  erff,
+  exp,
+  expf,
+  expm1,
+  expm1f,
+  fabs,
+  fabsf,
+  finite,
+  finitef,
+  floor,
+  floorf,
+  fmod,
+  fmodf,
+  frexp,
+  frexpf,
+  gamma,
+  gamma_r,
+  gammaf,
+  gammaf_r,
+  hypot,
+  hypotf,
+  ilogb,
+  ilogbf,
+  isnanf,
+  j0,
+  j0f,
+  j1,
+  j1f,
+  jn,
+  jnf,
+  ldexp,
+  ldexpf,
+  lgamma,
+  lgamma_r,
+  lgammaf,
+  lgammaf_r,
+  log,
+  log10,
+  log10f,
+  log1p,
+  log1pf,
+  logb,
+  logbf,
+  logf,
+  matherr,
+  modf,
+  modff,
+  nextafter,
+  nextafterf,
+  pow,
+  powf,
+  remainder,
+  remainderf,
+  rint,
+  rintf,
+  scalb,
+  scalbf,
+  scalbn,
+  scalbnf,
+  signgam,
+  significand,
+  significandf,
+  sin,
+  sinf,
+  sinh,
+  sinhf,
+  sqrt,
+  sqrtf,
+  tan,
+  tanf,
+  tanh,
+  tanhf,
+  y0,
+  y0f,
+  y1,
+  y1f,
+  yn,
+  ynf,
+  z_abs,
+}
+
+bundletype MathString_T =
+{ __dtoa,
+  atof,
+  atoi,
+  atol,
+  strtod,
+  strtol,
+  strtoq,
+  strtoul,
+  strtouq,
+}
+
+bundletype FreeBSDLocale_T =
+{ _CurrentRuneLocale,
+  _DefaultRuneLocale,
+  ___runetype,
+  ___tolower,
+  ___toupper,
+  __collate_chain_pri_table,
+  __collate_char_pri_table,
+  __collate_err,
+  __collate_load_error,
+  __collate_load_tables,
+  __collate_lookup,
+  __collate_range_cmp,
+  __collate_strdup,
+  __collate_substitute,
+  __collate_substitute_table,
+  __collate_version,
+  __isctype,
+  __lconv,
+  __maskrune,
+  __mb_cur_max,
+  __tolower,
+  __toupper,
+  _none_init,
+  _none_sgetrune,
+  _none_sputrune,
+  _PathLocale,
+  digittoint,
+  fgetrune,
+  fputrune,
+  fungetrune,
+  isalnum,
+  isalpha,
+  isascii,
+  isblank,
+  iscntrl,
+  isdigit,
+  isgraph,
+  islower,
+  isprint,
+  ispunct,
+  isspace,
+  isupper,
+  isxdigit,
+  localeconv,
+  mblen,
+  mbmb,
+  mbrrune,
+  mbrune,
+  mbstowcs,
+  mbtowc,
+  setinvalidrune,
+  setlocale,
+  setrunelocale,
+  toascii,
+  tolower,
+  toupper,
+  wcstombs,
+  wctomb,
+}
+
+bundletype FreeBSDString_T =
+{
+  extends String_T,
+  index,
+  strdup
+}
+
+bundletype GetPutEnv_T =
+{ extends GetEnv_T, 
+  putenv,
+  setenv,
+}
+
+bundletype FreeBSDNetlib_T =
+{
+  addr2ascii,
+  ascii2addr,
+  gethostbyaddr,
+  gethostbyname,
+  gethostbyname2,
+  gethostent,
+//  gethostname,
+  getnetbyaddr,
+  getnetbyname,
+  getnetent,
+  recv,
+  send,
+}
+
+/*
+ * Profiling!
+ */
+bundletype Profile_T = {
+	mcount,
+      '.mcount',
+       _mcount,
+}
+
+/************************************************************/
+// End
+/************************************************************/

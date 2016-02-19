@@ -1,0 +1,11 @@
+
+Directories: oskit/oskit/misc
+Target: Various examples
+Documentation:  To come 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Miscellaneous include files used by examples, and
+	unsupported code.  
+
+	WARNING: These files may be moved into
+	a more appropriate location in a later release. 

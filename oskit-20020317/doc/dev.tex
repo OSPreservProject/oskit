@@ -1,0 +1,1892 @@
+%
+% Copyright (c) 1996-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% -*- LaTeX -*-
+
+\label{dev}
+
+\section{Introduction}
+
+\emph{Note: the framework's obsolete name as
+``device driver framework'' is historical baggage from its first
+client component, imported device drivers.  Today, a more accurate
+name would be the ``OS Environment'' framework.  It provides the API
+and glue used by all ``large'' encapsulated components (devices, networking,
+filesystems) imported from other operating systems.  We'll change the
+name and documentation in the future.
+}
+
+\emph{A note on organization and content:
+this chapter really contains three quite separate parts: a general
+narrative about execution models, some very sketchy documentation of
+the ``up-side'' device interfaces, and the bulk covers the ``osenv''
+interfaces.  A later chapter (\ref{libfdev}) talks sketchily about the
+default implementation of the interfaces found here.
+}
+
+
+
+The \oskit{} device driver framework
+is a device driver interface specification 
+designed to allow \emph{existing} device drivers 
+to be borrowed from well-established operating systems
+in source form,
+and used unchanged to provide extensive device support
+in new operating systems or other programs that need device drivers
+(e.g., hardware configuration management utilities).
+With appropriate glue,
+this framework can also be used in an existing operating system
+to augment the drivers already supported by the OS.
+(We believe it's possible to extend the framework to
+accomodate drivers in binary form.)
+This chapter describes the device driver framework itself;
+other chapters later in this document describe
+specific libraries provided as part of the \oskit{}
+that provide driver and kernel code implementing or supporting this interface.
+
+The primary goals of this device driver framework are,
+in order from most to least important:
+\begin{enumerate}
+\item	{\bf Breadth of hardware coverage.}
+	There is a tremendous range of common hardware available these days,
+	each typically supporting its own device programming interface
+	and requiring a special device driver.
+	Device drivers for a given device
+	are generally only available for a few operating systems,
+	depending on how well-established the particular device and OS is.
+	Thus, in order to achieve maximum hardware coverage,
+	the framework must be capable of incorporating device drivers
+	originally written for a variety of different operating systems.
+
+\item	{\bf Adaptability to different environments.}
+	This device driver framework is intended to be useful
+	not only in traditional Unix-like kernels,
+	but also in operating systems with widely different structures,
+	e.g., kernels written in a ``stackless'' interrupt model,
+	or kernels that run all device drivers as user mode programs,
+	or kernels that do not support virtual memory.
+
+\item	{\bf Ease-of-use.}
+	It should be reasonably easy for an OS developer
+	to add support for this framework to a new or existing OS\@.
+	The set of support functions the OS developer must supply
+	should be kept as small and simple as possible,
+	and there should be few ``hidden surprises'' lurking in the drivers.
+	In situations where existing device drivers supported by the \oskit{}
+	have special requirements that the OS must satisfy in order to use them,
+	these requirements are clearly documented in the relevant chapters.
+
+\item	{\bf Performance.}
+	In spite of the above constraints,
+	device drivers should be able to run under this framework
+	with as little unnecessary overhead as possible.
+	Performance issues are discussed further in Section~\ref{fdev-perf}.
+\end{enumerate}
+
+Since the most important goal of this framework
+is to achieve wide hardware coverage by making use of existing drivers,
+and not to define a new model or interface for writing drivers,
+it is somewhat more demanding and restricting in terms of OS support
+than would be ideal if we were writing entirely new device drivers
+from scratch.
+Other device driver interface standards,
+such as SVR4's DDI/DKI and UDI~\cite{udi:url},
+are not designed to allow easy adaptation of existing drivers;
+instead, they are intended to define and restrict
+the interfaces and environment used by \emph{new} drivers
+specially written for those interfaces,
+so that these new drivers will be as widely useful as possible.
+For example, UDI requires all conforming drivers
+to be implemented in a nonblocking interrupt model;
+this theoretically allows UDI drivers to run easily
+in either process-model or interrupt-model kernels,
+but at the same time it eliminates all possibility
+of adapting existing traditional process-model drivers to be UDI conformant
+without extensive changes to the drivers themselves.
+Hopefully, at some point in the future,
+one of these more generic device driver standards
+will become commonplace enough
+so that conforming device drivers are available for ``everything'';
+however, until then, the \oskit{} device driver framework
+takes a compromise approach,
+being designed to allow easy adaptation of a wide range of existing drivers
+while keeping the primary interface as simple and flexible as possible.
+
+\subsection{Full versus partial compliance}
+
+Because the range of existing drivers to be adopted under this framework
+is so diverse in terms of the assumptions and restrictions made by the drivers,
+it would be impractical
+to define the requirements of the framework as a whole
+to be the ``union'' of all the requirements of all possible drivers.
+For example, if we had taken that approach,
+then the framework would only be usable in kernels
+in which all physical memory is directly mapped
+into the kernel's virtual address space at identical addresses,
+because \emph{some} drivers will not work unless that is the case.
+This restriction would make the framework completely unusable
+in many common OS environments,
+even though there are plenty of drivers available
+that \emph{don't} make the $virtual=physical$ assumption
+and should work fine in OS environments that don't meet that requirement.
+
+For this reason, we have defined the framework itself
+to be somewhat more generic than is suitable for ``all'' existing drivers,
+and to account for the remaining ``problematic'' drivers,
+we make a distinction between \emph{full} and \emph{partial compliance}.
+A fully compliant driver
+is a driver that makes no additional assumptions or requirements
+beyond those defined as part of the basic driver framework;
+these drivers should run in any environment that supports the framework.
+A partially compliant driver
+is a driver that is compliant with the framework,
+\emph{except} that it makes one or more additional restrictions or requirements,
+such as the $virtual=physical$ requirement mentioned above.
+For each partially-compliant driver provided with the \oskit{},
+the exact set of additional restrictions made by the driver
+are clearly documented and provided in both human- and machine-readable form
+so that a given OS environment can make use of the framework as a whole
+while avoiding drivers that will not work in the environment it provides.
+
+\section{Organization}
+
+In a typical OS environment in which all device drivers run in the kernel,
+Figure~\ref{fig-fdev-org} illustrates the basic organization
+of the device driver framework.
+
+\psfigure{fdev-org}{%
+	Organization of \oskit{} Device Driver Framework in a typical kernel
+}
+
+The heavy black horizontal lines represent
+the actual interfaces comprising the framework,
+which are described in this chapter.
+There are two primary interfaces:
+the \emph{device driver interface} (or just ``driver interface''),
+which the OS kernel uses to invoke the device drivers;
+and the \emph{driver-kernel interface} (or just ``kernel interface''),
+which the device drivers use to invoke kernel support functions.
+The kernel implements the kernel interface and uses the driver interface;
+the drivers implement the driver interface and use the kernel interface.
+
+Chapter~\ref{libfdev}
+describes a library supplied as part of the \oskit{}
+that provides facilities to help the OS
+implement the kernel interface and use the driver interface effectively.
+Default implementations suitable in typical kernel environments
+are provided for many operations;
+the OS can use these default implementations or not,
+as the situation demands.
+
+Several chapters in Part~\ref{comp-libraries}
+describe device driver sets supplied with the \oskit{}
+for use in environments supporting the \oskit{} device driver framework.
+Since the Flux project is not in the driver writing business,
+and does not wish to be,
+these driver sets are derived from existing kernels,
+either unchanged or with as little code modified as possible
+so that the versions of the drivers in the \oskit{}
+can easily be kept up-to-date
+with the original source bases from which they are derived.
+
+\section{Driver Sets}
+
+Up to this point we have used the term ``device driver set'' fairly loosely;
+however, in the context of the \oskit{} device driver framework,
+this term has a very important, specific meaning.
+A driver set is a set of related device drivers
+that work together and are fairly tightly integrated together.
+Different driver sets running in a given environment
+are independent of each other and oblivious to each other's presence.
+Drivers within a set
+may share code and data structures internally in arbitrary ways;
+however, code in different driver sets
+may \emph{not} directly share data structures.
+(Different driver sets may share code,
+but only if that code is ``pure''
+or operates on a disjoint set of data structures:
+for example, driver sets may share simple functions such as {\tt memcpy}.)
+
+Of course, the surrounding OS can maintain shared data structures
+in whatever way it chooses;
+this is the only way drivers in different sets can interact with each other.
+For example, if a kernel is using
+a FreeBSD device driver to drive one network card
+and a Linux driver to drive another,
+then the kernel can take IP packets coming in on one card
+and route them out through the other card,
+but the network device drivers themselves
+are completely oblivious to each other's presence.
+
+Some driver sets may contain only a single driver;
+this is ideal for modularity purposes,
+since in this case each such driver is independent of all others.
+Also, given some effort on the part of the OS,
+some multi-driver sets can be ``split up''
+into multiple single-driver sets and used independently;
+Section~\ref{fdev-user-mode-sec} describes one way this can be done.
+
+In essence, each driver set represents an ``encapsulated environment''
+with a well-defined interface and a clearly-bounded set of state.
+The concept of a driver set has important implications
+throughout the device driver framework,
+especially in terms of execution environment and synchronization;
+the following sections describe these aspects of the framework
+in more detail.
+
+Note that currently all ``osenv'' code in the same address space is
+essentially a single driver set.  We are planning on changing
+this to allow drivers to be independant from each other.
+Currently, the only way to achieve this is to run them in
+separate address spaces.
+
+
+\section{Execution Model}
+
+Device drivers running in the \oskit{} device driver framework
+use the interruptible, blocking execution model,
+defined in Section~\ref{intr-blocking-model},
+and all of the constraints and considerations
+described in that section generally apply to \oskit{} device drivers.
+However,
+there are a few execution model issues specific to device drivers,
+which are dealt with here.
+
+\subsection{Use in out-of-kernel, user-mode device drivers}
+\label{fdev-user-mode-sec}
+
+In some situations, for reasons of
+elegance, modularity, configuration flexibility, robustness,
+or even (in some cases) performance,
+it is desirable to run device drivers in user mode,
+as ``semi-ordinary'' application programs.
+This is done as a matter of course
+by some microkernels.
+There is nothing in the \oskit{} device driver framework
+that prevents its device drivers from executing in user mode,
+and in fact the framework was deliberately designed
+with support for user-mode device drivers in mind.
+
+\psfigure{fdev-user-mode}{%
+	Using the framework to create user-mode device drivers
+}
+
+Figure~\ref{fig-fdev-user-mode} illustrates an example system
+in which device drivers are located in user-mode processes.
+In this case, all of the code within a given driver set
+is part of the user-level device driver process,
+and the ``surrounding'' OS-specific code,
+which makes calls to the drivers through the driver interface,
+and provides the functions in the ``kernel interface,''
+is not actually kernel code at all
+but, rather, ``glue'' code that handles communication
+with the kernel and other processes.
+For example, many of the functions in the driver-kernel interface,
+such as the calls to allocate interrupt request lines,
+will be implemented by this glue code
+as system calls to the ``actual'' kernel,
+or as remote procedure calls to servers in other processes.
+
+Device driver code running in user space
+will typically run in the context of ordinary threads;
+the execution environment required by the driver framework
+can be built on top of these threads in different ways.
+For example, the OS-specific glue code may run on only a single thread
+and use a simple coroutine mechanism
+to provide a separate stack
+for each outstanding process-level device driver operation;
+alternately, multiple threads may be used,
+in which case the glue code will have to use locking
+to provide the nonpreemptive environment required by the framework.
+
+Dispatching interrupt handlers in these user-mode drivers
+can be handled in various ways,
+depending on the environment and kernel functionality provided.
+For example, interrupt handlers may be run as ``signal handers''
+of some kind ``on top of'' the thread(s)
+that normally execute process-level driver code;
+alternatively, a separate thread may be used to run interrupt handlers.
+In the latter case,
+the OS-specific glue code must use appropriate locking to ensure
+that process-level driver code does not continue to execute
+while interrupt handlers are running.
+
+%XXX talk about memory buffers and such
+
+\subsubsection{Shared interrupt request lines}
+
+One particularly difficult problem for user-level drivers in general,
+and especially for user-level drivers built using this framework,
+is supporting shared interrupt lines.
+Many platforms, including PCI-based PCs,
+allow multiple unrelated devices
+to send interrupts to the processor using a single request line;
+the processor must then sort out which device(s) actually caused the interrupt
+by checking each of the possible devices in turn.
+With user-level drivers, 
+the code necessary to perform this checking
+is typically part of the user-mode device driver,
+since it must access device-specific registers.
+Thus, in a ``naive'' implementation,
+when the kernel receives a device interrupt,
+it must notify \emph{all} of the drivers hooked to that interrupt,
+possibly causing many unnecessary context switches for every interrupt.
+
+The typical solution to this problem
+is to allow device drivers to ``download'' small pieces
+of ``disambiguation'' code into the kernel itself;
+the kernel then chains together all of the code fragments
+for a particular interrupt line,
+and when an interrupt occurs,
+the resulting code sequence determines
+exactly which device(s) caused the interrupt,
+and hence, which drivers need to be notified.
+This solution works fine for ``native'' drivers
+designed specifically for the kernel in question;
+however, there is no obvious, straightforward way
+to support such a feature in the driver framework.
+
+For this reason, until a better solution can be found,
+the following policy applies to using shared interrupts in this framework:
+for a given shared interrupt line,
+either the kernel must unconditionally notify
+all registered drivers running under this framework,
+and take the resulting performance hit;
+or else the drivers running under this framework
+will not support shared interrupts at all.
+(Native drivers written specifically for the kernel in question
+can still use the appropriate facilities
+to support shared interrupt lines efficiently.)
+
+\section{Performance}
+\label{fdev-perf}
+
+Since this framework emphasizes breadth, adaptability, and ease-of-use
+over raw performance,
+the performance of device drivers running under this framework
+is likely to suffer somewhat;
+how much depends on how well-matched the particular driver is
+to the driver framework and to the host OS\@.
+Various factors can influence driver performance:
+for example, if the OS's network code does not match the network drivers
+in terms of whether scatter/gather message buffers are supported or required,
+performance is likely to suffer somewhat due to extra copying
+between the driver and the OS's network code.
+The OS developer will have to take these issues into account
+when selecting \emph{which} sets of device drivers to use
+(e.g., FreeBSD versus Linux network drivers).
+If the device driver sets are chosen carefully
+and the OS's driver support code is designed well,
+in many cases it should be possible to use these drivers
+with minimal performance loss.
+
+Another consideration is how extensively the OS
+should rely on this device driver framework.
+There is nothing preventing the OS from maintaining
+its own (probably smaller) collection of ``native'' drivers
+designed and tuned for the particular OS;
+this way, the OS can achieve maximum performance
+for particularly common or performance-critical hardware devices,
+and use the larger set of device drivers
+easily available through this framework
+to provide support for other types of hardware
+that otherwise wouldn't be supported at all.
+This approach of combining native and emulated drivers
+is likely to be especially important
+for kernels that are not well matched to the existing drivers
+this framework was designed around:
+e.g., ``stackless'' interrupt model kernels
+which must run emulated device drivers on special threads or in user space.
+
+\com{%
+Three levels:
+\begin{itemize}
+\item	Through the framework: supports all devices,
+	but slow in some cases.
+\item	Short-circuit directly to certain driver sets
+	(e.g., get access to BSD mbufs).
+\item	Tailor specific ``important'' device drivers for the OS.
+\end{itemize}
+}
+
+% We were and will, but aren't currently...
+% We are working on gathering performance statistics
+%% reflecting typical relative performance
+% for various types of drivers and kernels using this framework.
+% For a general indication of probable performance costs,
+For a very rough idea of the performance of
+drivers and kernels using this framework,
+see the results in our SOSP'97 paper
+``The Flux OSKit: A Substrate for OS and Language Research.''
+Performance results for a related but less formal and less encapsulated framework
+can be found in the USENIX'96 paper
+``Linux Device Driver Emulation in Mach.''
+
+
+\section{Device Driver Initialization}
+
+When the host OS is ready to start using device drivers in this framework,
+it typically calls a \emph{probe function} for each driver set it uses;
+this function initializes the drivers
+and checks for hardware devices supported by any of the drivers in the set.
+If any such devices are found,
+they are \emph{registered} with the host OS
+by calling a registration routine specific to the type of bus
+on which the device resides (e.g., ISA, PCI, SCSI).
+The host OS can then record this information internally
+so that it knows which devices are available for later use.
+The OS can implement device registration any way it chooses;
+however, the driver support library ({\tt libdev}) provided by the \oskit{}
+provides a default implementation of a registration mechanism
+which builds a single ``hardware tree'' representing all known devices;
+see Section~\ref{fdev-default-reg} for more information.
+
+When a device driver discovers a device,
+it creates a \emph{device node} structure representing the device.
+The device node structure can be of arbitrary size,
+and most of its contents are private to the device driver.
+However, the first part of the device node
+is always a structure of type {\tt oskit_device_t},
+defined in {\tt oskit/dev/dev.h},
+which contains generic information about the device and driver
+needed by the OS to make use of the device.
+In addition, depending on the device's type,
+there may be additional information available to the host OS,
+as described in the following section.
+
+\section{Device Classification}
+
+Device nodes have types
+that follow a C++-like single-inheritance subtyping relationship,
+where {\tt oskit_device_t} is the ultimate ancestor or ``supertype''
+of all device types.
+
+In general, the host OS \emph{must} know
+what \emph{class} of device it is talking to
+in order to make use of it properly.
+On the other hand, it is \emph{not} strictly necessary
+for the host OS to recognize the specific device \emph{type},
+although it may be able to make better use of the device if it does.
+
+The block device class has the following attributes:
+\begin{itemize}
+\item	All input and output is synchronously driven by the host OS,
+	through calls to the read and write methods of the associated
+	{\tt blkio} object;
+	the driver never calls the asynchronous I/O functions
+	defined in Section~\ref{oskit-asyncio}.
+	I/O operations always complete ``promptly'':
+	barring device driver or hardware bugs,
+	reads and writes are never delayed indefinitely
+	due to external conditions.
+	(This contrasts with network devices, for example,
+	where input is received when another machine sends a message,
+	not when the host OS asks for input.)
+\item	There may be a minimum read/write granularity, or \emph{block size},
+	which may be obtained through the {\tt getblocksize} method.
+	The block size is always a power of two
+	(e.g., typically 512 for most disks),
+	and is always less than the processor's minimum page size
+	({\tt PAGE_SIZE}, Section~\ref{page-h}).
+	The \emph{offset} and \emph{count} parameters
+	of all read/write calls made by the host OS to this device driver
+	must be an even multiple of this block size.
+	For block devices with no minimum read/write granularity,
+	the driver specifies a block size of 1
+	(i.e., one-byte granularity).
+\item	Block devices may have removable media,
+	such as floppy drives, CD-ROM drives, or removable hard drives.
+	The device driver provides an indication to the OS
+	of whether or not the device supports removable media.
+	%XXX removal detection, removal request, locking.
+\end{itemize}
+
+The character device class has the following characteristics:
+\begin{itemize}
+\item	Output is synchronous, directed by the host OS,
+	but input is asynchronous, directed by the external device.
+\item	Incoming and outgoing data consists of a stream of bytes;
+	there is no larger minimum read/write granularity.
+	Multiple bytes of data can be sent and received in one operation,
+	but this is just an optimization;
+	there is no semantic difference from handling each byte individually.
+\end{itemize}
+
+The network device class has the following characteristics:
+\begin{itemize}
+\item	Output is synchronous, directed by the host OS,
+	but input is asynchronous, directed by the external device.
+\item	Data is handled in units of packets;
+	one send or receive operation is performed for each packet.
+\item	Packets sent and received typically have
+	specific size and format restrictions,
+	depending on the specific network type (e.g., ethernet, myrinet).
+\end{itemize}
+
+\com{Future possible device classes:
+	- raw keyboard device
+	- mouse device
+}
+
+Note that it would certainly be possible to decompose these device classes
+into a deeper type hierarchy.
+For example, in abstract terms it might make sense
+to arrange character and network devices
+under a single supertype representing ``asynchronous'' devices.
+However, since the structure representing this ``abstract supertype''
+would contain essentially nothing in terms of actual code or data,
+this additional level was not deemed useful for the driver framework.
+Of course, the OS is free to use
+any type hierarchy (or non-hierarchy) it desires
+for its own data structures representing devices, drivers, etc.
+
+\com{XXX should tape devices be block, character, or a separate class?}
+
+
+\section{Buffer Management}
+
+XXX overview
+
+\com{%
+Why is [osenv_irq_alloc] *blocking*?
+
+First, because it's generally only needed during initialization,
+which happens at the process level,
+and defining it as blocking gives the OS more implementation leeway.
+For example, our default implementation allocates memory,
+and although the interface supports nonblocking allocations,
+it's always best to use blocking allocations whenever possible.
+For example, nonblocking allocations in most kernels
+may fail at arbitrary times due to system load and other factors,
+so drivers should only depend on them for ``best-effort'' service,
+and not for things critical to the driver's functioning.
+For example, it's OK to allocate packet receive buffers nonblockingly,
+since the driver can just drop the packet if the allocation fails.
+I think the Linux drivers already generally follow this principle,
+although knowing their sloppiness I'd be surprised if there weren't exceptions.
+}
+
+\section{Asynchronous I/O}
+
+While asynchronous I/O is not directly suported by the \oskit{} device interface,
+it is possible to create an asychronous interface in the OS itself,
+which calls the blocking fdev functions.
+
+
+\section{Other Considerations}
+
+%XXX provide a requirements checklist?
+
+XXX some rare, poorly-designed hardware does not work right
+if long delays occur while programming the devices.
+(This is supposedly the case for some IDE drives, for example.)
+For this reason, reliability and hardware compatibility may be increased
+by implementing {\tt osenv_intr_disable} as a function
+that \emph{really does} disable all interrupts on the processor in question.
+
+XXX Symbol name conflicts among libraries\ldots{}
+For each existing driver set,
+provide a list of ``reserved'' symbols used by the set.
+
+\vspace*{.2in}
+XXX This should be moved somewhere else:
+\begin{quote}
+All functions may block,
+except those specifically designated as nonblocking.
+
+All functions may be called at any time,
+including during driver initialization.
+In other words, all of the functionality exposed by this interface
+must be present and fully operational
+by the time the device drivers are initialized.
+\end{quote}
+
+\apisec{Common Device Driver Interface}
+
+This section describes the \oskit{} device driver interfaces
+that are common to all types of drivers and hardware.
+
+
+\api{dev.h}{common device driver framework definitions}
+\begin{apisyn}
+	\cinclude{oskit/dev/dev.h}
+\end{apisyn}
+
+XXX
+
+oskit_dev_init
+
+oskit_X_init_X
+
+oskit_dump_drivers
+
+oskit_dev_probe
+
+oskit_dump_devices
+
+rtc_get and rtc_set interfaces (Real time clock).
+
+\com{%
+\api{oskit_ioctl}{control a device using a driver-specific protocol}
+\begin{apisyn}
+	\cinclude{oskit/dev/dev.h}
+
+	\funcproto int oskit_ioctl(oskit_device_t *dev, int cmd,
+				  void *buf, fxxx_buf_vec_t *bufvec);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+
+	XXX: ioctls are not currently implemented.
+
+	This function is the only OS-to-driver call
+	that is common to \emph{all} types of devices and drivers;
+	it provides a common mechanism by which the OS can
+	invoke device- and driver-specific control operations.
+	As the name implies,
+	this entrypoint corresponds to the {\tt ioctl} entrypoint
+	in typical Unix device driver interfaces:
+	it provides a fully generic ``escape hatch''
+	through which drivers can easily expose arbitrary device features
+	without requiring specific support to be present in the rest of the OS\@.
+	XXX explain implications in more detail.
+
+	The caller must supply a structure of type {\tt oskit_device_t}
+	that identifies the device on which the operation is to be performed.
+	The argument \emph{cmd} specifies the control operation;
+	its interpretation is completely specific
+	to the device driver being called.
+	The {\tt buf} and {\tt bufvec} arguments represent a buffer
+	used to hold any associated data passed to and/or from the driver.
+\end{apidesc}
+\begin{apiparm}
+	\item[dev]
+		The device on which the control operation is to be performed.
+	\item[cmd]
+		The command to be performed.  This is driver specific.
+	\item[buf]
+		The opaque buffer containing additional data
+		to be passed to the driver for the processing of the command,
+		and/or to hold data passed back from the driver to the OS.
+	\item[bufvec]
+		A function vector table providing the device driver
+		with functions with which to access the opaque buffer.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/dev/error.h>}, on error.
+\end{apiret}
+}%com
+
+
+\apisec{Driver Memory Allocation}
+
+The OS must provide routines for drivers to call
+to allocate memory for the private use of the drivers,
+as well as for I/O buffers and other purposes.
+The \oskit{} device driver framework defines a single set
+of memory allocation functions
+which all drivers running under the framework
+call to allocate and free memory.
+
+Device drivers often need to allocate memory
+in different ways, or memory of different types,
+for different purposes.
+For this reason, the device driver framework defines a set of flags
+provided to each memory allocation function
+describing how the allocation is to be done,
+or what type of memory is required.
+
+As with other aspects of the \oskit{} device driver framework,
+the {\tt libdev} library provides default implementations
+of the memory allocation functions,
+but these implementations may be replaced by the OS as desired.
+The default implementations make a number of assumptions
+which are often invalid in ``real'' OS kernels;
+therefore, these functions will often be overridden by the client OS\@.
+Specifically, the default implementation assumes:
+\begin{itemize}
+\item	The LMM pool {\tt malloc_lmm} is used to manage kernel memory.
+\item	Memory allocation and deallocation never block.
+\item	All memory allocation functions can be called at interrupt time.
+\item	All allocated blocks are physically as well as virtually contiguous.
+\end{itemize}
+Additionally, the default routines which deal with physical memory
+addresses make these assumptions:
+\begin{itemize}
+\item	Virtual address is the same as the physical address.
+\item	Paging is not enabled.
+\end{itemize}
+
+\api{osenv_memflags_t}{memory allocation flags}
+\begin{apisyn}
+	XXX typedef unsigned osenv_memflags_t;
+\end{apisyn}
+\begin{apidesc}
+	All of the memory allocation functions
+	used by device drivers in the \oskit{} device framework
+	take a parameter of type {\tt osenv_memflags_t},
+	which is a bit field describing various option flags
+	that affect how memory allocation is done.
+	Device drivers often need to allocate memory
+	that satisfies certain constraints,
+	such as being physically contiguous,
+	or page aligned, or accessible to DMA controllers.
+	These flags abstract out these various requirements,
+	so that all memory allocation requests made by device drivers
+	are sent to a single set of routines;
+	this design allows the OS maximum flexibility
+	in mapping device memory allocation requests
+	onto its internal kernel memory allocation mechanisms.
+
+	Routing all memory allocations through a single interface this way
+	may have some impact on performance,
+	due to the cost of decoding the \emph{flags} argument
+	on every allocation or deallocation call.
+	However, this cost is expected to be small
+	compared to the typical cost
+	of actually performing the requested operation.
+
+	The specific flags currently defined are as follows:
+	\begin{icsymlist}
+	\item[OSENV_AUTO_SIZE]
+		The memory allocator must keep track
+		of the size of allocated blocks allocated using this flag;
+		in this case, the value \emph{size} parameter passed
+		in the corresponding {\tt osenv_mem_free} call is meaningless.
+		For blocks allocated without this flag set,
+		the caller (device driver) promises
+		to keep track of the size of the allocated block,
+		and pass it back to {\tt osenv_mem_free} on deallocation.
+
+		It is possible for the OS
+		to implement these memory allocation routines
+		so that they ignore the {\tt OSENV_AUTO_SIZE} flag
+		and simply \emph{always} keep track of block sizes themselves.
+		However, note that in some situations,
+		doing so may produce extremely inefficient memory usage.
+		For example, if the OS memory allocation mechanism
+		prefixes each block with a word containing the block's length,
+		then any request by a device driver
+		to allocate a page-aligned page
+		(or some other naturally-aligned, power-of-two-sized block)
+		will consume that page
+		\emph{plus} the last word of the previous page.
+		If many successive allocations are done in this way,
+		only every \emph{other} page will be usable,
+		and half of the available memory will be wasted.
+		Therefore, it is generally a good idea
+		for the memory allocation functions
+		to pay attention to the {\tt OSENV_AUTO_SIZE} flag,
+		at least for allocations with alignment restrictions.
+	\item[OSENV_NONBLOCKING]
+		If set,
+		this flag indicates that the memory allocator
+		must not block during the allocation or deallocation operation.
+		More specifically, the flag indicates
+		that the device driver code must not be run
+		in the context of other, concurrent processes
+		while the allocation is taking place.
+		Any calls to the allocation functions from interrupt handlers
+		\emph{must} specify the {\tt OSENV_NONBLOCKING} flag.
+	\com{%
+	\item[OSENV_INTERRUPT_LEVEL]
+		If set,
+		this flag indicates to the memory allocator
+		that this call \emph{might} be occurring at interrupt level
+		(in a hardware or software interrupt handler).
+		If this flag is clear,
+		the memory allocator can assume
+		that the call is being made from process-level code,
+		not in any interrupt handler.
+		XXX is this flag really useful in practice?
+	\item[XXX]
+		Indicates that the memory must be non-pageable.
+		If this flag is not set,
+		then all accesses to this memory area
+		are potential blocking points,
+		in which driver code may be allowed to run
+		in the context of other processes.
+	}
+	\item[OSENV_PHYS_WIRED]
+		Indicates that the must must be non-pageable.
+		Accesses to the returned memory must not fault.
+	\item[OSENV_PHYS_CONTIG]
+		Indicates the underlying physical memory
+		must be contiguous.
+	\item[OSENV_VIRT_EQ_PHYS]
+		Indicates the virtual address must \emph{exactly}
+		equal the physical address so the driver may use
+		them interchangeably.
+		The {\tt OSENV_PHYS_CONTIG} flag must also be set
+		whenever this flag is set.
+	\item[OSENV_ISADMA_MEM]
+		This flag applies only to machines with ISA busses
+		or other busses that are software compatible with ISA,
+		such as EISA, MCA, or PCI\@.
+		It indicates that the memory allocated
+		must be appropriate for DMA access
+		using the system's built-in DMA controller.
+		In particular, it means that the buffer
+		must be physically contiguous,
+		must be entirely contained in the low 16MB of physical memory,
+		and must not cross a 64KB boundary.
+		(By implication,
+		this means that allocations using this flag
+		are limited to at most 64KB in size.)
+		The {\tt OSENV_PHYS_CONTIG} flag must also be set
+		if this flag is set.
+	\item[OSENV_X861MB_MEM]
+		This flag only applies to x86 machines,
+		in which some device drivers
+		may need to call 16-bit real-mode BIOS routines.
+		Such drivers may need to allocate physical memory
+		in the low 1MB region accessible to real-mode code;
+		this flag allows drivers to request such memory.
+		This is not used by existing driver sets.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{osenv_mem_alloc}{allocate memory for use by device drivers}
+\begin{apisyn}
+        \funcproto void *osenv_mem_alloc(oskit_size_t size, osenv_memflags_t flags,
+				        unsigned align);
+\end{apisyn}
+\drvtoosb
+\begin{apidesc}
+	This function is called by the drivers to allocate memory.
+	Allocate the requested amount of memory with the restrictions
+	specified by the \emph{flags} argument as described above.
+
+	XXX: While this is defined as blocking, the current glue
+	code cannot yet handle this blocking, as it is not
+	prepared for another request to enter the component.
+	This will be fixed.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Amount of memory to allocate.
+	\item[flags]
+		Restrictions on memory.
+	\item[align]
+		Boundary on which memory should be aligned,
+		which must be a power of two,
+		or 0 which means the same as 1 (no restrictions).
+\end{apiparm}
+\begin{apiret}
+	Returns the address of the allocated block
+	in the driver's virtual address space,
+	or NULL if not enough memory was available.
+\end{apiret}
+
+
+\api{osenv_mem_free}{free memory allocated with osenv_mem_alloc}
+\begin{apisyn}
+        \funcproto void osenv_mem_free(void *block, osenv_memflags_t flags,
+				      oskit_size_t size);
+\end{apisyn}
+\drvtoosb
+\begin{apidesc}
+	Frees a memory block previously allocated by {\tt osenv_mem_alloc}.
+
+	XXX: While this is defined as blocking, the current glue
+	code cannot yet handle this blocking, as it is not
+	prepared for another request to enter the component.
+	This will be fixed.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[block]
+		A pointer to the memory block,
+		as returned from {\tt osenv_mem_alloc}.
+	\item[flags]
+		Flags indicating deallocation semantics required.
+		Only {\tt OSENV_AUTO_SIZE} and {\tt OSENV_NONBLOCKING}
+		are meaningful in this context.
+		{\tt OSENV_AUTO_SIZE} must be set
+		\emph{if and only if} it was set during the allocation,
+		and {\tt OSENV_NONBLOCKING} indicates
+		that the deallocation operation must not block.
+	\item[size]
+		If \emph{flags} doesn't include {\tt OSENV_AUTO_SIZE},
+		then this parameter \emph{must} be the size requested
+		when this block was allocated.
+		Otherwise, the value of the \emph{size} parameter is
+		meaningless.
+\end{apiparm}
+
+
+\api{osenv_mem_get_phys}{find the physical address of an allocated block}
+\begin{apisyn}
+	\funcproto oskit_addr_t osenv_mem_get_phys(oskit_addr_t va);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns the physical address associated with a given virtual address.
+	Virtual address should refer to a memory block as returned by
+	{\tt osenv_mem_alloc}.
+		XXX does it have to be the exact same pointer,
+		or just a pointer in the block?
+	In systems which do not support address translation,
+	or for blocks allocated with {\tt OSENV_VIRT_EQ_PHYS},
+	this function returns \emph{va}.
+
+	The returned address is only valid for the first page of the
+	indicated block unless it was allocated with {\tt OSENV_PHYS_CONTIG}.
+	In a system supporting paging,
+	the result of the operation is only guaranteed to be accurate if
+	{\tt OSENV_PHYS_WIRED} was specified when the block was allocated.
+		XXX other constraints?
+\end{apidesc}
+\begin{apiparm}
+	\item[va]
+		The virtual address of a memory block,
+		as returned from {\tt osenv_mem_alloc}.
+\end{apiparm}
+\begin{apiret}
+	Returns the PA for the associated (wired) VA\@.
+	XXX zero (or something else) if VA is not valid?
+\end{apiret}
+
+
+\api{osenv_mem_get_virt}{find the virtual address of an allocated block}
+\begin{apisyn}
+	\funcproto oskit_addr_t osenv_mem_get_virt(oskit_addr_t pa);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns the virtual address of an allocated physical memory block.
+	Can only be called with the physical address of blocks that have been
+	allocated with {\tt osenv_mem_alloc}.
+	XXX or else what?
+
+	XXX error codes?
+
+	XXX If the Linux glue uses this, and gets and error,
+	should the physical memory be mapped (by the glue)
+	(if it is not in the address space) and re-try?
+
+\end{apidesc}
+\begin{apiparm}
+	\item[pa]
+		The physical memory location.
+\end{apiparm}
+\begin{apiret}
+	Returns the VA for the mapped PA.
+\end{apiret}
+
+
+\api{osenv_mem_phys_max}{find the largest physical memory address}
+\begin{apisyn}
+	\funcproto oskit_addr_t osenv_mem_phys_max(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns the top of physical memory, which is
+	noramlly equivelent to the amount of physical
+	RAM in the machine.
+	Note that memory-mapped devices may reside higher in
+	physical memory, but this is the largest address normal
+	RAM could have.
+\end{apidesc}
+\begin{apiret}
+	Returns the amount of physical memory.
+\end{apiret}
+
+
+\api{osenv_mem_map_phys}{map physical memory into kernel virtual memory}
+\begin{apisyn}
+	\funcproto int osenv_mem_map_phys(oskit_addr_t pa, oskit_size_t length,
+						void **kaddr, int flags);
+\end{apisyn}
+\drvtoosb
+\begin{apidesc}
+	Allocate kernel virtual memory and map the caller
+	supplied physical addresses into it.  The address
+	and length must be aligned on a page boundary.
+
+	This function is intended to provide device drivers
+	access to memory-mapped devices.
+
+	An osenv_mem_unmap_phys interface will likely be added in the future.
+
+	XXX: While this is defined as blocking, the current glue
+	code cannot yet handle this blocking, as it is not
+	prepared for another request to enter the component.
+	This will be fixed.
+
+	Flags:
+	\begin{icsymlist}
+	\item[PHYS_MEM_NOCACHE]
+		Inhibit cache of data in the specified memory.
+	\item[PHYS_MEM_WRITETHROUGH]
+		Data cached from the specified memory must
+		be synchronously written back on writes.
+	\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[pa]
+		Starting physical address.
+	\item[length]
+		Amount of memory to map.
+	\item[kaddr]
+		Kernel virtual address allocated and
+		returned by the kernel that maps the
+		specified memory.
+	\item[flags]
+		Memory mapping attributes, as described above.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, non-zero on error.
+\end{apiret}
+
+
+
+\apisec{DMA}
+
+This section is specific to ISA devices utilizing the
+Direct Memory Access controller.
+
+If the OS wishes to support devices that utilize DMA,
+then basic routines must be provided to allow access
+to the DMA controller.
+
+The Linux drivers directly access the DMA controller
+themselves, with macros and with embedded assembly.
+All devices that utilize the DMA controller must be in the same
+driver set, as there is not way to arbitrate between
+different driver sets.
+Because this shortcoming is in the encapsulated drivers,
+and would take significant effort to correct,
+we have not provided an interface to access the DMA controller,
+although we may in the future.
+
+\com{%
+The internal Linux driver interface consists of:
+request_dma
+free_dma
+enable_dma
+disable_dma
+set_dma_mode
+set_dma_page
+set_dma_addr
+set_dma_count
+get_dma_residue
+clear_dma_ff
+in addition to the direct manipulation of the DMA controller.
+}%com
+
+\api{osenv_isadma_alloc}{Reserve a DMA channel}
+\begin{apisyn}
+	\funcproto int osenv_isadma_alloc(int channel);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This requests a DMA channel.
+
+	If sucessfull, the driver must be able to directly
+manipulate the ISA DMA controller.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[channel]
+		The DMA channel to reserve.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, non-zero if already allocated.
+\end{apiret}
+
+
+\api{osenv_isadma_free}{Release a DMA channel}
+\begin{apisyn}
+	\funcproto void osenv_isadma_free(int channel);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This releases a DMA channel.
+	The DMA channel must have already been reserved
+	by the driver.
+\end{apidesc}
+\begin{apiparm}
+	\item[channel]
+		The DMA channel to release.
+\end{apiparm}
+
+
+
+\apisec{I/O Ports}
+
+Many devices have a concept of ``I/O space''.
+In general, multiple devices cannot share the same
+range of I/O ports.  Unfortunately, there are a few exceptions,
+most notably the keyboard and PS/2 mouse, and the
+Floppy and IDE controllers.
+
+Many of the device drivers assume they may access port 0x80,
+for use in timing loops.  This is not used in most computers,
+although POST cards are used to display the last value written
+to that port.
+
+
+\api{osenv_io_avail}{Check availability of a range of ports}
+\begin{apisyn}
+	\funcproto oskit_bool_t osenv_io_avail(oskit_addr_t port, oskit_size_t size);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns true (nonzero) if the range is free;
+	false (zero) if any ports in the range are already allocated.
+\end{apidesc}
+\begin{apiparm}
+	\item[port]
+		The start of the I/O range.
+	\item[size]
+		The number of ports to check.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 (false) if any part of the range is unavailable, non-zero
+	otherwise.
+\end{apiret}
+
+
+\api{osenv_io_alloc}{Allocate a range of ports}
+\begin{apisyn}
+	\funcproto oskit_error_t osenv_io_alloc(oskit_addr_t port, oskit_size_t size);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns 0 if the range is free,
+	or an error code if any ports in the range are already allocated.
+
+	XXX: shared ports?
+
+	XXX: Default implementation panics if range is allocated.
+
+	Note: this is based on the assumption that I/O space is not
+	mapped through the MMU\@.  On a system where this is not the
+	case (memory mapped I/O), osenv_mem_map_phys should be used
+	instead.
+\end{apidesc}
+\begin{apiparm}
+	\item[port]
+		The start of the I/O range.
+	\item[size]
+		The number of ports to check.
+\end{apiparm}
+
+
+
+\api{osenv_io_free}{Release a range of ports}
+\begin{apisyn}
+	\funcproto void osenv_io_free(oskit_addr_t port, oskit_size_t size);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Releases a range previously allocated.
+	All ports in the range must have been allocated by the device.
+\end{apidesc}
+\begin{apiparm}
+	\item[port]
+		The start of the I/O range.
+	\item[size]
+		The number of ports to check.
+\end{apiparm}
+
+
+
+\apisec{Hardware Interrupts}
+
+Shared interrupts are supported, as long as OSENV_IRQ_SHAREABLE 
+is requested by all devices wishing to use the interrupt.
+
+In a given driver environment in this framework,
+there are only two ``interrupt levels'': enabled and disabled.
+In the default case in which all device drivers of all types
+are linked together into one large driver environment in an OS kernel,
+this means that whenever one driver masks interrupts,
+it masks \emph{all} device interrupts in the system.\rat{%
+	The Linux device drivers work this way,
+	and we can't provide more than what we have to work with.
+	This also makes the OS interface simpler,
+	and may allow the basic operations to be faster
+	due to this simplicity.
+}
+
+However, an OS can implement multiple interrupt priority levels,
+as in BSD or Windows NT, if it so desires,
+by creating separate ``environments'' for different device drivers.
+For example, if each driver
+is built into a separate, dynamically-loadable module,
+then the {\tt osenv_intr_} calls in different driver modules
+could be resolved by the dynamic loader to {\tt spl}-like routines
+that switch between different interrupt priority levels.
+For example, the {\tt osenv_intr_disable} call in network drivers
+may resolve to {\tt splnet},
+whereas the same call in a disk driver may be mapped to {\tt splbio} instead.
+
+
+\api{osenv_intr_disable}{prevent interrupts in the driver environment}
+\label{osenv-intr-disable}
+\begin{apisyn}
+	\funcproto void osenv_intr_disable(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Disable further entry into the calling driver set through an
+	interrupt handler.  This can be implemented either by directly
+	disabling interrupts at the interrupt controller or CPU, or
+	using some software scheme.
+
+	XXX Merely needs to prevent intrs from being dispatched 
+	to the driver set.  Drivers may see spurious interrupts
+	if they briefly cause interrupts while disabled.
+
+	XXX Timing-critical sections need interrupts actually disabled.
+\end{apidesc}
+
+
+\api{osenv_intr_enable}{allow interrupts in the driver environment}
+\begin{apisyn}
+	\funcproto void osenv_intr_enable(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Enable interrupt delivery to the calling driver set.
+	This can be implemented either by directly enabling interrupts
+	at the interrupt controller or CPU, or using some software scheme.
+\end{apidesc}
+
+
+\api{osenv_intr_enabled}{determine the current interrupt enable state}
+\begin{apisyn}
+	\funcproto int osenv_intr_enabled(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Returns the driver's view of the current interrupt status.
+\end{apidesc}
+\begin{apiret}
+	Returns non-zero if interrupts are currently enabled, zero otherwise.
+\end{apiret}
+
+\api{osenv_intr_save_disable}{disable interrupts and return the former state}
+\begin{apisyn}
+	\funcproto int osenv_intr_save_disable(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Set the interrupt status to disabled and return the previous status.
+
+	This call is equivalent to calling {\tt osenv_intr_enabled} and then
+	calling {\tt osenv_intr_disable} if the result was non-zero and is
+	intended to optimize that common case.
+\end{apidesc}
+\begin{apiret}
+	Returns non-zero if interrupts are currently enabled, zero otherwise.
+\end{apiret}
+
+
+\api{osenv_irq_alloc}{allocate an interrupt request line}
+\begin{apisyn}
+	\funcproto int osenv_irq_alloc(int irqnum, void (*handler)(void *),
+					void *data, int flags);
+\end{apisyn}
+\drvtoosb
+\begin{apidesc}
+	Allocate an interrupt request line and attach the specified
+	handler to it.  On interrupt, the kernel must pass the \emph{data}
+	argument to the handler.
+
+	XXX: interrupts should be ``disabled'' when the handler is invoked.
+
+	XXX: This has not been verified to function correctly if an
+	incomming request is processed while this is blocked.
+
+	Flags:
+	\begin{icsymlist}
+	\item[OSENV_IRQ_SHAREABLE]
+		If this flag is specified, the interrupt
+		request line can be shared between multiple
+		devices.  On interrupt, the OS will call
+		each handler attached to the interrupt line.
+		Without this flag set, the OS is free to return
+		an error if another handler is attached to the
+		interrupt request line.
+		(If shared, ALL handlers must have this set).
+	\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[irqnum]
+		The interrupt request line to allocate.
+	\item[handler]
+		Interrupt handler.
+	\item[data]
+		Data passed by the kernel to the interrupt handler.
+	\item[flags]
+		Flags indicating special behavior.
+		Only OSENV_IRQ_SHAREABLE is currently used.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, non-zero on error.
+\end{apiret}
+
+
+\api{osenv_irq_free}{Unregister the handler for the interrupt}
+\begin{apisyn}
+	\funcproto void osenv_irq_free(int irqnum, void (*handler)(void *),
+					void *data);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Removes the indicated interrupt handler.
+	The handler is only removed if it was registered with
+	{\tt osenv_irq_alloc} for the indicated interrupt request line
+	and with the indicated \emph{data} pointer.
+\end{apidesc}
+\begin{apiparm}
+	\item[irq]
+		The physical interrupt line.
+	\item[handler]
+		The function handler's address.
+		This is necessary if multiple handlers are registered
+		for the same interrupt.
+	\item[data]
+		The data value registered with {\tt osenv_irq_alloc}.
+\end{apiparm}
+\com{%
+\begin{apiret}
+\end{apiret}
+}
+
+
+\api{osenv_irq_disable}{Disable a single interrupt line}
+\begin{apisyn}
+	\funcproto void osenv_irq_disable(int irq);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Prevents a specific interrupt line from delivering an
+	interrupt.  Can be done in software or by disabling
+	at the interrupt controller.
+
+	If the interrupt does occur while disabled,
+	it should be delivered as soon as {\tt osenv_irq_enable}
+	is called (see that section for details).
+\end{apidesc}
+\begin{apiparm}
+	\item[irq]
+		The physical interrupt line.
+\end{apiparm}
+
+
+\api{osenv_irq_enable}{Enable a single interrupt line}
+\begin{apisyn}
+	\funcproto void osenv_irq_enable(int irq);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This allows the specified interrupt to be received,
+	provided interrupts are enabled.
+	(e.g., osenv_intr_enabled also returns true)
+\end{apidesc}
+\begin{apiparm}
+	\item[irq]
+		The physical interrupt line.
+\end{apiparm}
+
+\api{osenv_irq_pending}{Determine if an interrupt is pending for a single line}
+\begin{apisyn}
+	\funcproto int osenv_irq_pending(int irq);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Determine if an interrupt is pending for the specified interrupt line.
+\end{apidesc}
+\begin{apiparm}
+	\item[irq]
+		The physical interrupt line.
+\end{apiparm}
+\begin{apiret}
+	Returns 1 if an interrupt is pending for the indicated line,
+	0 otherwise.
+\end{apiret}
+
+
+
+\apisec{Sleep/Wakeup}
+
+The current driver model only allow one thread or request into
+the driver set at a time.
+However, if the driver set is waiting for an external event and
+can handle another request while it is waiting,
+then the driver sleeps.
+
+The default implementation of sleep busy-waits on the event,
+as it is not possible for it to do more without knowledge of
+the operating sysmte environment it is in.
+
+\api{osenv_sleep_init}{prepare to put the current process to sleep}
+\begin{apisyn}
+	\cinclude{oskit/dev/dev.h}
+
+	\funcproto void osenv_sleep_init(osenv_sleeprec_t *sleeprec);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This function initializes a ``sleep record'' structure
+	in preparation for the current process's going to sleep
+	waiting for some event to occur.
+	The sleep record is used to avoid races
+	between actually going to sleep and the event of interest,
+	and to provide a ``handle'' on the current activity
+	by which {\tt osenv_wakeup} can indicate which process to awaken.
+\end{apidesc}
+\begin{apiparm}
+	\item[sleeprec]
+		A pointer to the process-private sleep record.
+\end{apiparm}
+
+
+\api{osenv_sleep}{put the current process to sleep}
+\begin{apisyn}
+	\cinclude{oskit/dev/dev.h}
+
+	\funcproto int osenv_sleep(osenv_sleeprec_t *sleeprec);
+\end{apisyn}
+\drvtoosb
+\begin{apidesc}
+	The driver calls this function at process level
+	to put the current activity (process) to sleep until some event occurs,
+	typically triggered by a hardware interrupt or timer handler.
+	The driver must supply a pointer
+	to a process-private ``sleep record'' variable (\emph{sleeprec}),
+	which is typically just allocated on the stack by the driver.
+	The \emph{sleeprec} must already have been initialized
+	using {\tt osenv_sleep_init}.
+	If the event of interest occurs
+	after the {\tt osenv_sleep_init} but before the {\tt osenv_sleep},
+	then {\tt osenv_sleep} will return immediately without blocking.
+\end{apidesc}
+\begin{apiparm}
+	\item[sleeprec]
+		A pointer to the process-private sleep record,
+		already allocated by the driver
+		and initialized using {\tt osenv_sleep_init}.
+\end{apiparm}
+\begin{apiret}
+	Returns the wakeup status value provided to {\tt osenv_wakeup}.
+\end{apiret}
+
+
+\api{osenv_wakeup}{wake up a sleeping process}
+\begin{apisyn}
+	\cinclude{oskit/dev/dev.h}
+
+	\funcproto void osenv_wakeup(osenv_sleeprec_t *sleeprec,
+                                     int wakeup_status);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	The driver calls this function
+	to wake up a process-level activity
+	that has gone to sleep (or is preparing to go to sleep)
+	waiting on some event. The value of {\tt wakeup_status} is
+	subsequently returned to the caller of {\tt osenv_sleep}, making it
+	possible to indicate various wakeup conditions (such as abnormal
+	termination). 
+	It is harmless to wake up a process
+	that has already been woken.
+\end{apidesc}
+\begin{apiparm}
+	\item[sleeprec]
+		A pointer to the sleep record of the process to wake up.
+		Must actually point to a valid sleep record variable
+		that has been properly initialized using {\tt
+		osenv_sleep_init}. 
+	\item[wakeup_status]
+		The status to be returned from {\tt osenv_sleep}.
+		{\tt OSENV_SLEEP_WAKEUP} indicates normal wakeup,
+		{\tt OSENV_SLEEP_CANCELLED} indicates an interrupted sleep,
+		while other status values indicate other conditions.
+\end{apiparm}
+
+
+
+\apisec{Driver-Kernel Interface: Timing}
+
+The device support code relies on the OS to provide timers
+to control events.  Unfortunately, timers are in a state
+of flux, and there are currently too many ways to do almost the same thing.
+We will be cleaning this up.
+
+Meanwhile\ldots{}
+the interface provided by the host OS is currently at the osenv_timer layer.
+However, we plan on moving the abstraction layer down to a
+simple ``PIT'' interface.
+(The existing osenv_timer_pit code is similar to the planned interface).
+
+When we move to an osenv_pit interface,
+the driver glue code will use an intermediate timer
+`device driver' which will provide the higher-level
+functionality currently in the osenv_timer interface.
+The motivation for this is to make the OS-provided interface
+as simple as possible and to build extra functionality on top.
+
+`dev/clock.c' is an example device driver built on the
+osenv_timer interface.
+It could be implemented on top of an osenv_pit interface
+as easily as on the osenv_timer interface.
+
+The current implementation of the default osenv_timer code is
+based on the osenv_timer_pit interface.
+{osenv_timer_pit} is \emph{not} currently defined as part of the osenv API,
+but merely exists for implementation convenience.
+However, over-riding the osenv_timer_pit implementation is probably the
+easiest way to provide a different implementation of the
+osenv_timer interface.
+
+The default osenv_timer implementation also provides an
+osenv_timer_shutdown hook for use by the host operating system.
+{osenv_timer_shutdown} disables the osenv_timer.
+
+
+\api{osenv_timer_init}{Initialize the timer support code}
+\begin{apisyn}
+	\funcproto void osenv_timer_init(void);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	XXX: Belongs in libdev.a section
+
+	Intiializes the timer code.
+\end{apidesc}
+
+
+\api{osenv_timer_register}{Request a timer handler be called at the specified frequency}
+\begin{apisyn}
+	\funcproto void osenv_timer_register(void (*func)(void), int freq);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	Requests that the function {\tt func} gets called {\tt freq} times
+	per second.
+
+	XXX: Default implementation currently only works for {\tt freq}
+	equal to 100.
+\end{apidesc}
+\begin{apiparm}
+	\item[func]
+		Address of function to be called.
+	\item[freq]
+		Times per second to call the handler.
+\end{apiparm}
+
+
+\api{osenv_timer_unregister}{Request a timer handler not be called}
+\begin{apisyn}
+	\funcproto void osenv_timer_unregister(void (*func)(void), int freq);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	The function pointer and frequency must be identically equal
+to parameters on a previous osenv_timer_register call.
+\end{apidesc}
+\begin{apiparm}
+	\item[func]
+		Address of function to be called.
+	\item[freq]
+		Times per second the handler was called.
+\end{apiparm}
+
+
+\api{osenv_timer_spin}{Wait for a specified amount of time without blocking.}
+\begin{apisyn}
+	\funcproto void osenv_timer_spin(long nanosec);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This allows a driver component to block for a specified amount
+	of time (usually for hardware to catch up) without blocking.
+	Unlike with osenv_sleep,
+	this cannot give up the process-level lock.
+\end{apidesc}
+\begin{apiparm}
+	\item[nanosec]
+		Time to spin, in nanoseconds.
+\end{apiparm}
+
+
+
+
+\apisec{Misc}
+
+All output goes throught the osenv_vlog interface.
+
+The following log priorities are defined.
+From highest priority to lowest, they are:
+{\tt
+OSENV_LOG_EMERG,
+OSENV_LOG_ALERT,
+OSENV_LOG_CRIT,
+OSENV_LOG_ERR,
+OSENV_LOG_WARNING,
+OSENV_LOG_NOTICE,
+OSENV_LOG_INFO,
+}
+and
+{\tt
+OSENV_LOG_DEBUG
+}
+which correspond the the log priorities used by both BSD and Linux.
+
+
+\api{osenv_vlog}{OS environment's output routine}
+\begin{apisyn}
+	\funcproto void osenv_vlog(int priority, const~char *fmt, va_list args);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This is the output interface to the device driver framework.
+	All output must go through this interface, so the OS may
+	decide what to do with it.
+
+	Normal {\tt printf}-type calls should get converted to the
+	OSENV_LOG_INFO priority.
+\end{apidesc}
+\begin{apiparm}
+	\item[priority]
+	\item[fmt]
+		{\tt printf}-style message format
+	\item[args]
+		Any parameters required by the output format
+\end{apiparm}
+
+
+\api{osenv_log}{OS environment's output routine}
+\begin{apisyn}
+	\funcproto void osenv_log(int priority, const~char *fmt, ... \unskip);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+% 	XXX: should be in the liblinux_dev part
+
+	Front-end to osenv_vlog
+\end{apidesc}
+\begin{apiparm}
+	\item[priority]
+		Priority of the message.
+	\item[fmt]
+		{\tt printf}-style message format
+	\item[...]
+		Any parameters required by the output format
+\end{apiparm}
+
+
+
+\api{osenv_vpanic}{Abort driver set operation}
+\begin{apisyn}
+	\funcproto void osenv_vpanic(const~char *fmt, va_list args);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+	This function should only be called if the device driver
+	framework can no longer continue and cannot exit gracefully.
+
+	The driver's `native' {\tt panic} calls 
+	will get resolved to this function call.
+
+	This should be provided by the OS to provide a graceful way
+	of dealing with a situation that prevents the drivers
+	from continuing.
+\end{apidesc}
+\begin{apiparm}
+	\item[fmt]
+		{\tt printf}-style message format
+	\item[args]
+		Any parameters required by the output format
+\end{apiparm}
+
+
+\api{osenv_panic}{Abort driver set operation}
+\begin{apisyn}
+	\funcproto void osenv_panic(const~char *fmt, ... \unskip);
+\end{apisyn}
+\drvtoosn
+\begin{apidesc}
+%	XXX: should be in the liblinux_dev part
+
+	Front-end to osenv_vpanic
+\end{apidesc}
+\begin{apiparm}
+	\item[fmt]
+		{\tt printf}-style message format
+	\item[...]
+		Any parameters required by the output format
+\end{apiparm}
+
+
+
+\apisec{Device Registration}
+
+\emph{Nothing here yet, sorry.  See Section~\ref{fdev-default-reg} for
+a tiny bit more information on our current default implementation of
+device registration.  More information can be gained from the
+extensively commented header files in the directory
+\texttt{<oskit/dev>}, starting with file \texttt{device.h}.
+}
+
+
+\apisec{Block Storage Device Interfaces}
+
+\emph{This section is incomplete.  Block device interfaces now
+	provide an {\tt open} method which returns a per-open
+	{\tt blkio} object through which block reads and writes are
+	done.  See Section~\ref{oskit-blkio}.  In the absence of other
+	documentation, the example programs will be helpful.
+}
+
+XXX describe oskit_blkdev, blksize, etc.
+
+
+\apisec{Serial Device Interfaces}
+
+XXX: This section is in severe need of an update.
+
+Character device support is provided in the \oskit{} using device
+drivers from FreeBSD.
+
+\com{%
+\api{oskit_serial_set}{set standard serial port parameters}
+\begin{apisyn}
+	\cinclude{oskit/dev/serial.h}
+
+	\funcproto oskit_error_t
+	oskit_serial_set(oskit_serial_t *dev, unsigned baud, int mode);
+\end{apisyn}
+\begin{apidesc}
+	This function is specific to RS-232 serial devices:
+	specifically, devices with a class of {\tt oskit_chardev}
+	and a character device type of {\tt oskit_chardev_serial}.
+	It can be called by the host OS
+	to set standard serial port parameters such as baud rate.
+
+	The following mode flags are defined in {\tt oskit/dev/serial.h}:
+	XXX
+	\com{%
+	\begin{icsymlist}
+	\item[OSKIT_SERIAL_DTR]
+		Assert the data terminal ready (DTR) signal.
+	\item[OSKIT_SERIAL_RTS]
+		Assert the request-to-send (RTS) signal.
+	\end{icsymlist}
+	}
+
+	Most existing serial device drivers also support
+	an {\tt ioctl}-based method of setting
+	these serial parameters and perhaps others.
+	However, the specific {\tt ioctl} codes and structure formats used
+	vary depending on the nature and origin of the device driver
+	(e.g., BSD serial drivers use different {\tt ioctl} codes
+	than Linux drivers do);
+	therefore, this function is provided 
+	so that the basic parameters common to all standard serial ports
+	can be controlled in a driver-independent way.
+\end{apidesc}
+\begin{apiparm}
+	\item[dev]
+		A pointer to the serial device node to invoke.
+		Must be of type {\tt oskit_serial_t}.
+	\item[baud]
+		The new baud rate for the serial port to use.
+	\item[mode]
+		The new serial line mode,
+		consisting of the flags defined above.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/dev/error.h>}, on error.
+\end{apiret}
+
+\api{oskit_serial_get}{get standard serial port parameters and line status}
+\begin{apisyn}
+	\cinclude{oskit/dev/serial.h}
+
+	\funcproto oskit_error_t
+	oskit_serial_get(oskit_serial_t *dev, \outparam unsigned *baud,
+			    \outparam int *mode, \outparam int *status);
+\end{apisyn}
+\begin{apidesc}
+	This function is specific to RS-232 serial devices:
+	specifically, devices with a class of {\tt oskit_chardev}
+	and a character device type of {\tt oskit_chardev_serial}.
+	It can be called by the host OS
+	to examine the state of the serial port.
+	The current baud rate, serial line mode
+	(as specified to {\tt fxxxx_drv_set_serial}),
+	and status flags are returned in separate parameters.
+
+	The following status flags are defined in {\tt oskit/dev/serial.h}:
+	XXX
+
+	Most existing serial device drivers also support
+	an {\tt ioctl}-based method of checking
+	these serial parameters and perhaps others.
+	However, the specific {\tt ioctl} codes and structure formats used
+	vary depending on the nature and origin of the device driver
+	(e.g., BSD serial drivers use different {\tt ioctl} codes
+	than Linux drivers do);
+	therefore, this function is provided 
+	so that the basic parameters common to all standard serial ports
+	can be controlled in a driver-independent way.
+\end{apidesc}
+\begin{apiparm}
+	\item[dev]
+		A pointer to the serial device node to invoke.
+		Must be of type {\tt oskit_serial_t}.
+	\item[baud]
+		The serial port's current baud rate is returned
+		in this parameter.
+	\item[mode]
+		The serial port's current mode
+		(e.g., the mode last specified using {\tt fxxx_drv_set_serial})
+		is returned in this parameter.
+	\item[status]
+		The serial port's current status flags
+		are returned in this parameter.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/dev/error.h>}, on error.
+\end{apiret}
+}%com
+
+\apisec{Driver-Kernel Interface: \intelpc\ ISA device registration}
+
+\api{osenv_isabus_addchild}{add a device node to an ISA bus}
+
+XXX: new device tree management
+
+The \emph{address} parameter is used
+to uniquely identify the device on the ISA bus.
+For example, if there are two identical NE2000 cards plugged into the machine,
+the \emph{address} will be be the only way the host OS can distinguish them,
+because all of the other parameters of the device will be identical.
+If \emph{address} is in the range 0--0xffff (0--65535),
+it is interpreted as a port number in I/O space;
+otherwise, it is interpreted as a physical memory address.
+For devices that use any I/O ports for communication with software,
+the base of the ``primary'' range of I/O ports used by the device
+should be used as the \emph{address};
+a physical memory address should be used
+only for devices that \emph{only} communicate through memory-mapped I/O.
+
+\api{osenv_isabus_remchild}{remove a device node from an ISA bus}

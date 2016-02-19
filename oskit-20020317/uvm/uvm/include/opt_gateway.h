@@ -1,0 +1,1 @@
+/* option `GATEWAY' not defined */

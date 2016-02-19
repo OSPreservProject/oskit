@@ -1,0 +1,33 @@
+The OSKit document is a work in progress; ~575 pages and still growing.
+
+The document in its current form suffers from a variety of maladies:
+
+1. The document is incomplete.
+   There still remain many interfaces which are not covered.
+
+2. The document is occasionally incorrect.
+   That is, there are periodic discontinuities between the documentation
+   and the implementation.
+
+3. The document is really two different documents crammed into one.
+   Much of the expository text (rationale, extended descriptions) belongs
+   in an overview or introductory document.  The more concise ``man pages''
+   belong in an API reference manual.
+
+4. The API pages are not ordered in a consistent manner.
+   Some API sections are arranged alphabetically, some are presented in
+   a manner logical to how you would use them in a program, while others are
+   seemingly ordered arbitrarily.
+
+5. The document as a whole is ``stylistically diverse.''
+   Some sections are complete and well organized as standalone documents;
+   others are highly context dependent.  Some present far more information
+   than is necessary while others are woefully inadequate.  The formatting
+   of various pieces is equally diverse.
+
+6. We need a short tutorial document that is a guide for the new user, based
+   around some of the examples.
+  
+As such, we are very interested in feedback about the document, both formatting
+and content issues.  Anything that is missing, wrong, ugly, or could be
+presented better we want to hear about.

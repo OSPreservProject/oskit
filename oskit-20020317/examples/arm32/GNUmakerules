@@ -1,0 +1,150 @@
+#
+# Copyright (c) 1995-1996,1998,1999,2000, 2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#
+# Note: applications that use the Linux dev library need to link
+# in dummy.o to make sure that mem_lock from libkern gets linked in
+# rather than the one from libc.
+# This is because Linux interrupt handlers allocate memory.
+# If you don't do this, you will experience random LMM trashing
+# and other Strange memory bugs.
+#
+
+ifndef _oskit_examples_arm32_makerules_
+_oskit_examples_arm32_makerules__ = yes
+
+TARGETS = hello timer timer_com timer_com2 pingreply socket_com
+
+all: $(TARGETS)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/arm32 \
+		$(OSKIT_SRCDIR)/examples/x86 \
+		$(OSKIT_SRCDIR)/examples/x86/more \
+		$(OSKIT_SRCDIR)/examples/x86/shared
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/c	\
+		$(OSKIT_SRCDIR)/examples/x86/shared
+CLEAN_FILES +=	$(TARGETS) *.gdb
+OSKIT_CFLAGS += -DOSKIT
+OSKIT_LDFLAGS += -X -Ttext 0x18100000
+
+#
+# The C library is made up of several pieces. The core library, the
+# POSIX interface that converts syscalls to COM, and the actual COM
+# interfaces. Note that the C library is built with the COM library.
+#
+CLIB   = -loskit_c `$(CC) --print-libgcc-file-name`
+CLIB_P = -loskit_c_p -loskit_gprof -loskit_c_p -loskit_kern_p
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+hello: $(OBJDIR)/lib/multiboot.o hello.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_clientos -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+timer: $(OBJDIR)/lib/multiboot.o timer.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+timer_com: $(OBJDIR)/lib/multiboot.o timer_com.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+timer_com2: $(OBJDIR)/lib/multiboot.o timer_com2.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+pingreply: $(OBJDIR)/lib/multiboot.o pingreply.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_bootp \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		-loskit_memdebug \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+socket_com: $(OBJDIR)/lib/multiboot.o socket_com.o bootp.o dummy.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_clientos -loskit_bootp \
+		-loskit_freebsd_net \
+		-loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+diskpart: $(OBJDIR)/lib/multiboot.o diskpart.o $(DEPENDLIBS)
+	$(LD)  $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_linux_dev -loskit_dev -loskit_diskpart	\
+		-loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+netbsd_fs_com: $(OBJDIR)/lib/multiboot.o netbsd_fs_com.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_netbsd_fs -loskit_linux_dev -loskit_dev  \
+		-loskit_diskpart -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+blkio: $(OBJDIR)/lib/multiboot.o blkio.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_linux_dev \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+sound: $(OBJDIR)/lib/multiboot.o sound.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_memfs -loskit_fsnamespace \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+#
+# Make OFW boot adaptor images.
+#
+IMAGES	    :=	$(foreach FILE, $(TARGETS), $(FILE).image)
+CLEAN_FILES +=	$(IMAGES)
+BOOTDIR      =	$(OBJDIR)/boot/ofw
+export BOOTDIR
+
+images:		$(IMAGES)
+
+%.image:	% $(OBJDIR)/boot/ofw/ofwboot.o
+	cp $< $<.strip
+	$(STRIP) $<.strip
+	$(OBJDIR)/boot/ofw/mkofwimage -o $@ $<.strip
+	rm -f $<.strip
+
+endif

@@ -1,0 +1,114 @@
+README for the x11 client patches.
+
+:: Included files:
+
+     xfree.diff			patches to the XFree86 X11R6.3 sources
+     xc.diff			patches to the xconsortium X11R6.3 sources
+
+
+:: How to use the x11 client patches:
+
+Build and install an oskit tree.
+
+Get a copy of the X11R6.3 tree.
+	
+     The patches were made against XFree86 3.3.2.  They also apply
+     cleanly to XFree86 3.3.1.  They almost apply cleanly to the stock
+     X11R6.3 sources, but there are enough differences that there's a
+     patch included for them specifically.
+
+
+     You can get the XFree86 sources from:
+
+	ftp://ftp.xfree86.org/pub/XFree86/3.3.2/source/X332src-1.tgz
+	ftp://xfree86.cdrom.com/pub/XFree86/3.3.2/source/X332src-1.tgz
+
+     There are also many mirror sites listed at ftp.xfree86.org.
+
+     You can get the standard xconsortium X11R6.3 at:
+
+	ftp://ftp.x.org/pub/R6.3/tars/xc-[12].tar.gz
+
+
+Untar your X11 tree.
+
+    Assuming that you've gotten the XFree86 3.3.2 sources:
+
+	tar xfvz X332src-1.tgz
+
+    If you have the xconsortium tar files, you'll have to untar
+    both xc-1.tar.gz and xc-2.tar.gz, since the standard build
+    requires the doc subdirectory.
+
+Patch your X tree:
+
+	patch -p < xc.diff		(the -p is important)
+
+Modify xc/config/cf/oskit.cf depending on your installation:
+
+     Set ``OskitTop'' to the base of your oskit install tree 
+     (ie. whatever you specified with --prefix= when you 
+     configured the oskit).
+
+     You also probably need to change ArCmdBase, AsCmd, CcCmd,
+     CplusplusCmd, CppCmd, LdCmd and RanlibCmd.  These should be
+     the same as you'd find in the Makeconf file in your oskit
+     build directory.
+
+     You may or may not need to change OskitUndefines, to get rid of
+     standard defines when you're building.  The same thing applies 
+     if you're using the standard compiler on your system, since you're
+     really using them as cross-build tools for the Oskit.
+
+     You'll also want to comment out ElfOskit if you're using a.out.
+
+     If you get link errors when making oclock et al. you may need to
+     add another -loskit_libkern after -loskit_libc in the link line.
+     You can do this in oskit.cf in the OskitLibraries macro (and won't hurt
+     even if you don't get link errors).
+     (This kludge is temporary until we fix libc to not depend on libkern.
+     The libc breakage happened after the diffs were generated.)
+
+Build and install the X11 libraries and the two example programs
+(bitmap and oclock):
+
+	make World BOOTSTRAPCFLAGS="-DOSKIT -DCROSS_COMPILE"
+	make install
+
+
+Once you've built and installed the client libraries and includes, you
+can try out the example programs.  To do so you'll have to either use
+a multiboot compliant bootloader like GRUB, or build an image file using
+one of the bootadapters.
+You can also use netboot and specify environment vars on the command line like:
+
+	NetBoot> someserver:/some/path/oclock DISPLAY=mymachine:0
+
+One thing to be aware of is that you'll have to include all the fonts,
+bitmaps, configuration files, etc. into the Image file, or make them
+accessible through a filesystem from your oskit program.  You'll also
+have to set environment variables like your DISPLAY so that the client
+libraries will know where to display their windows.
+
+If you're using the bsd boot adapter, you can try out the oclock program
+by doing this:
+
+	mkbsdimage oclock -c "DISPLAY=<machine>:0"
+
+     The -c option lets you specify a command line to pass to the oskit
+     kernel, since the BSD bootloaders only let you pass along a flag 
+     word.  This will give you a file called ``Image'' that you can
+     then boot.
+
+Another thing to be aware of is that currently only the tulip driver
+is probed for.  You can modify this behavior in the patched main()
+functions of the various xc/programs like oclock, bitmap, and xlogo.
+
+If you use the linux boot adapter, you just need to include the
+program itself.  You can pass along the DISPLAY information on the
+lilo command line (or however you normally pass a command line to
+linux).
+
+	mklinuximage oclock
+
+     You should now have a file called ``zImage'' that you can boot.

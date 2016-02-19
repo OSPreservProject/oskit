@@ -1,0 +1,28 @@
+
+Directories: oskit/boot/bsd, oskit/boot/dos, oskit/boot/linux,
+	oskit/boot/multiboot, oskit/boot/net, oskit/boot/ofw,
+	oskit/boot/ofwboot, oskit/boot/pxe
+Target: See per-directory READMEs
+Documentation: 
+Original Code Source: See per-directory READMEs
+Description: 
+	Bootstrap adaptors and standalone boot programs.
+
+	The boot adaptors provide native boot loader format binaries
+	for OSKit kernels which expect to be booted from a multiboot
+	environment.  See the ``Booting Kernels'' section of the
+	documentation for details.  The bsd, dos, linux, multiboot,
+	and ofw directories contain boot adaptors.
+
+	The remaining directories contain standalone bootstrap
+	programs that are themselves OSKit kernels.  net is the
+	netboot utility described in the ``Netboot'' section of
+	the documentation.  The other two directories contain small,
+	simple first-stage boot loaders intended to themselves be
+	booted from OpenFirmware (ofwboot) or via the PXE protocol
+	(pxe).  Once booted, both use the custom UDP-based bootinfo
+	protocol (see oskit/boot/bootwhat.h) to communicate with a
+	server (simple example in oskit/boot/pxe/bootinfo) to determine
+	what kernel to boot.  See the individual README files for
+	more details.
+

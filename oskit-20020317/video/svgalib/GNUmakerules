@@ -1,0 +1,83 @@
+#
+# Copyright (c) 1998 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_liboskit_video_svgalib_makerules_
+_oskit_liboskit_video_svgalib_makerules_ = yes
+
+TARGET	= liboskit_video_svgalib.a
+
+SRCDIRS += $(OSKIT_SRCDIR)/video/svgalib/device \
+	   $(OSKIT_SRCDIR)/video/svgalib/src \
+	   $(OSKIT_SRCDIR)/video/svgalib/src/clockchip \
+	   $(OSKIT_SRCDIR)/video/svgalib/src/ramdac \
+	   $(OSKIT_SRCDIR)/video/svgalib/oskit
+
+
+INCDIRS += $(OSKIT_SRCDIR)/freebsd/libc/include \
+	   $(OSKIT_SRCDIR)/freebsd/3.x/src/include \
+   	   $(OSKIT_SRCDIR)/freebsd/3.x/src/sys \
+	   $(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386 \
+	   $(OBJDIR)/freebsd/libc/objinclude
+
+INCDIRS += $(OSKIT_SRCDIR)/video/svgalib/src \
+	   $(OSKIT_SRCDIR)/video/svgalib/src/clockchip \
+	   $(OSKIT_SRCDIR)/video/svgalib/src/ramdac
+
+DEFINES += -DOSKIT 
+DEFINES += -Ulinux -U__linux__ -U__linux
+
+DEFINES += -DSVGALIB_CONFIG_FILE=\"/etc/libvga.config\"
+
+
+DEFINES += -DINCLUDE_ALI_DRIVER -DINCLUDE_ALI_DRIVER_TEST
+DEFINES += -DINCLUDE_APM_DRIVER -DINCLUDE_APM_DRIVER_TEST
+DEFINES += -DINCLUDE_ARK_DRIVER -DINCLUDE_ARK_DRIVER_TEST
+DEFINES += -DINCLUDE_ATI_DRIVER -DINCLUDE_ATI_DRIVER_TEST
+DEFINES += -DINCLUDE_CHIPS_DRIVER -DINCLUDE_CHIPS_DRIVER_TEST
+DEFINES += -DINCLUDE_CIRRUS_DRIVER -DINCLUDE_CIRRUS_DRIVER_TEST
+DEFINES += -DINCLUDE_EGA_DRIVER -DINCLUDE_EGA_DRIVER_TEST
+DEFINES += -DINCLUDE_ET3000_DRIVER -DINCLUDE_ET3000_DRIVER_TEST
+DEFINES += -DINCLUDE_ET4000_DRIVER -DINCLUDE_ET4000_DRIVER_TEST
+DEFINES += -DINCLUDE_GVGA6400_DRIVER -DINCLUDE_GVGA6400_DRIVER_TEST
+DEFINES += -DINCLUDE_NV3_DRIVER -DINCLUDE_NV3_DRIVER_TEST
+DEFINES += -DINCLUDE_OAK_DRIVER -DINCLUDE_OAK_DRIVER_TEST
+DEFINES += -DINCLUDE_S3_DRIVER -DINCLUDE_S3_DRIVER_TEST -DS3_LINEAR_SUPPORT
+DEFINES += -DINCLUDE_TVGA_DRIVER -DINCLUDE_TVGA_DRIVER_TEST
+
+DEFINES += -DINCLUDE_MACH32_DRIVER -DINCLUDE_MACH32_DRIVER_TEST
+DEFINES += -DINCLUDE_MACH64_DRIVER -DINCLUDE_MACH64_DRIVER_TEST
+
+DEFINES += -DINCLUDE_NORMAL_DAC -DINCLUDE_NORMAL_DAC_TEST
+DEFINES += -DINCLUDE_S3_SDAC_DAC -DINCLUDE_S3_SDAC_DAC_TEST
+DEFINES += -DINCLUDE_S3_GENDAC_DAC -DINCLUDE_S3_GENDAC_DAC_TEST
+DEFINES += -DINCLUDE_S3_TRIO64_DAC -DINCLUDE_S3_TRIO64_DAC_TEST
+DEFINES += -DINCLUDE_IBMRGB52x_DAC -DINCLUDE_IBMRGB52x_DAC_TEST
+DEFINES += -DINCLUDE_ATT20C490_DAC -DINCLUDE_ATT20C490_DAC_TEST 
+DEFINES += -DINCLUDE_ATT20C498_DAC -DINCLUDE_ATT20C498_DAC_TEST 
+DEFINES += -DINCLUDE_SC15025_DAC -DINCLUDE_SC15025_DAC_TEST 
+DEFINES += -DINCLUDE_SC1148X_DAC -DINCLUDE_SC1148X_DAC_TEST 
+DEFINES += -DINCLUDE_ICW_DAC -DINCLUDE_ICW_DAC_TEST 
+DEFINES += -DINCLUDE_SIERRA_DAC -DINCLUDE_SIERRA_DAC_TEST
+
+# We really don't want DEBUG defined generally...
+DEFINES := $(filter-out -DDEBUG,$(DEFINES))
+
+#OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/video/svgalib/include/global.h
+
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+endif

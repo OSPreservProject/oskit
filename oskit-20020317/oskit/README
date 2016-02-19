@@ -1,0 +1,24 @@
+
+Directories: oskit/oskit, and ALL of its subdirectories
+Target: No specific target
+Documentation: See individual header files
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	Include files for all of the OSKit are here.
+	(except for netbsd, linux, or freebsd specific
+	ones that are parts of those distributions.)
+
+	OSKit-original headers are in this directory;
+	the c/ subdirectory has most of the standard
+	POSIX includes.
+
+	The x86/ subdirectory contains machine specific
+	details for header files in this directory AND
+	all the other subdirectories.  (e.g., 
+	oskit/c/float.h includes machine specific info 
+	from oskit/x86/c/float.h)
+	
+	The other directories generally correspond to 
+	the similarly named library.
+ 

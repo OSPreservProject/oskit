@@ -1,0 +1,510 @@
+%
+% Copyright (c) 1996-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{diskpart}
+
+\section{Introduction}
+
+The \oskit{} includes code that understands the various
+partitioning schemes used to divide disk drives into smaller pieces
+for use by filesystems.
+This code enables the use of various (possibly nested) partitioning
+schemes in an easy manner without requiring knowledge of which partitioning
+scheme was used, or how these partitioning schemes work.  E.g., you don't 
+need to understand or know the format of a VTOC to use the partitioning, 
+as the library does all of it for you.
+
+\section{Supported Partitioning Schemes}
+
+Supported partitioning schemes are:
+\begin{itemize}
+\item
+BSD Disklabels
+\item
+IBM-PC BIOS/DOS partitions (including logical)
+\item
+VTOC labels (Mach).
+\item
+OMRON and DEC label support based on old Mach code is provided,
+although it is completely untested.
+\end{itemize}
+
+\section{Example Use}
+
+\subsection{Reading the partition table}
+
+This shows how the partitioning information can be extracted in user-mode
+(running under Unix).
+In the kernel, it would likely be necessary to pass a
+{\tt driver_info} structure 
+to a device-specific read function.  In this case, 
+driver_info is simply a filename string.
+
+\begin{verbatim}
+/* This is the testing program for the partitioning code. */
+#include <oskit/diskpart/diskpart.h>
+#include <stdio.h>
+#include <fcntl.h>
+
+#define FILENAME "/dev/sd0c"
+
+/* We pass in a fixed-size table; this defines how big we want it. */
+#define MAX_PARTS 30
+diskpart_t part_array[MAX_PARTS];
+
+/*
+ * In this case, we are defining the disk size to be 10000 sectors.
+ * Normally, this would be the number of physical sectors on the
+ * disk.  If the `disk' is a `file', it would be better to get the
+ * equivalent number of sectors from the file size.
+ * This is only used to fill in the whole-drive partition entry.
+ */
+#define DISK_SIZE 10000
+
+/*
+ * This is the function pointer I pass to the partition code
+ * to read sectors on the drive.
+ */
+int my_read_fun(void *driver_info, int sector, char *buf);
+
+
+int
+main(int argc, char *argv[])
+{
+        int numparts;
+        char *filename;
+
+        if (argc == 2)
+                filename = argv[1];
+        else
+                filename = FILENAME;
+
+        /* call the partition code */
+        numparts = diskpart_get_partition(filename, my_read_fun, part_array, 
+                MAX_PARTS, DISK_SIZE);
+
+        printf("%d partitions found\n",numparts);
+        /* diskpart_dump(part_array, 0); */
+}
+ 
+static int
+my_read_fun(void *driver_info, int sector, char *buf)
+{
+        char *filename = driver_info;
+
+        int fd = open(filename, O_RDONLY, 0775);
+
+        lseek(fd, SECTOR_SIZE * sector, SEEK_SET);
+        read(fd, buf, SECTOR_SIZE);
+        close(fd);
+
+        /* Should bzero the result if read error occurs */
+        return(0);
+}
+\end{verbatim}
+
+\subsection{Using Partition Information}
+The routine {\tt diskpart_lookup_bsd_compat} is an example of how the
+old partition naming
+can be used even with the new nested structure.  This takes two
+integers representing the slice and partition.  The behavior is
+intended to be similar to {\tt diskpart_lookup_bsd_string} (below),
+using integers as parameters.
+
+While this `hack' allows two levels of nesting (slice and partition),
+it is not general enough to support arbitrary nesting.  Arbitrary
+nesting support is most easily achieved by passing string names to a
+lookup function which can follow the structure down the partition
+specifications.  For example, `sd0eab' would be used to specify the
+second partition in the first partition inside the fifth top-level
+partition on the first SCSI disk.  Since the lookup routine doesn't
+need to know about the disk, `eab' would be the partition name passed
+to the lookup routine.  This naming scheme would work well as long as
+there are not more than 26 partitions at any nesting layer.
+
+{\tt diskpart_lookup_bsd_string} does a string lookup using the
+FreeBSD style slice names.  FreeBSD considers the DOS partitioning to
+be slices.  A slice can contain a BSD disklabel, and if it does, then
+partitions can be inside the slice.  If the third DOS partition
+contains a disklabel, then `s3a' would be partition `a' inside the
+disklabel.  The slice name without a partition would mean the entire
+slice.  Note also that `a' would alias to partition `a' in the first
+BSD slice.  If there is no BSD slice, then `a' would be aliased to
+`s1' instead.  However, to avoid confusion, if slice-naming is used, 
+aliases should only be used to point inside a BSD slice.
+
+\section{Restrictions}
+
+This is a list of known restrictions/limitations of the partitioning library.
+
+\subsection{Endian}
+The partitioning code only recognizes labels
+created with the same endian-ness as the machine it is running on.
+While it is quite possible to detect an endian conflict and interpret the 
+information in the label, the information stored in the partitions will 
+probably not be very useful, as most filesystems expect the numeric 
+representations to remain constant.
+
+\subsection{Nesting}
+Strict nesting, in which a child is not allowed to extend outside the parent, 
+is not enforced, or even checked by the library.  This allows greater 
+flexibility in the use of nested partitions, while also placing greater 
+responsibility on the user's shoulders to ensure that the partition 
+information on the disk is correct.  Enforcement of strict nesting, 
+should it be desired, is left to the user.
+
+Due to previous constraints, the search routine does not yet do a recursive
+search for all possible nestings, although all `sensible' ones are searched
+manually.  This is a change that will be incorporated as soon as nesting of 
+this type exists and it can be utilized by something.
+
+\subsection{Lookup}
+A general lookup routine is not yet part of the library.
+The {\tt diskpart_lookup} routine is only able to do one layer of nesting.
+More general support may be added in the future, 
+or it may be left to the user to 
+determine a naming scheme to access the subpartitions.
+
+Also, the lookup routines currently assume a sector size of 512 bytes.
+
+\section{API reference}
+
+\api{diskpart_get_partition}{initialize an array of partition entries}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto int diskpart_get_partition(void *driver_info, 
+			int (*diskpart_read_func)(),
+                        struct~diskpart *array, int array_size,
+                        int disk_size);
+
+\end{apisyn}
+\begin{apidesc}
+        This function initializes an array of {\tt struct~diskpart} entries.
+        The caller must provide a pointer to a {\tt struct~diskpart} array,
+	and a function to read the disk.
+\end{apidesc}
+\begin{apiparm}
+        \item[driver_info]
+                A pointer to an initialized structure of user-defined type
+                which is passed unmodified to {\tt diskpart_read_func}.
+	\item[diskpart_read_func]
+		A function pointer provided by the user which can read
+		a sector given {\tt driver_info}.
+	\item[array]
+		Array of {\tt struct~diskpart}.
+	\item[array_size]
+		integer containing the number of allocated entries in
+		the array.
+	\item[disk_size]
+		Size of the whole disk, in sectors.
+\end{apiparm}
+\begin{apiret}
+	Returns an integer count of the number of partition entries that were
+	filled by the library.  If there were more partitions found than
+	space available, this will be {\tt array_size}.
+	Empty partitions (unused entries in a BSD disklabel, for example)
+	occupy an entry the same as `used' entries.
+
+	For example, a PC-DOS partition with a single filled entry would still
+	report 4 partitions, as that is the size of the DOS partition table.
+\end{apiret}
+\begin{apirel}
+	{\tt diskpart_read_func}
+\end{apirel}
+
+
+\api{diskpart_read_func}{read a disk sector (user-provided callout)}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto int diskpart_read_func(void *driver_info, 
+			int sector, char *buf);
+\end{apisyn}
+\begin{apidesc}
+        This function is called from {\tt diskpart_get_partition} and
+	{\tt diskpart_get_\emph{type}} whenever they need to read data from
+	the target disk.
+\end{apidesc}
+\begin{apiparm}
+        \item[driver_info]
+                The parameter passed to {\tt diskpart_get_partition} and
+		{\tt diskpart_get_\emph{type}}.  Used to pass data through
+		the diskpart library to this read routine.
+	\item[sector]
+		The sector to read.
+	\item[buf]
+		Memory location where the sector should be read in to.
+		The buffer must be at least {\tt SECTOR_SIZE} bytes.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, non-zero to indicate an error.
+\end{apiret}
+
+
+\api{diskpart_blkio_get_partition}{initialize an array of partition entries}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto int diskpart_blkio_get_partition(oskit_blkio_t *block_io,
+			struct~diskpart *array, int array_size);
+\end{apisyn}
+\begin{apidesc}
+        This function initializes an array of {\tt struct~diskpart} entries.
+        The caller must provide a pointer to a {\tt struct~diskpart} array.
+
+	This function is a version of \texttt{diskpart_get_partition}
+	using an \oskit\ ``Block I/O'' interface in place of an explicit
+	callback function.
+\end{apidesc}
+\begin{apiparm}
+	\item[block_io]
+		An \texttt{oskit_blkio_t} that represents the disk whose
+		partitions we are interested in.
+	\item[array]
+		Array of {\tt struct~diskpart}.
+	\item[array_size]
+		integer containing the number of allocated entries in
+		the array.
+\end{apiparm}
+\begin{apiret}
+	Returns an integer count of the number of partition entries that were
+	filled by the library.  If there were more partitions found than
+	space available, this will be {\tt array_size}.
+	Empty partitions (unused entries in a BSD disklabel, for example)
+	occupy an entry the same as `used' entries.
+
+	For example, a PC-DOS partition with a single filled entry would still
+	report 4 partitions, as that is the size of the DOS partition table.
+\end{apiret}
+\begin{apirel}
+	The \oskit\ Block I/O Interface (section~\ref{oskit-blkio}).
+\end{apirel}
+
+
+\api{diskpart_fill_entry}{initialize a single partition entry}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto void diskpart_fill_entry(struct~diskpart *array, 
+		int start, int size,
+                struct~diskpart *subs, int nsubs, short type, short fsys);
+\end{apisyn}
+\begin{apidesc}
+        This function initializes a single partition entry.
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		Pointer to the {\tt struct~diskpart} entry to be filled
+	\item[start]
+		Starting sector on the disk for the partition.
+	\item[size]
+		Number of sectors in the partition.
+	\item[subs]
+		Pointer to its first child partition.
+	\item[nsubs]
+		Number of sub-partitions.
+	\item[type]
+		Partition type, as defined in diskpart.h
+	\item[fsys]
+		Filesystem in the partition (if known), as defined in diskpart.h
+\end{apiparm}
+
+
+\api{diskpart_dump}{print a partition entry to stdout}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto void diskpart_dump(struct~diskpart *array, int level);
+\end{apisyn}
+\begin{apidesc}
+        This function prints a partition entry with indentation and labeling
+	corresponding to its nesting level.  It also recursively prints any
+	child partitions on separate lines, with level+1.
+
+	This provides valuable diagnostic messages for debugging disk or
+	filesystem problems.
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		A pointer to the first entry to be printed.  It and any 
+		sub-partitions are printed.
+        \item[level]
+		int representing current level.  This controls indentation and
+		naming of the output.
+		{\tt diskpart_dump} called with the root {\tt struct~diskpart}
+		entry and 0 will print the entire table.
+\end{apiparm}
+\begin{apiret}
+	Returns nothing, but does write to stdout.
+\end{apiret}
+
+
+
+
+\api{diskpart_lookup_bsd_compat}{search for a partition entry}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto struct~diskpart
+		*diskpart_lookup_bsd_compat(struct~diskpart *array,
+		        short slice, short part);
+\end{apisyn}
+\begin{apidesc}
+	This function is a \emph{sample} lookup routine which finds a partition
+	given a slice number and partition number.
+
+	This demonstrates how a two-level naming scheme can be
+	implemented using integers.
+	This was first used in Mach 4 (UK22) to provide support for
+	FreeBSD slices as well as backwards-compatibility with
+	previous naming methods.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		This should be the pointer to the start of the array.
+	\item[slice]
+		Slice 0 is used as a `compatibility slice', in that it
+		is aliased to a BSD partition, if it exists.  This
+		allows users to not specify the slice for compatibility.
+	\item[part]
+		Partition 0 is used to represent the whole slice, and
+		Partition 0, Slice 0 is the whole drive.
+\end{apiparm}
+\begin{apiret}
+        Returns a pointer to the corresponding partition entry, or
+	zero if it is invalid.
+\end{apiret}
+
+
+\api{diskpart_lookup_bsd_string}{search for a partition entry}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto struct~diskpart
+		*diskpart_lookup_bsd_string(struct~diskpart *array, char *name);
+\end{apisyn}
+\begin{apidesc}
+	This function is a \emph{sample} lookup routine which finds a partition
+	given a FreeBSD style slice string.  If no slice number is
+	given, it defaults to the first BSD partition, and then to the
+	whole disk if no BSD partition is found.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		This should be the pointer to the start of the array.
+	\item[name]
+		A case-insensitive, NULL-terminated, ASCII string
+		containing an optional Slice specifier followed by an
+		optional partition.  [s$<$num$>$][$<$part$>$], where part is
+		a valid partition in the BSD slice specified by num
+		(or default).
+\end{apiparm}
+\begin{apiret}
+        Returns a pointer to the corresponding partition entry, or
+	zero if it is invalid.
+\end{apiret}
+
+
+
+\api{diskpart_blkio_lookup_bsd_string}{search for a partition entry}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto struct~diskpart
+		*diskpart_blkio_lookup_bsd_string(struct~diskpart *array,
+			char *name, oskit_blkio_t *block_io,
+			\outparam oskit_blkio_t **out_block_io);
+\end{apisyn}
+\begin{apidesc}
+	This is similar to (and uses) \texttt{diskpart_lookup_bsd_string}
+	but returns an \oskit\ ``Block I/O'' interface for the partition;
+	i.e., operations on the returned \texttt{oskit_blkio_t} are restricted
+	to the bounds of the partition.
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		This should be the pointer to the start of the array.
+	\item[name]
+		A case-insensitive, NULL-terminated, ASCII string
+		containing an optional Slice specifier followed by an
+		optional partition.  [s$<$num$>$][$<$part$>$], where part is
+		a valid partition in the BSD slice specified by num
+		(or default).
+	\item[block_io]
+		The \texttt{oskit_blkio_t} whose partitions we are interested
+		in.
+	\item[out_block_io]
+		A pointer to the new \texttt{oskit_blkio_t}.
+\end{apiparm}
+\begin{apiret}
+        Returns a pointer to the corresponding partition entry, or
+	zero if it is invalid.
+\end{apiret}
+\begin{apirel}
+	\texttt{diskpart_lookup_bsd_string},
+	the \oskit\ Block I/O Interface (section~\ref{oskit-blkio}).
+\end{apirel}
+
+
+\api{diskpart_get_\emph{type}}{Search for \emph{type} type partitions}
+\begin{apisyn}
+	\cinclude{oskit/diskpart/diskpart.h}
+
+        \funcproto int diskpart_get_\emph{type}(struct~diskpart *array, 
+		char *buf, int start,
+                void *driver_info, int (*diskpart_read_func)(),
+                int max_part);
+\end{apisyn}
+\begin{apidesc}
+        This function finds \emph{type} type partitions if they are on the disk.
+	These routines would not normally be invoked directly.
+	However, the API is documented here so that {\tt diskpart_lookup}
+	can be extended easily for future or additional labeling schemes.
+
+	Currently defined functions are: {\tt pcbios, disklabel, vtoc, dec,}
+	and {\tt omron}.
+
+	They should return immediately if {\tt diskpart_read_func} returns
+	non-zero, and return that error code.
+\end{apidesc}
+\begin{apiparm}
+        \item[array]
+		Pointer to the start of preallocated storage.
+	\item[buf]
+		Pointer to a sector-sized scratch area.
+	\item[start]
+		Offset from start of disk the partition starts.
+	\item[driver_info]
+                A pointer to an initialized structure of user-defined type
+                which is passed unmodified to {\tt diskpart_read_func}.
+	\item[diskpart_read_func]
+		A function pointer provided by the user which can read
+		a sector given {\tt driver_info}.
+	\item[max_part]
+		Maximum number of partition entries that can be filled.
+		This will generally be equal to the number of pre-allocated
+		entries that are available.
+\end{apiparm}
+\begin{apiret}
+        Returns the number of partition entries of that type found.
+	If none were found, it returns 0.
+
+	If the return value is equal to {\tt max_part} then it is possible
+	that there were more partitions than space for them.  It is up to
+	the user to ensure that adequate storage is passed to 
+	{\tt diskpart_get_partitions}.
+\end{apiret}
+\begin{apirel}
+	{\tt diskpart_read_func}
+\end{apirel}

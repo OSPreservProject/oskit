@@ -1,0 +1,7 @@
+Directories: oskit/dpf/dpf
+Target: liboskit_dpf.a
+Documentation: 
+Original Code Source: 
+Description:  
+	Glue code for wrapping the DPF interpreted packet filter. 
+

@@ -1,0 +1,21 @@
+Directories: oskit/rtld
+Target: liboskit_rtld.a
+Documentation: doc/rtld.tex
+Original Code Source:
+	FreeBSD v3.0, FreeBSD Project
+	Flux Research Group, University of Utah
+Description: 
+	A runtime linker/loader for ELF compiled oskit kernels. This
+	library is based on the FreeBSD 3.0 rtld-elf library, and
+	allows an OSKit kernel to load shared libraries (.so files).
+	The typical set of rtld functions is exported: dlopen, dlsym,
+	dlclose, dlerror.
+
+	See the demonstration kernel in examples/dyntest.
+
+	NOTE: We need to use a linker script because a bug in the 2.9
+	linker causes -Ttext argument to be ignored when used in
+	combination with the -shared option. So, the text offset must
+	be plugged into a linker script. See the examples/dyntest
+	GNUmakerules file.
+	

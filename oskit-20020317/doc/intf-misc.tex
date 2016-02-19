@@ -1,0 +1,95 @@
+%
+% Copyright (c) 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{intf-misc}
+
+This chapter describes additional COM interfaces defined by the \oskit{}.
+
+\apiintf{oskit_random}{Interface for random number generators}
+
+The \texttt{oskit_random} COM interface provides a simple encapsulation for
+pseudo-random number generators.  The interface is based on the common C
+library functions \texttt{random} and \texttt{srandom}.  The interface inherits
+from \texttt{oskit_iunknown} and provides the following additional methods:
+\begin{csymlist}
+	\item[random]
+		Produce a pseudo-random number in the range $0$ to $2^{31}-1$.
+	\item[srandom]
+		Seed the random number generator.
+\end{csymlist}
+The \texttt{oskit_random_create} function can be used to create instances of
+the \texttt{oskit_random} interface.
+
+\api{create}{Create a new pseudo-random number generator}
+\begin{apisyn}
+	\cinclude{oskit/com/random.h}
+
+	\funcproto oskit_error_t
+	oskit_random_create(\outparam oskit_random_t **out_r);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \texttt{oskit_random} object in the default seed state.
+\end{apidesc}
+\begin{apiparm}
+	\item[out_r]
+		Upon success, the new \texttt{oskit_random} object reference is
+		returned in \texttt{*out_r}.
+\end{apiparm}
+\begin{apiret}
+	Upon success, returns 0.  Upon failure, the return value is set to a
+	code indicating the reason for failure.  (See {\tt <oskit/error.h>}.)
+\end{apiret}
+
+\api{random}{Produce a pseudo-random number}
+\begin{apisyn}
+	\cinclude{oskit/com/random.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_random_random(oskit_random_t *r, \outparam oskit_s32_t *out_num);
+\end{apisyn}
+\begin{apidesc}
+	Use \texttt{r} to generate a new pseudo-random number in the range $0$
+	to $2^{31}-1$.
+\end{apidesc}
+\begin{apiparm}
+	\item[r]
+		The random number generator object reference.
+	\item[out_num]
+		Upon success, the newly generated number is stored in
+		\texttt{*out_num}.
+\end{apiparm}
+\begin{apiret}
+	Upon success, returns 0.  Upon failure, the return value is set to a
+	code indicating the reason for failure.  (See {\tt <oskit/error.h>}.)
+\end{apiret}
+
+\api{srandom}{Seed a pseudo-random number generator}
+\begin{apisyn}
+	\cinclude{oskit/com/random.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_random_srandom(oskit_random_t *r, oskit_u32_t seed);
+\end{apisyn}
+\begin{apidesc}
+	Use \texttt{seed} to reinitialize the random number generator
+	\texttt{r}.
+\end{apidesc}
+\begin{apiparm}
+	\item[r]
+		The random number generator object reference.
+	\item[seed]
+		The seed value with which to reset the generator.
+\end{apiparm}
+\begin{apiret}
+	Upon success, returns 0.  Upon failure, the return value is set to a
+	code indicating the reason for failure.  (See {\tt <oskit/error.h>}.)
+\end{apiret}
+

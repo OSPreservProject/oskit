@@ -1,0 +1,9 @@
+
+Directories: oskit/examples/x86/video_x11
+Targets: video_x11
+Documentation: ``Use the Source''
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory serves to build certain of the example kernels
+	which require the X11 video library (-loskit_x11video).
+

@@ -1,0 +1,9 @@
+
+Directories: oskit/startup
+Target: Useful functions to bootstrap stand-alone single or multithreaded
+	systems.
+Documentation: See the source files
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	These functions can be useful to initialize clock, fs, and
+	networking components and the pthread threading system.

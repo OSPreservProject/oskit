@@ -1,0 +1,41 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+# FLASK
+
+#
+# Define the security context for each initial SID
+# sid sidname   context
+
+sid kernel	nobody:system_r:kernel_t:u
+sid security	nobody:system_r:security_t:u
+sid unlabeled	nobody:user_r:unlabeled_t:u
+sid fs		nobody:user_r:fs_t:u-ts
+sid file	nobody:user_r:file_t:u
+sid file_labels	nobody:system_r:file_labels_t:u
+sid init	root:startup_r:init_t:u
+sid proc	nobody:system_r:proc_t:u
+sid any_socket 	nobody:system_r:any_socket_t:u
+sid port	nobody:system_r:port_t:u
+sid netif	nobody:system_r:netif_t:u
+sid netmsg	nobody:system_r:netmsg_t:u
+sid node	nobody:system_r:node_t:u
+sid icmp_socket nobody:system_r:icmp_socket_t:u
+sid tcp_socket  nobody:system_r:tcp_socket_t:u
+
+# FLASK

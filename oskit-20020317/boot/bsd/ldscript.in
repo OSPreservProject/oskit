@@ -1,0 +1,36 @@
+OUTPUT_FORMAT("a.out-mach3", "a.out-mach3",
+              "a.out-mach3")
+OUTPUT_ARCH(i386)
+PROVIDE (__stack = 0);
+SECTIONS
+{
+  . = 0x10020;
+  .text :
+  {
+    CREATE_OBJECT_SYMBOLS
+    *(.text)
+    *(.rodata)
+    _etext = .;
+    __etext = .;
+    . = ALIGN(0x1000);
+  }
+  . = ALIGN(0x1000);
+  .data :
+  {
+    *(.data)
+    CONSTRUCTORS
+    _edata  =  .;
+    __edata  =  .;
+  }
+  .bss :
+  {
+   *(.bss)
+   *(COMMON)
+   _end = ALIGN(4) ;
+   __end = ALIGN(4) ;
+  }
+  /DISCARD/ : { *(.debug*); }
+  /DISCARD/ : { *(.stab*); }
+  /DISCARD/ : { *(.comment); }
+  /DISCARD/ : { *(.note); }
+}

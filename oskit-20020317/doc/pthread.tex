@@ -1,0 +1,2463 @@
+%
+% Copyright (c) 1996-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{pthread}
+
+\section{Introduction}
+
+This chapter describes the \posix{} threads module and associated support for
+writing multithreaded kernels. At present, threads support is very new and
+not every combination of components is known to work; see
+Section~\ref{pthread-caveats} for a more detailed description of what has been
+tested. Section~\ref{pthread-api} describes the application program
+interface for the core \posix{} threads module, while
+Section~\ref{pthread-wrappers} contains a discussion of how the threads system
+interacts with the device driver framework.
+
+\section{Examples and Caveats}
+\label{pthread-caveats}
+
+The sample kernels in the {\tt examples/threads} directory (see
+Section~\ref{example-kernels}), contain several sample kernels demonstrating
+the use of the \posix{} threads module. 
+
+\begin{itemize}
+\item	{\tt dphils}:
+	A computational example that tests basic \posix{} threads
+	operations such as thread creation, mutexes, and conditions.
+	Solves the classic Dining Philosophers problem.
+\item	{\tt disktest}:
+	A contrived disk thrashing program that tests the interaction
+	between \posix{} threads and the NetBSD filesystem (see
+	Section~\ref{netbsd-fs}). A number of threads are created, where each
+	one creates and copies files in varying block sizes.
+\item	{\tt disknet}:
+	Another contrived program that builds on the disk thrashing program
+	above. Also tested is the interaction bewteen \posix{} threads and
+	the BSD network interface. Half of the threads created thrash the
+	disk and the other half connect to a server process and send and
+	receive data blocks. This program achieves reasonable interleaving
+	of work.
+\item	{\tt http_proxy}:
+	A simplified HTTP proxy daemon that tests the interaction between
+	\posix{} threads and the BSD network interface. For each new
+	connection request, three threads are created to manage that
+	connection and forward data between the client and the server. 
+\end{itemize}
+
+This small set of test programs clearly does not test every possible
+combination of components. A larger set of test program is in the works. In
+addition, not all of the thread-safe adaptors are implemented, so some
+components cannot be used in a multithreaded environment. \emph{For now, the
+\posix{} threads module should be used with caution.} Note that these
+examples are compiled and linked against the multithreaded version of the
+\freebsd{} C library (see Section~\ref{freebsd-libc}), rather than the minimal
+C library (Section~\ref{libc}).
+
+\section{POSIX Threads Reference}
+\label{pthread-api}
+
+As with most \posix{} threads implementations, this one is slightly
+different than others. This section briefly covers the specific interfaces,
+but does not describe the semantics of each interface function in great
+detail. The reader is advised to consult the \posix{} documentation for a
+more complete description. All of these functions, as well as the types
+necessary to use them, are defined in the header file {\tt
+<oskit/threads/pthread.h>}.
+
+\api{pthread.h}{Thread constants and data structures}
+\begin{apidesc}
+	This header file defines the following standard symbols.
+	\begin{icsymlist}
+	\item[PRIORITY_MIN]
+		Lowest possible thread scheduling priority.
+	\item[PRIORITY_NORMAL]
+		Default thread scheduling priority.
+	\item[PRIORITY_MAX]
+		Highest possible thread scheduling priority.
+	\item[SCHED_FIFO]
+		The ``first in first out'' thread scheduling policy.
+	\item[SCHED_RR]
+		The ``round robin'' thread scheduling policy.
+	\item[PTHREAD_STACK_MIN]
+		The minumum allowed stack size.
+	\item[PTHREAD_CREATE_JOINABLE]
+		Thread attribute; thread is created joinable.
+	\item[PTHREAD_CREATE_DETACHED]
+		Thread attribute; thread is created detached.
+	\item[PTHREAD_PRIO_NONE]
+		Mutex attribute; mutex does not do priority inheritance.
+	\item[PTHREAD_PRIO_INHERIT]
+		Mutex attribute; mutex does priority inheritance.
+	\item[PTHREAD_MUTEX_NORMAL]
+		Mutex attribute; normal error checking, no recursion.
+	\item[PTHREAD_MUTEX_ERRORCHECK]
+		Mutex attribute; extra error checking, no recursion.
+	\item[PTHREAD_MUTEX_RECURSIVE]
+		Mutex attribute; normal error checking, recursion allowed.
+	\item[PTHREAD_MUTEX_DEFAULT]
+		Mutex attribute; normal error checking, no recursion.
+	\item[PTHREAD_CANCEL_ENABLE]
+		Cancelation state; Cancelation state is enabled.
+	\item[PTHREAD_CANCEL_DISABLE]
+		Cancelation state; Cancelation state is disabled.
+	\item[PTHREAD_CANCEL_DEFERRED]
+		Cancelation type; Cancelation type deferred,
+	\item[PTHREAD_CANCEL_ASYNCHRONOUS]
+		Cancelation type; Cancelation type is asynchronous.
+	\item[PTHREAD_CANCELED]
+		The exit status returned by pthread_join for a canceled thread.
+	\item[pthread_t]
+		Thread identifier type definition.
+	\item[pthread_mutex_t]
+		Mutex type definition.
+	\item[pthread_cond_t]
+		Condition variable type definition.
+	\item[pthread_attr_t]
+		Thread attributes type definition.
+	\item[pthread_attr_default]
+		Default thread attributes object.
+	\item[pthread_mutexattr_t]
+		Mutex attributes type definition.
+	\item[pthread_mutexattr_default]
+		Default mutex attributes object.
+	\item[pthread_condattr_t]
+		Condition variable attributes type definition.
+	\item[pthread_condattr_default]
+		Default condition variable attributes object.
+	\item[sched_param_t]
+		Type definition for the {\tt pthread_setschedparam}
+		interface function.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{pthread_init}{Initialize the threads system}
+\label{pthread-init}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void pthread_init(int preemptible);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes the threads system. It should be called
+	as the first function in the application's main program function.
+
+	When {\tt pthread_init} returns, the caller is now running within
+	the main thread, although on the same stack as when called. One or
+	more idle threads have also been created, and are running at low
+	priority. At this point, the application is free to use any of the
+	pthread interface functions described in this section.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[preemptible]
+		A boolean value specifying whether the threads system
+		should use preemption based scheduling. When preemption
+		based scheduling is not used, it is up to the application
+		to yield the processor using {\tt sched_yield} as necessary.
+\end{apiparm}
+
+
+\api{pthread_attr_init}{Initialize a thread attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_init(pthread_attr_t *attr);
+\end{apisyn}
+\begin{apidesc}
+	Initialize a thread attributes object for use with {\tt
+	pthread_create}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_setprio},
+	{\tt pthread_attr_setstacksize}
+\end{apirel}
+
+
+\api{pthread_attr_setdetachstate}{Set the detach state in a thread attributes
+                                  object} 
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setdetachstate(pthread_attr_t *attr,
+                                                   int detachstate);
+\end{apisyn}
+\begin{apidesc}
+	Set the thread detach state in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[detachstate]
+		Either PTHREAD_CREATE_JOINABLE or PTHREAD_CREATE_DETACHED. 
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt detachstate} is 
+	invalid.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init}
+\end{apirel}
+
+
+\api{pthread_attr_setprio}{Set the priority in a thread attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setprio(pthread_attr_t *attr, int pri);
+\end{apisyn}
+\begin{apidesc}
+	Set the priority value in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[pri]
+		A value between PRIORITY_MIN and PRIORITY_MAX.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt priority} is
+	outside the range of PRIORITY_MIN to PRIORITY_MAX.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init},
+	{\tt pthread_attr_setstacksize}
+\end{apirel}
+
+
+\api{pthread_attr_setstackaddr}{Set the stack address in a thread attributes
+                                object} 
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setstackaddr(pthread_attr_t *attr,
+                                                 void *stackaddr);
+\end{apisyn}
+\begin{apidesc}
+	Set the stack address in a previously initialized threads attribute
+	object, for use with {\tt pthread_create}. The new thread will be
+	created using the provided stack. It is necessary to call {\tt
+	pthread_attr_setstacksize()} if the size is not {\tt
+	PTHREAD_STACK_MIN}.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[stackaddr]
+		The address of the stack.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. 
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init},
+        {\tt pthread_attr_setstacksize}
+\end{apirel}
+
+
+\api{pthread_attr_setguardsize}{Set the stack guard size in a thread attributes
+                                object} 
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setguardsize(pthread_attr_t *attr,
+                                                 oskit_size_t guardsize);
+\end{apisyn}
+\begin{apidesc}
+	Set the stack guard size in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. This much
+	extra space will be allocated at the end of the stack and set as a
+	redzone to catch stack overflow. The guard size is rounded up to a
+	multiple of the native page size. Stack guards are not created for
+	stacks provided with {\tt pthread_attr_setstackaddr}.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[guardsize]
+		A reasonable stack guard size.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. 
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init},
+        {\tt pthread_attr_setstackaddr}
+\end{apirel}
+
+
+\api{pthread_attr_setstacksize}{Set the stack size in a thread attributes
+                                object} 
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setstacksize(pthread_attr_t *attr,
+                                                 oskit_size_t stacksize);
+\end{apisyn}
+\begin{apidesc}
+	Set the stack size in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[stacksize]
+		A reasonable stack size.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt stacksize} is less
+	than PTHREAD_STACK_MIN.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init},
+        {\tt pthread_attr_setprio}
+\end{apirel}
+
+
+\api{pthread_attr_setschedpolicy}{Set the scheduling policy in a thread
+                                  attributes object} 
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_attr_setschedpolicy(pthread_attr_t *attr,
+                                                   int policy);
+\end{apisyn}
+\begin{apidesc}
+	Set the scheduling policy in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[policy]
+		Either SCHED_FIFO or SCHED_RR.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt policy} is 
+	invalid.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_attr_init}
+\end{apirel}
+
+
+\api{pthread_mutexattr_init}{Initialize a mutex attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutexattr_init(pthread_mutexattr_t *attr);
+\end{apisyn}
+\begin{apidesc}
+	Initialize an mutex attributes object for use with {\tt
+	pthread_mutex_init}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_mutexattr_t} object
+		representing the attributes for a mutex initialization.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}, {\tt pthread_mutex_setprotocol}
+\end{apirel}
+
+
+\api{pthread_mutexattr_setprotocol}{Set the protocol attribute of a mutex
+                                    attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutexattr_setprotocol(pthread_mutexattr_t *attr,
+                                                     int protocol);
+\end{apisyn}
+\begin{apidesc}
+	Set the protocol in a previously initialized mutex
+	attribute object. When a mutex is created with the protocol
+	PTHREAD_PRIO_INHERIT, threads that blocked on the mutex will result
+	in a transfer of priority from higher to lower priority threads.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_mutexattr_t} object
+		representing the attributes for a mutex initialization.
+	\item[protocol]
+		Either PTHREAD_PRIO_NONE or PTHREAD_PRIO_INHERIT.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}
+\end{apirel}
+
+
+\api{pthread_mutexattr_settype}{Set the type attribute of a mutex
+                                attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutexattr_settype(pthread_mutexattr_t *attr,
+                                                 int type);
+\end{apisyn}
+\begin{apidesc}
+	Set the type in a previously initialized mutex
+	attribute object. PTHREAD_MUTEX_NORMAL, PTHREAD_MUTEX_ERRORCHECK,
+	and PTHREAD_MUTEX_DEFAULT are equivalent. PTHREAD_MUTEX_RECURSIVE
+	allows a mutex to be recursively locked.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_mutexattr_t} object
+		representing the attributes for a mutex initialization.
+	\item[type]
+		One of PTHREAD_MUTEX_NORMAL, PTHREAD_MUTEX_ERRORCHECK,
+		PTHREAD_MUTEX_DEFAULT, or PTHREAD_MUTEX_RECURSIVE.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}
+\end{apirel}
+
+
+\api{pthread_condattr_init}{Initialize a condition attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_condattr_init(pthread_condattr_t *attr);
+\end{apisyn}
+\begin{apidesc}
+	Initialize an condition variable attributes object for use with
+	{\tt pthread_cond_init}.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_condattr_t} object
+		representing the attributes for a condition variable
+		initialization.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_init}
+\end{apirel}
+
+
+\api{pthread_cancel}{Cancel a running thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cancel(pthread_t tid);
+\end{apisyn}
+\begin{apidesc}
+	Cancel the thread specified by {\tt tid}. The thread is marked for
+	cancellation, but because of scheduling and device delays, might not
+	be acted upon until some future time.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread identifier of the thread to be canceled.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if {\tt tid} specifies an invalid
+	thread. 
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt pthread_sleep}
+\end{apirel}
+
+
+\api{pthread_cleanup_push}{Push a cancellation cleanup handler routine onto
+                           the calling thread's cancellation cleanup stack}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void pthread_cleanup_push(void (*routine)(void *),
+                                            void *arg);
+\end{apisyn}
+\begin{apidesc}
+	Push a cancellation cleanup handler routine onto the calling
+	thread's cancellation cleanup stack. When requested, the cleanup
+	{\tt routine} will be popped from the cancellation stack, and
+	invoked with the argument {\tt arg}.
+\end{apidesc}
+\begin{apiparm}
+	\item[routine]
+		The cleanup handler routine.
+	\item[arg]
+		The argument to pass to the cleanup handler routine.
+\end{apiparm}
+\begin{apirel}
+	{\tt pthread_cancel}, {\tt pthread_cleaup_pop} 
+\end{apirel}
+
+
+\api{pthread_setcancelstate}{Set the cancelation state}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void pthread_setcancelstate(int state, int *oldstate);
+\end{apisyn}
+\begin{apidesc}
+	Set the cancel {\tt state} for the current thread, returning the
+	old state in {\tt oldstate}. Valid states are either {\tt
+	PTHREAD_CANCEL_ENABLE} or {\tt PTHREAD_CANCEL_DISABLE}. This
+	routine is async-cancel safe.
+\end{apidesc}
+\begin{apiparm}
+	\item[state]
+		New cancel state.
+	\item[oldstate]
+		Location in which to place the original cancel state.
+\end{apiparm}
+\begin{apirel}
+	{\tt pthread_cancel}, {\tt pthread_setcanceltype} 
+\end{apirel}
+
+
+\api{pthread_setcanceltype}{Set the cancelation type}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void pthread_setcanceltype(int type, int *oldtype);
+\end{apisyn}
+\begin{apidesc}
+	Set the cancel {\tt type} for the current thread, returning the old
+	type in {\tt oldtype}. Valid types are either {\tt
+	PTHREAD_CANCEL_DEFERRED} or {\tt PTHREAD_CANCEL_ASYNCHRONOUS}.
+	This routine is async-cancel safe.
+\end{apidesc}
+\begin{apiparm}
+	\item[type]
+		New cancel type.
+	\item[oldtype]
+		Location in which to place the original cancel type.
+\end{apiparm}
+\begin{apirel}
+	{\tt pthread_cancel}, {\tt pthread_setcancelstate} 
+\end{apirel}
+
+
+\api{pthread_testcancel}{Check for a cancelation point}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void pthread_testcancel(void);
+\end{apisyn}
+\begin{apidesc}
+	Test whether a cancelation is pending, and deliver the cancelation
+	if the cancel state is {\tt PTHREAD_CANCEL_ENABLED}.
+\end{apidesc}
+\begin{apirel}
+	{\tt pthread_cancel}, {\tt pthread_setcancelstate}
+\end{apirel}
+
+
+
+\api{pthread_cond_broadcast}{Wakeup all threads waiting on a condition
+                             variable}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_broadcast(pthread_cond_t *cond);
+\end{apisyn}
+\begin{apidesc}
+	Wakeup all threads waiting on a condition variable.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_init}, {\tt pthread_cond_wait},
+	{\tt pthread_cond_signal}
+\end{apirel}
+
+
+\api{pthread_cond_destroy}{Destroy a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_destroy(pthread_cond_t *cond);
+\end{apisyn}
+\begin{apidesc}
+	Destroy a condition variable object. The condition variable should
+	be unused, with no threads waiting for it. The memory for the
+	object is left intact; it is up to the caller to deallocate it.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if there are threads still waiting.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_init}
+\end{apirel}
+
+
+\api{pthread_cond_init}{Initialize a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_init(pthread_cond_t *cond,
+                                         pthread_condattr_t *attr);
+\end{apisyn}
+\begin{apidesc}
+	Initialize a condition variable object, using the provided
+	condition attributes object. The attributes object may be a NULL
+	pointer, in which case {\tt pthread_condattr_default} is used.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+	\item[attr]
+		A pointer to the condition variable attributes object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_destroy}
+\end{apirel}
+
+
+\api{pthread_cond_signal}{Wakeup one thread waiting on a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_signal(pthread_cond_t *cond);
+\end{apisyn}
+\begin{apidesc}
+	Wakeup the highest priority thread waiting on a condition variable.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_wait}, {\tt pthread_cond_broadcast}
+\end{apirel}
+
+
+\api{pthread_cond_wait}{Wait on a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_wait(pthread_cond_t *cond,
+					 pthread_mutex_t *mutex);
+\end{apisyn}
+\begin{apidesc}
+	The current thread is made to wait until the condition variable is
+	signaled or broadcast. The mutex is released prior to waiting, and
+	reacquired before returning. 
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+	\item[mutex]
+		A pointer to the mutex object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_signal}, {\tt pthread_cond_broadcast},
+	{\tt pthread_cond_timedwait}
+\end{apirel}
+
+
+\api{pthread_cond_timedwait}{Wait on a condition variable with timeout}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_cond_timedwait(pthread_cond_t *cond,
+					      pthread_mutex_t *mutex,
+                                              oskit_timespec_t *abstime);
+\end{apisyn}
+\begin{apidesc}
+	The current thread is made to wait until the condition variable is
+	signaled or broadcast, or until the timeout expires. The mutex is
+	released prior to waiting, and reacquired before returning. The
+	timeout is given as an absolute time in the future that bounds the
+	wait.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+	\item[mutex]
+		A pointer to the mutex object.
+	\item[abstime]
+		A pointer to an oskit_timespec structure.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns ETIMEDOUT if the timeout expires.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_cond_signal}, {\tt pthread_cond_broadcast},
+	{\tt pthread_cond_wait}
+\end{apirel}
+
+
+\api{pthread_create}{Create a new thread and start it running}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_create(pthread_t *tid,
+                                      const pthread_attr_t *attr,
+				      void (*function)(void *), void *arg);
+\end{apisyn}
+\begin{apidesc}
+	Create a new thread and schedule it to run. The thread is created
+	using the attributes object {\tt attr}, which specifies the initial
+	priority, stack size, and detach state. If a NULL attributes
+	object is provided, a system default attributes object is used
+	instead, specifying that the thread is detachable, has priority
+	PRIORITY_NORMAL, and with a reasonable stack size. 
+
+	This call returns immediately, with the thread id stored in the
+	location given by {\tt tid}. This thread id should be saved if the
+	application wishes to manipulate the thread's state at some future
+	time.
+
+	The new thread is scheduled to run. When the thread starts up, it
+	will call {\tt void (*function)(void *arg)}.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		A pointer to the location where the thread id should be
+		stored. 
+	\item[attr]
+		A pointer to the thread creation attributes object.
+	\item[function]
+		The initial function to call when the thread first starts.
+	\item[arg]
+		The argument to the initial function.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, storing the tid of the new thread into
+	{\tt *tid}.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_join}, {\tt pthread_detach}, {\tt pthread_exit}
+\end{apirel}
+
+
+\api{pthread_detach}{Detach a thread from its parent}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_detach(pthread_t tid);
+\end{apisyn}
+\begin{apidesc}
+	The thread specified by {\tt tid} is detached from its parent. If
+	the thread has already exited, its resources are released.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread id of the thread being detached.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if {\tt tid} refers to a
+	non-existent thread.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_join}, {\tt pthread_create}, {\tt pthread_exit}
+\end{apirel}
+
+
+\api{pthread_exit}{Terminate a thread with status}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_exit(void *status);
+\end{apisyn}
+\begin{apidesc}
+	The current thread is terminated, with its status value made
+	available to the parent using {\tt pthread_join}.
+\end{apidesc}
+\begin{apiparm}
+	\item[status]
+		The exit status.
+\end{apiparm}
+\begin{apiret}
+	This function does not return.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_join}, {\tt pthread_create}, {\tt pthread_detach}
+\end{apirel}
+
+
+\api{pthread_join}{Join with a target thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_join(pthread_t tid, void **status);
+\end{apisyn}
+\begin{apidesc}
+	The current thread indicates that it would like to join with the
+	target thread specified by {\tt tid}. If the target thread has
+	already terminated, its exit status is provided immediately to the
+	caller. If the target thread has not yet exited, the caller is made
+	to wait. Once the target has exited, all of the threads waiting to
+	join with it are woken up, and the target's exit status provided to
+	each.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread id of the thread being joined with.
+	\item[status]
+		A pointer to a location where the target's exit status is
+		placed. 
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, storing the target's exit status in {\tt
+	*status}. EINVAL if {\tt tid} refers to a non-existent thread.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_join}, {\tt pthread_create}, {\tt pthread_detach}
+\end{apirel}
+
+
+\api{pthread_key_create}{Create a thread-specific data key}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_key_create(pthread_key_t *key,
+                                          void (*destructor)(void *));
+\end{apisyn}
+\begin{apidesc}
+	Create a thread-specific key for use with {\tt
+	pthread_setspecific}.  If specified, the destructor is called on
+	any non-NULL key/value pair when a thread exits.
+\end{apidesc}
+\begin{apiparm}
+	\item[key]
+		Address where the new key value should be stored.
+	\item[destructor]
+		Pointer to the destructor function, which may be NULL.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, and stores the new key value at {\tt
+	*key}. Returns EAGAIN if the are no more keys available.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_key_delete}, {\tt pthread_setspecific},
+	{\tt pthread_getspecific}
+\end{apirel}
+
+
+\api{pthread_key_delete}{Delete a thread-specific data key}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_key_delete(pthread_key_t *key);
+\end{apisyn}
+\begin{apidesc}
+	Delete the thread-specific key. Attempts to use a key via {\tt
+	pthread_setspecific} or {\tt pthread_getspecific} after it has been
+	deleted is undefined.
+\end{apidesc}
+\begin{apiparm}
+	\item[key]
+		The key that should be deleted.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt key} refers to an
+	invalid key.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_key_create}, {\tt pthread_setspecific},
+	{\tt pthread_getspecific}
+\end{apirel}
+
+
+\api{pthread_setspecific}{Set a thread-specific data value}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_setspecific(pthread_key_t key,
+                                           const void *value);
+\end{apisyn}
+\begin{apidesc}
+	Associate a new thread-specific value with the specified key.
+\end{apidesc}
+\begin{apiparm}
+	\item[key]
+		The key that should be set.
+	\item[value]
+		The new value to associate with the key.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EINVAL if {\tt key} refers to an
+	invalid key.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_key_create}, {\tt pthread_key_delete},
+	{\tt pthread_getspecific}
+\end{apirel}
+
+
+\api{pthread_getspecific}{Set a thread-specific data value}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void *pthread_getspecific(pthread_key_t key);
+\end{apisyn}
+\begin{apidesc}
+	Get the thread-specific value associated the specified key.
+\end{apidesc}
+\begin{apiparm}
+	\item[key]
+		The key for the value that should be retrieved.
+\end{apiparm}
+\begin{apiret}
+	Returns the value of the key. Errors always return zero.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_key_create}, {\tt pthread_key_delete},
+	{\tt pthread_setspecific}
+\end{apirel}
+
+
+\api{pthread_mutex_init}{Initialize a mutex object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutex_init(pthread_mutex_t *m,
+                                          pthread_mutexattr_t *attr);
+\end{apisyn}
+\begin{apidesc}
+	Initialize a mutex object, using the provided mutex attributes
+	object. The attributes object may be a NULL pointer, in which case
+	{\tt pthread_mutexattr_default} is used.
+\end{apidesc}
+\begin{apiparm}
+	\item[mutex]
+		A pointer to the mutex object.
+	\item[attr]
+		A pointer to the mutex attributes object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_destroy}, {\tt pthread_mutex_lock},
+	{\tt pthread_mutex_unlock}
+\end{apirel}
+
+
+\api{pthread_mutex_destroy}{Destroy a mutex object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutex_destroy(pthread_mutex_t *m);
+\end{apisyn}
+\begin{apidesc}
+	The mutex object is destroyed, although the memory for the object
+	is not deallocated. The mutex must not be held.
+\end{apidesc}
+\begin{apiparm}
+	\item[mutex]
+		A pointer to the mutex object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EBUSY if the mutex is still held.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}
+\end{apirel}
+
+
+\api{pthread_mutex_lock}{Lock a unlocked mutex object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutex_lock(pthread_mutex_t *m);
+\end{apisyn}
+\begin{apidesc}
+	Lock a mutex object. If the mutex is currently locked, the thread
+	waits (is suspended) for the mutex to become available.
+\end{apidesc}
+\begin{apiparm}
+	\item[mutex]
+		A pointer to the mutex object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}, {\tt pthread_mutex_unlock},
+	{\tt pthread_mutex_trylock}
+\end{apirel}
+
+
+\api{pthread_mutex_trylock}{Attempt to lock a unlocked mutex object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutex_trylock(pthread_mutex_t *m);
+\end{apisyn}
+\begin{apidesc}
+	Attempt to lock a mutex object. This function always returns
+	immediately.
+\end{apidesc}
+\begin{apiparm}
+	\item[mutex]
+		A pointer to the mutex object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns EBUSY if the mutex object is
+	locked. 
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}, {\tt pthread_mutex_unlock},
+	{\tt pthread_mutex_lock}
+\end{apirel}
+
+
+\api{pthread_mutex_unlock}{Unlock a mutex object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_mutex_unlock(pthread_mutex_t *m);
+\end{apisyn}
+\begin{apidesc}
+	Unlock a mutex object. If there other threads waiting to acquire
+	the mutex, the highest priority thread is woken up and granted the
+	mutex. 
+\end{apidesc}
+\begin{apiparm}
+	\item[mutex]
+		A pointer to the mutex object.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_mutex_init}, {\tt pthread_mutex_trylock},
+	{\tt pthread_mutex_lock}
+\end{apirel}
+
+
+\api{pthread_self}{Return the thread identifier of the current thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto pthread_t pthread_self(void);
+\end{apisyn}
+\begin{apidesc}
+	Return the thread identifier of the current thread.
+\end{apidesc}
+\begin{apiret}
+	Returns the thread identifier.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}
+\end{apirel}
+
+
+\api{pthread_setschedparam}{Set the scheduling parameters for a thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int pthread_setschedparam(pthread_t tid,
+                                             int policy,
+                                             const struct sched_param *param);
+\end{apisyn}
+\begin{apidesc}
+	Change the scheduling parameters for a thread. The thread's
+	scheduling policy and priority are changed. If the change causes a
+	thread to have a higher priority than the currently running thread,
+	a reschedule operation is performed.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread identifier of the thread whose scheduling
+		parameters should be changed.
+	\item[policy]
+		The new scheduling policy, as defined in {\tt pthread.h}
+	\item[param]
+		A pointer to the {\tt sched_param_t} object representing
+		the new scheduling parameters.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if {\tt tid} specifies an invalid
+	thread or {\tt policy} specifies an invalid policy.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt sched_yield}, {\tt	pthread_setprio}
+\end{apirel}
+
+\api{pthread_sigmask}{examine and change blocked signals}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+	\\
+	\cinclude{signal.h}
+
+	\funcproto int pthread_sigmask(int how,
+				const sigset_t *set,
+				\outparam sigset_t *oset);
+\end{apisyn}
+\begin{apidesc}
+	Examine or change the per-thread signal mask. This function
+	operates identically to the \posix{} function \texttt{sigprocmask},
+	but on the current thread.
+\end{apidesc}
+\begin{apiparm}
+	\item[how]
+		One of SIG_BLOCK, SIG_UNBLOCK, or SIG_SETMASK.
+	\item[set]
+		If not a null pointer, a pointer to the new signal set.
+	\item[oset]
+		If not a null pointer, a pointer to where the old signal
+		set should be stored.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. No errors are reported.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_kill} {\tt sigprocmask}
+\end{apirel}
+
+\api{pthread_kill}{send a signal to a thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+	\\
+	\cinclude{signal.h}
+
+	\funcproto int pthread_kill(pthread_t tid, int sig);
+\end{apisyn}
+\begin{apidesc}
+	Send a signal to a specific thread.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread to send the signal to.
+	\item[sig]
+		The signal to send.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_sigmask}
+\end{apirel}
+
+\api{sched_yield}{Yield the processor}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void sched_yield(void);
+\end{apisyn}
+\begin{apidesc}
+	The calling thread voluntarily yields the processor. The highest
+	priority thread is chosen for execution.
+\end{apidesc}
+\begin{apirel}
+	{\tt pthread_setprio}, {\tt pthread_setschedparam}
+\end{apirel}
+
+
+\section{Oskit API Extensions}
+
+The following functions are extensions to the \posix{} threads API, and
+should be considered extremely non-portable. They are included in the
+API as a convenience.
+
+\api{oskit_pthread_sleep}{Sleep for an interval of time}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int oskit_pthread_sleep(oskit_s64_t milliseconds);
+\end{apisyn}
+\begin{apidesc}
+	The calling thread is put to sleep for the number of milliseconds
+	specified. The thread will be woken up after the elapsed time, and
+	will return ETIMEDOUT\@. If the timeout is zero, the thread is put to
+	sleep forever. The thread may be woken up early, using the
+	\texttt{oskit_pthread_wakeup} function, in which case the return
+	value is zero.
+\end{apidesc}
+\begin{apiparm}
+	\item[milliseconds]
+		The number of milliseconds the thread should sleep for.
+\end{apiparm}
+\begin{apiret}
+	Returns ETIMEDOUT if the timeout expires, or zero if the thread is
+	woken up early.
+\end{apiret}
+\begin{apirel}
+	{\tt oskit_pthread_wakeup}
+\end{apirel}
+
+\api{oskit_pthread_wakeup}{Wakeup a thread in \texttt{oskit_pthread_sleep}}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int oskit_pthread_wakeup(pthread_t tid);
+\end{apisyn}
+\begin{apidesc}
+	Wakeup a thread that is sleeping in \texttt{oskit_pthread_sleep},
+	causing it to return from its sleep before the timeout expires.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread to wakeup.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if {\tt tid} specifies an invalid
+	thread or the current thread.
+\end{apiret}
+\begin{apirel}
+	{\tt oskit_pthread_sleep}
+\end{apirel}
+
+\api{oskit_pthread_setprio}{Change the priority of a thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto int oskit_pthread_setprio(pthread_t tid, int newpri);
+\end{apisyn}
+\begin{apidesc}
+	Change the priority of a thread. If the change causes a thread to
+	have a higher priority than the currently running thread, a
+	reschedule operation is performed.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The thread identifier of the thread whose priority should
+		be changed.
+	\item[newpri]
+		The new priority, which must be from PRIORITY_MIN to
+		PRIORITY_MAX.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. EINVAL if {\tt tid} specifies an invalid
+	thread or {\tt newpri} specifies an invalid priority.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_create}, {\tt sched_yield}, {\tt
+	pthread_setschedparam}
+\end{apirel}
+
+
+
+\api{osenv_process_lock}{Lock the process lock}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void osenv_process_lock(void);
+\end{apisyn}
+\begin{apidesc}
+	Attempt to lock the process lock. If the lock cannot be immediately
+	granted, the thread is put to sleep until it can be. The process
+	lock is provided so that the client operating system can protect
+	the device driver framework from concurrent execution. It is
+	expected than any entry into the device framework will first take
+	the process lock. If the thread executing inside the device driver
+	framework blocks by calling {\tt osenv_sleep}, the process lock
+	will be released so that another thread may enter it safely. When
+	the thread is woken up later, it will take the process lock again
+	before returning from the sleep.
+
+	Attempts to recursively lock the process lock will result in a
+	panic. This is intended as a debugging measure to prevent
+	indiscriminate nesting of components that try to take the lock.
+\end{apidesc}
+\begin{apirel}
+	{\tt osenv_process_unlock}, {\tt osenv_sleep}, {\tt osenv_wakeup}
+\end{apirel}
+
+\api{osenv_process_unlock}{Unlock the process lock}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}
+
+	\funcproto void osenv_process_unlock(void);
+\end{apisyn}
+\begin{apidesc}
+	Release the process lock. If another thread is waiting to lock the
+	process lock, it will be woken up. The process lock is provided so
+	that the client operating system can protect the device driver
+	framework from concurrent execution.
+\end{apidesc}
+\begin{apirel}
+	{\tt osenv_process_lock}, {\tt osenv_sleep}, {\tt osenv_wakeup}
+\end{apirel}
+
+
+\section{Thread-safe Adaptors}
+\label{pthread-wrappers}
+
+To facilitate the use of the device driver framework within a multithreaded
+client operating system, a number of \emph{adaptors} are provided. An
+adaptor acts as COM interface wrapper on another COM interface. Adaptors
+are intended to provide thread-safety with respect to the device driver
+framework. The thread system is expected to provide an implementation of a
+\emph{process lock} that is used to prevent concurrent execution inside the
+device driver framework. An adaptor method simply takes the process lock,
+calls the appropriate method in the underlying COM interface, and then
+releases the process lock when the method returns. If a thread blocks
+inside a device driver ({\tt osenv_sleep}), the process lock is
+released at that time, allowing another thread to enter the driver set.
+When the original thread is woken up, it will reacquire the process lock
+before being allowed to return from the sleep. Thus, only one thread is
+allowed to operate inside the driver set at a time.
+
+Implementationally, an adaptor is a COM interface that maintains a
+reference to the original, non thread-safe COM interface. Operations using
+the adaptor behave just like the original, invoking the corresponding
+method in the original. It should be noted that the query, addref, and
+release methods all operate on the adaptor itself. When the last reference
+to an adaptor is released, the reference to the underlying COM interface is
+released. As an example, consider the {\tt oskit_dir_t} adaptor as it is
+used when mounting the root filesystem in a multithreaded client operating
+system. In order to provide a thread-safe implementation to the C library,
+the root directory that is passed to {\tt fs_init} is first wrapped up in a
+thread-safe adaptor. All subsequent references to the corresponding
+filesystem go through the adaptor, and are thus thread-safe. A sample code
+fragment follows:
+
+\begin{codefrag}
+\footnotesize
+\begin{verbatim}
+#include <oskit/c/fs.h>
+#include <oskit/com/wrapper.h>
+#include <oskit/threads/pthread.h>
+
+oskit_error_t
+mountroot(oskit_dir_t *fsroot)
+{
+    oskit_dir_t    *wrappedroot;
+    oskit_error_t  err;
+
+    rc = oskit_wrap_dir(fsroot,
+                (void (*)(void *))osenv_process_lock, 
+                (void (*)(void *))osenv_process_unlock,
+                0, &wrappedroot);
+    if (rc)
+        return rc;
+
+    /* Don't need the root anymore, the wrapper has a ref. */
+    oskit_dir_release(fsroot);
+
+    return fs_init(wrappedroot);
+}
+\end{verbatim}
+\end{codefrag}
+
+The adaptor prototypes are found in \texttt{<oskit/com/wrapper.h>}, and have a
+common format. Each one takes the COM interface to be wrapped up, and
+returns the adaptor. Additional arguments are the process lock and unlock
+routines, as well as an optional cookie to be passed to the lock and unlock
+routines. It should be noted that the process lock is specific to the
+thread implementation, and thus the adaptor interface is intended to be as
+generic as possible. For the {\tt pthread} interface, the process lock does
+not need a cookie value.
+
+\api{oskit_wrap_socket}{Wrap an {\tt oskit_socket} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_socket(struct oskit_socket *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_socket **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_socket} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_socket} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_socket} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_stream}{Wrap an {\tt oskit_stream} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_stream(struct oskit_stream *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_stream **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_stream} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_stream} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_asyncio}{Wrap an {\tt oskit_asyncio} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_asyncio(struct oskit_asyncio *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_asyncio **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_asyncio} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_asyncio} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_sockio}{Wrap an {\tt oskit_sockio} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_sockio(struct oskit_sockio *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_sockio **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_sockio} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_sockio} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_posixio}{Wrap an {\tt oskit_posixio} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_posixio(struct oskit_posixio *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_posixio **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_posixio} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_posixio} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_file}{Wrap an {\tt oskit_file} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_file(struct oskit_file *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_file **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_file} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_file} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_dir}{Wrap an {\tt oskit_dir} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_dir(struct oskit_dir *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_dir **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_dir} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_dir} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_filesystem}{Wrap an {\tt oskit_filesystem} in a thread-safe
+                            adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_filesystem(struct oskit_filesystem *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_filesystem **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_filesystem} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_filesystem} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_openfile}{Wrap an {\tt oskit_openfile} in a thread-safe
+                          adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_openfile(struct oskit_openfile *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_openfile **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_dir} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_openfile} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_openfile} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_blkio}{Wrap an {\tt oskit_blkio} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_blkio(struct oskit_blkio *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_blkio **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_blkio} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_blkio} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_blkio} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_wrap_absio}{Wrap an {\tt oskit_absio} in a thread-safe adaptor}
+\begin{apisyn}
+	\cinclude{oskit/com/wrapper.h}
+
+	\funcproto oskit_error_t
+	oskit_wrap_absio(struct oskit_absio *in, 
+		void (*lock)(void *), 
+		void (*unlock)(void *),
+		void *cookie,
+		struct oskit_absio **out);
+\end{apisyn}
+\begin{apidesc}
+	Create and return an {\tt oskit_absio} thread-safe adaptor.
+\end{apidesc}
+\begin{apiparm}
+	\item[in]
+		The {\tt oskit_absio} COM interface to be wrapped.
+	\item[lock]
+		The process lock routine.
+	\item[unlock]
+		The process unlock routine.
+	\item[cookie]
+		A cookie to be passed to the lock and unlock routines.
+	\item[out]
+		The {\tt oskit_absio} adaptor COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\section{InterThread Communication}
+\label{pthread-ipc}
+
+This section describes the ``interthread'' communication primitives
+provided by the pthread library. 
+
+\api{oskit_ipc_send}{Send a message to another thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/ipc.h}
+
+	\funcproto oskit_error_t
+	oskit_ipc_send(pthread_t dst,
+		       void *msg, oskit_size_t msg_size, oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	Send a message to another thread. The destination thread is specified
+	by its {\tt pthread_t}. The sending thread blocks until the receiving
+	thread notices the message and actually initiates a receive
+	operation for it. Control returns to the caller only when the
+	receiver has initiated the receive.
+
+	The timeout value is currently ignored.
+\end{apidesc}
+\begin{apiparm}
+	\item[dst]
+		The {\tt pthread_t} of the destination thread.
+	\item[msg]
+		The message buffer.
+	\item[msg_size]
+		The size of the message, in bytes.
+	\item[timeout]
+		A timeout value. Currently ignored.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_ipc_recv}{Receive a message from a specific thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/ipc.h}
+
+	\funcproto oskit_error_t
+	oskit_ipc_recv(pthread_t src,
+		       void *msg, oskit_size_t msg_size, oskit_size_t *actual,
+		       oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	Receive a message from another thread. The sending thread is
+	specified by its {\tt pthread_t}. If the specified sending thread
+	has not attempted to send a message to current thread, the thread
+	is blocked until such time as the sender initiates a send operation
+	to the current thread. However, if the sender is blocked trying to
+	send a message to the current thread, the message is immediately
+	received and the sender is woken up.
+
+	The timeout value is either zero or non-zero. A zero value means do
+	not wait, but simply check to see if a message from the sender is
+	pending. A non-zero value means wait forever.
+\end{apidesc}
+\begin{apiparm}
+	\item[src]
+		The {\tt pthread_t} of the sending thread.
+	\item[msg]
+		The message buffer.
+	\item[msg_size]
+		The size of the message buffer, in bytes.
+	\item[actual]
+		The location in which to place the number of bytes received.
+	\item[timeout]
+		A timeout value. Currently only zero and non-zero values
+		are legal. Zero means no wait, non-zero means wait forever.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_ipc_wait}{Receive a message from any thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/ipc.h}
+
+	\funcproto oskit_error_t
+	oskit_ipc_wait(pthread_t *src,
+		       void *msg, oskit_size_t msg_size, oskit_size_t *actual,
+		       oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	This function operates identically to {\tt oskit_ipc_recv}, except
+	that the sending thread does not need to be a specific thread. The
+	first thread that attempts to send to the current thread will
+	succeed. The {\tt pthread_t} of that thread is returned to the
+	caller in {\tt src}.
+\end{apidesc}
+\begin{apiparm}
+	\item[src]
+		The location in which to place the {\tt pthread_t} of the
+		sending thread. 
+	\item[msg]
+		The message buffer.
+	\item[msg_size]
+		The size of the message buffer, in bytes.
+	\item[actual]
+		The location in which to place the number of bytes received.
+	\item[timeout]
+		A timeout value. Currently only zero and non-zero values
+		are legal. Zero means no wait, non-zero means wait forever.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_ipc_call}{make a synchronous IPC call to another thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/ipc.h}
+
+	\funcproto oskit_error_t
+	oskit_ipc_call(pthread_t dst,
+		       void *sendmsg, oskit_size_t sendmsg_size,
+		       void *recvmsg, oskit_size_t recvmsg_size,
+		       oskit_size_t *actual, oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	Make a synchronous IPC call to another thread, and wait for a
+	reply. The destination thread is specified by its {\tt pthread_t}.
+	The sending thread is blocked until the receiving thread replies to
+	the IPC using {\tt oskit_ipc_reply}. The send buffer and the reply
+	buffer are specified separately, with the actual number bytes
+	contained in the reply returned in the location pointed to by {\tt
+	actual}.
+\end{apidesc}
+\begin{apiparm}
+	\item[dst]
+		The {\tt pthread_t} of the destination thread.
+	\item[sendmsg]
+		The message buffer to send. 
+	\item[sendmsg_size]
+		The size of the send message buffer, in bytes.
+	\item[recvmsg]
+		The message receive buffer.
+	\item[recvmsg_size]
+		The size of the receive message buffer, in bytes.
+	\item[actual]
+		The location in which to place the number of bytes
+		contained in the reply message.
+	\item[timeout]
+		A timeout value. Currently ignored.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_ipc_reply}{reply to a synchronous IPC invocation}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/ipc.h}
+
+	\funcproto oskit_error_t
+	oskit_ipc_reply(pthread_t src, void *msg, oskit_size_t msg_size);
+\end{apisyn}
+\begin{apidesc}
+	Reply to a synchronous IPC invocation made with {\tt
+	oskit_ipc_call}. The destination thread is specified by its {\tt
+	pthread_t}, and it must be blocked in a call operation, waiting for
+	the reply message. If the destination thread is canceled before the
+	reply is made, this call with return OSKIT_ECANCELED.
+\end{apidesc}
+\begin{apiparm}
+	\item[dst]
+		The {\tt pthread_t} of the destination thread.
+	\item[msg]
+		The message buffer.
+	\item[msg_size]
+		The size of the message, in bytes.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\section{CPU Inheritance Framework}
+\label{cpuinherit}
+
+The \emph{CPU Inheritance} framework is a novel processor scheduling system
+that allows arbitrary threads to act as schedulers for other threads. When
+the C preprocessor symbol \texttt{CPU_INHERIT} is defined, the default
+\posix{} scheduler is replaced by a CPU inheritance support module, plus a
+number of example schedulers that demonstrate how to write an application
+level scheduler using the \oskit{} provided CPU inheritance interface.  The
+primary advantage of CPU inheritance scheduling is that widely different
+scheduling policies can be implemented, and yet still function properly
+together. Additionally, CPU inheritance scheduling neatly addresses the
+problem of priority inversion by providing a general interface for
+priority inheritance that can be used by either scheduler threads or
+arbitrary application threads. In the sections that follow, the CPU
+inheritance interface functions are described. The reader is encouraged to
+look at the example schedulers in {\tt threads/cpuinherit}.
+
+
+\api{pthread_sched_become_scheduler}{Become an application level scheduler}
+
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto void	pthread_sched_become_scheduler(void);
+\end{apisyn}
+\begin{apidesc}
+	Inform the CPU inheritance framework that the current thread is an
+	application level scheduler. Certain initializations are performed
+	that allow the current thread to donate its own CPU resources to
+	other threads, and to receive scheduling messages regarding threads
+	under its controls. Once this call is performed, the thread will
+	generally enter a loop waiting for scheduling messages to inform it
+	of new threads that it needs to schedule, or changes in the status
+	of threads already under its control. For example, when a thread
+	blocked on a mutex finally takes the mutex, an \emph{unblock}
+	message will be sent to that thread's scheduler informing it that
+	the thread in question should now be run.
+\end{apidesc}
+
+
+\api{pthread_sched_donate_wait_recv}{Donate CPU time to a thread}
+\label{sched-donate-wait-recv}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int pthread_sched_donate_wait_recv(pthread_t tid,
+			sched_wakecond_t wakecond, schedmsg_t *msg,
+			oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	Donate CPU time to a target thread whose pthread identifier is {\tt
+	tid}. The donation will terminate when the thread gives up the CPU,
+	or when the \texttt{timeout} value is reached. In this way, a
+	scheduler can implement preemptive scheduling by allowing each
+	thread to run for a maximum time value, at which time control
+	returns to the dontating scheduler.
+
+	The \texttt{wakecond} flag specifies under which circumstances
+	control should be returned to the scheduler when the target thread
+	blocks. There are currently just two values allowed:
+	\begin{icsymlist}
+	\item[WAKEUP_ON_BLOCK] Control returns to the scheduler whenever
+	the target thread blocks or otherwise gives up the CPU\@. This allows
+	the scheduler to make a new scheduling decision.
+
+	\item[WAKEUP_ON_SWITCH] Control returns to the scheduler's
+	scheduler whenever the target thread blocks or otherwise gives up
+	the CPU\@. This is typically used when a scheduler has just one
+	thread to schedule, and is not interested in when the target thread
+	blocks or unblocks, but only when some other thread wakes up,
+	requiring an actual scheduling decision to be made.
+	\end{icsymlist}
+
+	The return value indicates how the donation was terminated, and is
+	one of the following constants. Its is up to the scheduler to
+	determine the course of action. For example, a donation that
+	returns a \texttt{SCHEDULE_YIELDED} would typically result in the
+	target thread being placed back on the scheduler's run queue so
+	that it will be run at some later point.
+	\begin{icsymlist}
+	\item[SCHEDULE_NOTREADY] The target thread is not ready to receive
+	the donation, perhaps because the target thread is blocked.
+
+	\item[SCHEDULE_BLOCKED] The target thread ran and then blocked for
+	some reason. The thread should not be run until the scheduler
+	receives an \texttt{MSG_SCHED_UNBLOCK} message for the target
+	thread.
+
+	\item[SCHEDULE_YIELDED] The target thread ran and then voluntarily
+	gave up the CPU\@. The thread will typically be placed back on the
+	run queue for that scheduler.
+
+	\item[SCHEDULE_PREEMPTED] The target thread ran and was then
+	preempted by the threads system. The thread will typically be
+	placed back on the run queue for that scheduler.
+
+	\item[SCHEDULE_TIMEDOUT] The target thread ran until the
+	\texttt{timeout} expired, and was then preempted so that the
+	scheduler may pick another thread to run. The thread will typically
+	be placed back on the run queue for that scheduler.
+
+	\item[SCHEDULE_MSGRECV] This constant is bitwise or'ed into the
+	result value whenever a thread donation terminates and a scheduling
+	message was returned in the message block pointed to by
+	\texttt{msg}. The scheduler will need to take appropriate action
+	based on the both the return value of the donation, and the
+	contents of the message. 
+	\end{icsymlist}
+
+	Upon return from the donation, it is possible that a scheduling
+	message will also be ready. Rather than have the scheduler invoke a
+	separate message operation to retrieve the message, the message
+	reception operation is combined with the donation. This is
+	indicated in the return value when the \texttt{SCHEDULE_MSGRECV}
+	bit is set. The format of the message is as follows:
+
+	\begin{codefrag}
+        \begin{verbatim}
+        typedef struct schedmsg {
+                schedmsg_types_t        type;   
+                pthread_t               tid;    
+                oskit_u32_t             opaque; 
+                oskit_u32_t             opaque2;
+        } schedmsg_t;
+        \end{verbatim}
+	\end{codefrag}
+
+	The message refers to the thread identifed by \texttt{tid}, while
+	\texttt{opaque} and \texttt{opaque2} are message specific values.
+	Only some message types have associated message values (described
+	below).  The message types are as follows:
+
+	\begin{icsymlist}
+	\item[MSG_SCHED_NEWTHREAD] A new thread was created for the current
+	scheduler. The scheduler for a thread is specified using the thread
+	attributes and the texttt{pthread_attr_setscheduler} routine. Once
+	the thread is created and ready to be scheduled, a message is sent
+	to the specified scheduler so that it may set up the necessary data
+	structures, and add the new thread to its run queue. The thread id
+	of the new thread is given by the \texttt{tid} field of the
+	message. Depending on the scheduler, the \texttt{opaque} and
+	\texttt{opaque2} fields may also be valid. 
+
+	\item[MSG_SCHED_UNBLOCK] The thread specified by the \texttt{tid}
+	field of the message has been unblocked. The scheduler will
+	typically add the thread to its internal run queue so that it will
+	be run again. 
+
+	\item[MSG_SCHED_SETSTATE] Alter the scheduling parameters for the
+	thread specified by the \texttt{tid} field. This message is sent as
+	a result of the application calling \texttt{pthread_sched_setstate}. 
+        The \texttt{opaque} and	\texttt{opaque2} fields are obviously
+        specific to the scheduler.
+
+	\item[MSG_SCHED_EXITED] The thread specified by the \texttt{tid}
+	field of the message has called \texttt{pthread_exit}. The scheduler
+	will typically remove the thread from its internal data structures
+	and free any associated resources. 
+	\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The {\tt pthread_t} of the thread to donate to.
+	\item[wakecond]
+		The wakeup condition.
+	\item[msg]
+		A message buffer in which to place a message if one is
+		available when the donation ends.
+	\item[timeout]
+		A timeout value, in milliseconds. The donation will be
+		terminated after the time has elapsed.
+\end{apiparm}
+\begin{apiret}
+	The return values are described above.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_sched_setstate}, {\tt pthread_attr_setscheduler}
+\end{apirel}
+
+
+\api{pthread_sched_message_recv}{Scheduling message receive}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto oskit_error_t pthread_sched_message_recv(schedmsg_t *msg,
+			oskit_s32_t timeout);
+\end{apisyn}
+\begin{apidesc}
+	Initiate a scheduling message receive operation. If there are any
+	scheduling messages queued on the scheduler's message queue, the
+	first message will be dequeued and copied into the message buffer
+	pointed to by \texttt{msg}. The format of the message is described
+	in Section~\ref{sched-donate-wait-recv}. If \texttt{timeout} is
+	zero, and no message is ready for delivery, the call will return
+	immediately with the error value \texttt{OSKIT_EAGAIN}. If timeout
+	is \emph{any non-zero} value, the caller will block until a message
+	is available. A future release will allow the specification of an
+	actual timeout value.
+\end{apidesc}
+\begin{apiparm}
+	\item[msg]
+		A message buffer in which to place a message if one is
+		available.
+	\item[timeout]
+		A timeout value, in milliseconds. 
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or \texttt{OSKIT_EAGAIN} if the caller
+	specified a non-blocking receive and no message was available.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_sched_donate_wait_recv}
+\end{apirel}
+
+
+\api{pthread_sched_setstate}{Set the scheduling parameters for a thread}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int	pthread_sched_setstate(pthread_t tid, int opaque);
+\end{apisyn}
+\begin{apidesc}
+	Change the scheduling parameter for the thread specified by
+	\texttt{tid}. An scheduler specific \texttt{opaque} value should be
+	passed, which is then sent via a scheduling message to the message
+	queue of the scheduler responsible for the given thread. This
+	interface routine is entirely ad-hoc, and is intended to be used
+	until something better is formulated.
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		The {\tt pthread_t} of the thread to donate to.
+	\item[opaque]
+		An opaque value that hopefully makes sense to the thread's
+		scheduler. 
+\end{apiparm}
+\begin{apiret}
+	Always returns zero.
+\end{apiret}
+
+
+\api{pthread_cond_donate_wait}{Timed condition wait with CPU donation}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int pthread_cond_donate_wait(pthread_cond_t *c,
+		pthread_mutex_t *m, oskit_timespec_t *abstime,
+		pthread_t donee_tid);
+\end{apisyn}
+\begin{apidesc}
+	The current thread is made to wait until the condition variable is
+	signaled or broadcast, or until the timeout expires. The mutex is
+	released prior to waiting, and reacquired before returning. The
+	timeout is given as an absolute time in the future that bounds the
+	wait.
+
+	In addition to the normal operation for timed conditional wait, the
+	caller specifies a thread to which the current thread's CPU time
+	should be donated. This allows a thread to wait on a condition, but
+	specify that any CPU time that it would have received is donated to
+	thread \texttt{donee_tid}.
+\end{apidesc}
+\begin{apiparm}
+	\item[cond]
+		A pointer to the condition variable object.
+	\item[mutex]
+		A pointer to the mutex object.
+	\item[abstime]
+		A pointer to an oskit_timespec structure.
+	\item[donee_tid]
+		The \texttt{pthread_t} of the thread to which the current
+		thread's CPU time should be donated. 
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns ETIMEDOUT if the timeout expires.
+\end{apiret}
+
+
+\api{pthread_attr_setscheduler}{Set the scheduler in a thread
+					attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int pthread_attr_setscheduler(pthread_attr_t *attr,
+			pthread_t tid);
+\end{apisyn}
+\begin{apidesc}
+	Set the scheduler thread in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. Any thread
+	created with the given attributes object will have it's scheduler
+	thread set to \texttt{tid}. The caller can thus set up an arbitrary
+	scheduler and thread hierarchy by using this routine. 
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[tid]
+		The \texttt{pthread_t} of the thread that will function as
+		the scheduler for new threads.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_attr_setopaque}
+\end{apirel}
+
+
+\api{pthread_attr_setopaque}{Set the scheduling parameter in a thread
+				attributes object}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int pthread_attr_setopaque(pthread_attr_t *attr,
+			oskit_u32_t opaque);
+\end{apisyn}
+\begin{apidesc}
+	Set the scheduling parameter in a previously initialized threads
+	attribute object, for use with {\tt pthread_create}. This opaque
+	value will be passed to the thread's scheduler in the initial
+	\texttt{MSG_SCHED_NEWTHREAD} message, after the thread is created
+	and ready to be scheduled. The opaque value should make sense to
+	the scheduler selected with \texttt{pthread_attr_setscheduler}.
+\end{apidesc}
+\begin{apiparm}
+	\item[attr]
+		A pointer to the {\tt pthread_attr_t} object
+		representing the attributes for a thread creation.
+	\item[opaque]
+		An opaque value that hopefully makes sense to the scheduler. 
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success.
+\end{apiret}
+\begin{apirel}
+	{\tt pthread_attr_setscheduler}
+\end{apirel}
+
+\subsection{Example Schedulers}
+This section briefly describes a number of sample schedulers that are
+provided as examples of how to use the CPU Inheritance framework.
+
+\api{create_fixedpri_scheduler}{Create a fixed priority scheduler}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int create_fixedpri_scheduler(pthread_t *tid,
+			const pthread_attr_t *attr, int preemptible);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \emph{Fixed Priority} scheduler. The \texttt{pthread_t}
+	of the new scheduler is returned in \texttt{tid}. The attributes
+	structure to use when creating the new thread is \texttt{attr}. The
+	\texttt{preemptible} flag indicates whether the new scheduler
+	should use time-based preemption to achieve fairness.  Aside from
+	the usual attributes that can be specified, the caller may also
+	specify the new scheduler's scheduler by using
+	\texttt{pthread_attr_setscheduler}. Thus, the caller can set up an
+	arbitrary hierarchy of schedulers and threads.
+
+	This fixed priority scheduler roughly corresponds to the \posix{}
+	pthread scheduler, and implements both FIFO and round robin
+	policies. The standard pthread scheduling interface routines may be
+	used when altering the scheduling parameters for threads that are
+	scheduled by this scheduler. 
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		A pointer to the location where the thread id of the new
+		scheduler should be stored. 
+	\item[attr]
+		A pointer to the thread creation attributes object.
+	\item[preemptible]
+		A flag indicating whether the new scheduler should use
+		time-based preemption.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{create_lotto_scheduler}{Create a lottery scheduler}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int create_lotto_scheduler(pthread_t *tid,
+			const pthread_attr_t *attr, int preemptible);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \emph{Lottery} scheduler. The \texttt{pthread_t}
+	of the new scheduler is returned in \texttt{tid}. The attributes
+	structure to use when creating the new thread is \texttt{attr}. The
+	\texttt{preemptible} flag indicates whether the new scheduler
+	should use time-based preemption to achieve fairness.  Aside from
+	the usual attributes that can be specified, the caller may also
+	specify the new scheduler's scheduler by using
+	\texttt{pthread_attr_setscheduler}. Thus, the caller can set up an
+	arbitrary hierarchy of schedulers and threads.
+
+	When creating threads that are scheduled by a Lottery scheduler,
+	the caller should set the opaque scheduling parameter in the thread
+	creation attributes structure. This opaque value represents a
+	\emph{ticket} value, and should be an integer (usually a small to
+	moderately sized integer). As with any Lottery scheduler, the
+	larger the ticket value, the more CPU a thread is likely to
+	receive. 
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		A pointer to the location where the thread id of the new
+		scheduler should be stored. 
+	\item[attr]
+		A pointer to the thread creation attributes object.
+	\item[preemptible]
+		A flag indicating whether the new scheduler should use
+		time-based preemption.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{create_stride_scheduler}{Create a Stride scheduler}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int create_stride_scheduler(pthread_t *tid,
+			const pthread_attr_t *attr, int preemptible);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \emph{Stride} scheduler. The \texttt{pthread_t}
+	of the new scheduler is returned in \texttt{tid}. The attributes
+	structure to use when creating the new thread is \texttt{attr}. The
+	\texttt{preemptible} flag indicates whether the new scheduler
+	should use time-based preemption to achieve fairness.  Aside from
+	the usual attributes that can be specified, the caller may also
+	specify the new scheduler's scheduler by using
+	\texttt{pthread_attr_setscheduler}. Thus, the caller can set up an
+	arbitrary hierarchy of schedulers and threads.
+
+	When creating threads that are scheduled by a Stride scheduler,
+	the caller should set the opaque scheduling parameter in the thread
+	creation attributes structure. This opaque value represents a
+	\emph{ticket} value, and should be an integer (usually a small to
+	moderately sized integer). As with any Stride scheduler, the
+	larger the ticket value, the more CPU a thread is likely to
+	receive. 
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		A pointer to the location where the thread id of the new
+		scheduler should be stored. 
+	\item[attr]
+		A pointer to the thread creation attributes object.
+	\item[preemptible]
+		A flag indicating whether the new scheduler should use
+		time-based preemption.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{create_ratemono_scheduler}{Create a Rate Monotonic scheduler}
+\begin{apisyn}
+	\cinclude{oskit/threads/pthread.h}\\
+	\cinclude{oskit/threads/cpuinherit.h}
+
+	\funcproto int create_ratemono_scheduler(pthread_t *tid,
+			const pthread_attr_t *attr, int preemptible);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \emph{Rate Monotonic} scheduler. The \texttt{pthread_t}
+	of the new scheduler is returned in \texttt{tid}. The attributes
+	structure to use when creating the new thread is \texttt{attr}. The
+	\texttt{preemptible} flag indicates whether the new scheduler
+	should use time-based preemption to achieve fairness.  Aside from
+	the usual attributes that can be specified, the caller may also
+	specify the new scheduler's scheduler by using
+	\texttt{pthread_attr_setscheduler}. Thus, the caller can set up an
+	arbitrary hierarchy of schedulers and threads.
+
+	When creating threads that are scheduled by a Rate Monotonic
+	scheduler, the caller should set the opaque scheduling parameter in
+	the thread creation attributes structure. This opaque value
+	represents a \emph{period}, and is used to create the ordered
+	scheduling list. It should be an integer (usually a small to
+	moderately sized integer).
+
+	\emph{Note that this rate monotonic scheduler is extremely
+	simplified, and should be considered strictly as an example of how
+	to write a scheduler; it does not implement a proper Rate Monotonic
+	scheduling policy.}
+\end{apidesc}
+\begin{apiparm}
+	\item[tid]
+		A pointer to the location where the thread id of the new
+		scheduler should be stored. 
+	\item[attr]
+		A pointer to the thread creation attributes object.
+	\item[preemptible]
+		A flag indicating whether the new scheduler should use
+		time-based preemption.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+

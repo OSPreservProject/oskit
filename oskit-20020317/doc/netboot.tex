@@ -1,0 +1,137 @@
+%
+% Copyright (c) 1998, 1999, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{netboot}
+
+\section{Introduction}
+
+NetBoot is a small MultiBoot-compliant operating system,
+and example of \oskit{} use, that provides one service:
+fast booting of other MultiBoot-compliant operating systems
+across the network while
+itself remaining resident in order to regain control after
+the target OS exits.   This avoids going back to the
+BIOS to boot the next kernel and allows a reboot cycle that
+is often an order of magnitude faster than normal.
+
+When NetBoot is booted it prompts for the name of an OS
+to fetch and boot.
+The booted OS is passed a special command line flag indicating a
+return address that it can use to return control back to NetBoot
+upon exiting.
+Therefore NetBoot could be thought of as a crude batch-processing
+operating system.
+
+NetBoot is intended to be used as a kernel development tool,
+not as a mechanism for implementing diskless workstations,
+although it can conceivably be used either way.
+
+\textbf{Note:} the netboot described here is not to be
+confused with the FreeBSD netboot EPROM code of the same name.
+They share some code but perform different functions.
+
+\section{Implementation Issues and Requirements}
+
+NetBoot is built as a MultiBoot-compliant operating system;
+therefore to boot it with LILO or the BSD boot program,
+an appropriate image must be made with
+\texttt{mklinuximage} or \texttt{mkbsdimage},
+respectively (see Section~\ref{booting}).
+
+NetBoot boots MultiBoot-compliant operating systems such
+as the example programs that come with the \oskit{}.
+If the desired OS to boot needs MultiBoot boot-modules,
+they and the OS can be combined into one MultiBoot image via the
+\texttt{mkmbimage} script, or the faster \texttt{mkmb2} script,
+included with the \oskit{}.
+
+NetBoot requires a BOOTP server to be running on the local network
+in order to obtain the IP address, gateway address, netmask, and hostname
+of the host it runs on.
+If no BOOTP server responds when NetBoot is booted,
+it will ask to retry or exit.
+
+The files that NetBoot fetches and boots must reside in a directory
+that is NFS exported to the host running NetBoot.
+In the future, NetBoot may support other protocols such as TFTP.
+
+The OS that NetBoot installs will not know about all memory on the machine.
+This is because NetBoot stashes itself and some other things
+at the top of memory and then lies to the booted OS about where the top is.
+This is to allow the booted OS to return control to NetBoot upon exit;
+avoiding the time-consuming process of rebooting the machine.
+There is currently no way to disable this feature.
+
+\section{Using NetBoot}
+
+When NetBoot is booted it will print something like the following:
+\begin{quote}
+\texttt{NetBoot metakernel v2.4}\\
+\textsl{\ldots{}various startup output, driver probes, etc\ldots{}}\\
+\texttt{Type "help" for help.}\\
+\\
+\texttt{NetBoot> _}
+\end{quote}
+At the \texttt{NetBoot>} prompt one can boot another OS,
+get help,
+or quit.
+
+\subsection{Booting Another OS}
+
+If NetBoot is given a pseudo URL-style name at the prompt it will fetch
+that file and boot it.
+
+The format of the name is as follows:
+\begin{quote}
+        \textsl{hostname}:\textsl{path} [\textsl{args}]
+\end{quote}
+Where:
+\begin{description}
+        \item[\textsl{hostname}] is either an IP-address or a name of
+          a host from which to get the OS\@.
+          Currently the hostname lookup is fake and depends on
+          hardwired names in the NetBoot code.
+          The \oskit{} includes resolver code but that code depends
+          on the \oskit{} BSD socket package,
+          which NetBoot currently does not use.
+        \item[\textsl{path}] is the path to the desired OS\@.
+          This directory must be NFS-exported to the machine
+          running NetBoot or the fetch will fail.
+        \item[\textsl{args}] are optional command line arguments to
+          pass to the booted kernel.
+
+          Two args, \texttt{-h} and \texttt{-f}, are handled as toggles.
+          These args are checked for by the default \oskit{} console startup
+          code and determine if the serial console will be used (\texttt{-h})
+          and if it runs at 115200 baud (\texttt{-f}).
+          Therefore, if NetBoot was booted with either of these args it
+          will pass them to the booted OS,
+          assuming it wants to use the same console.
+          However, the OS to fetch may be specified with either of these
+          args and they will be removed from the default argument list.
+
+          Another arg is placed in the booted OS's argument string
+          before booting.
+          NetBoot passes a flag of the form
+          ``\texttt{-retaddr} \textsl{hex}''
+          to the booted OS so it can return to this address if it wants
+          to return control to NetBoot.
+          This is normally done by the booted OS's \texttt{_exit} routine.
+\end{description}
+
+\subsection{Getting Help}
+
+Typing ``help'' at the NetBoot prompt will give some basic usage help.
+
+\subsection{Quitting}
+
+Typing ``quit'' or ``exit'' at the NetBoot prompt will make NetBoot exit.
+

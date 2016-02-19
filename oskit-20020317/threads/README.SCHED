@@ -1,0 +1,264 @@
+We added two currently orthogonal features to the OSKit,
+providing support for low latency and for realtime scheduling.
+
+* A slightly modified version of the oskit device support library
+  (-loskit_dev) provides an extended API for registering realtime
+  device handlers that ensure that IRQs are delivered with minimum
+  possible latency.  Measurements indicate that average latency for
+  a realtime IRQ handler is just under 5 microseconds on a 200Mhz machine.
+  This allows, for example, reliable support for high speed data acquisition.
+
+* A moderate restructuring of the pthreads scheduling support allows
+  different types of schedulers to be easily plugged in.
+  Specifically, you can plug in the standard POSIX scheduler, and/or a
+  realtime scheduler, or a proportional share stride scheduler. (For
+  the POSIX scheduler, the original pthreads scheduler is available.
+  For a realtime scheduler, you can use the simple Earliest Deadline
+  First (EDF) scheduler we threw together.  Or, you can easily write
+  your own scheduler to replace either one.
+
+Each of these is discussed in more detail below. This text is also
+contained in oskit/threads/README.SCHED.
+
+These are the first two in a series of realtime improvements.  In the future
+we'll be adding more schedulers, improving the existing EDF scheduler, and
+extending the clock support so that schedulers can better control when
+realtime threads are switched in (rather than relying on the coarse 10ms
+clock).  We also expect to add more of the POSIX realtime APIs.
+
+
+**** Realtime Device Library:
+
+The "realtime" device library (liboskit_realtime.a) is a lightly modified
+version of the OSKit device library that seeks to minimize the amount of
+latency that a realtime device IRQ handler experiences, by ensuring that
+hardware interrupts are rarely blocked at the PIC.  (It probably should be
+called "liboskit_lowlatency.a".)  This is done by a small
+extension to the osenv_irq interface, enabling the installation of the
+realtime IRQ handlers. In conjunction, the code for interrupt
+enable/disable was also changed to do "soft" interrupt control; rather than
+using cli/sti to block all interrupts, interrupt control is accomplished
+with software controls. Realtime handlers for an IRQ are always delivered
+immediately, while regular handlers are held pending when interrupts are
+software blocked, and delivered when interrupts are renabled
+(osenv_intr_enable/osenv_intr_disable). This approach entails a small
+performance penalty for kernels that are not using any realtime features,
+so it is kept as an option (hence, a different library).  To use the
+realtime device library, simply replace -loskit_dev.a with
+-loskit_realtime.a in your makefiles.
+
+There are two new flags to osenv_irq_alloc(). These flags are defined
+in oskit/machine/dev.h, and are allowed only with the realtime version
+of the device library:
+
+    * OSENV_IRQ_REALTIME: Allocate a realtime IRQ handler. This is a
+      handler that is invoked even when interrupts are software
+      disabled (see above). As mentioned, a realtime handler is one in
+      which latency will be low since interrupts are no longer
+      hardware disabled for long periods of time.
+
+      An IRQ can have both realtime and standard handlers. In this case,
+      the realtime handlers always have precedence, and the standard
+      handlers are only invoked as the result of the realtime handler
+      saying they should be run, via osenv_irq_schedule() (described
+      below). In other words, the standard handlers will not be run unless
+      the realtime handler calls osenv_irq_schedule().
+
+    * OSENV_IRQ_TRAPSTATE: Instead of passing a predefined token of
+      data to the interrupt handler, pass the (struct trap_state *)
+      instead (which came in from the assembly stub). This is
+      potentially useful to a realtime handler that wants to know
+      something specific about the machine state.
+
+And there is a new osenv_irq interface function:
+
+                osenv_irq_schedule(int irq);
+
+      Schedule an IRQ for later delivery when interrupts are software
+      enabled.  The typical use of this would be by a realtime handler
+      that wants to chain to a regular handler for a particular IRQ. As an
+      example, the pthread library installs a realtime handler for the
+      clock IRQ, and uses osenv_irq_schedule() to pend a corresponding IRQ
+      for the rest of the kernel's timekeeping mechanisms.
+
+As a rather contrived example, here is a program that installs a realtime
+hander for the RTC, which chains to a standard handler when some condition
+is true.
+
+	void
+	rtc_realtime_handler(void *data)
+	{
+		struct trap_state *ts = (struct trap_state *) data;
+
+		/* Do something realtime'ish */
+		
+		if (some_condition)
+			osenv_irq_schedule(IRQ_RTC);
+	}
+
+	void
+	rtc_standard_handler(void *data)
+	{
+		/* Do something else */
+	}
+
+	osenv_irq_alloc(IRQ_RTC, rtc_realtime_handler, 0,
+			OSENV_IRQ_TRAPSTATE|OSENV_IRQ_REALTIME);
+		
+	osenv_irq_alloc(IRQ_RTC, rtc_standard_handler, 0, 0);
+			
+The realtime handler is invoked immediately, even if soft interrupts are
+blocked.  If some_condition is true, the IRQ is marked pending for the
+standard handler. The standard handler is invoked as soon as soft
+interrupts are enabled by whoever currently has them blocked.
+
+An example used in real code can be found in oskit/kern/x86/pc/profil.c,
+which installs a realtime handler to handle RTC interrupts for GPROF
+profiling.  The main advantage of the realtime handler is that profiling
+ticks can be recorded even when soft interrupts are blocked, thus allowing
+for more precise profiling data. If you have ever profiled and found that
+some huge percentage of time is spent in osenv_irq_enable(), you know why:
+profiling ticks were held pending until the enable. This was accomplished
+with the following change, which replaced all the special-purpose GPROF goo.
+
+	  err = osenv_irq_alloc(IRQ_RTC, gprof_hook, 0,
+				OSENV_IRQ_TRAPSTATE|OSENV_IRQ_REALTIME);
+
+
+**** Pthreads Scheduler Changes:
+
+There has been a moderate restructuring of the pthreads scheduling support
+to allow different types of schedulers to be more easily plugged
+in. Specifically, you can plug in the standard POSIX scheduler, and/or a
+realtime scheduler, or a proportional share Stride scheduler. For the POSIX
+scheduler, the original pthreads scheduler is available. For a realtime
+scheduler, you can use the (very simple) EDF scheduler. Or, you can write
+your own scheduler to replace either one.
+
+This is accomplished by breaking up the scheduler into a more or less
+common part, and a policy-specific part. It should be noted that the intent
+of this work is to allow easier selection of scheduler policies (say, you
+want the EDF or Stride scheduler), as well as easier replacement of
+schedulers with one you write yourself. It should not be construed as
+support for arbitrary mixing of schedulers (say, POSIX, EDF and Stride all
+at once). Without a hierarchical model, that would make little sense.
+
+For just *using* the realtime scheduler support, there are some new
+extensions to the pthreads/posix APIs, which you can use to create and
+control threads with a realtime policy. To enable the realtime scheduler
+support, you need to edit oskit/threads/Makeflags, and remove the comment
+on this line:
+
+	OSKIT_CFLAGS += -DPTHREAD_SCHED_EDF -DPTHREAD_REALTIME
+
+Then rebuild your object tree.
+
+To use the proportional share Stride scheduler, it is recommended that you
+turn off all of the other schedulers, since it is not clear what it means
+to mix them, and then define just -DPTHREAD_SCHED_STRIDE. See the comment
+in oskit/threads/Makeflags.
+
+You also need to be running GCC 2.95.2 or later, since we make use of
+weak symbols, and some earlier versions of GCC do not handle this
+properly.
+
+The API extensions:
+
+* Definition of three new scheduling policies in oskit/threads/sched.h:
+
+		SCHED_EDF
+		SCHED_RMS
+		SCHED_STRIDE
+
+  Note that a simple EDF scheduler is done, as well as a Stride
+  scheduler. The RMS (ratemono) type is a placeholder for anyone who wants
+  to take it on. New types can be added as needed.
+
+* Several new fields in the POSIX "sched_param" structure (also in
+  oskit/threads/sched.h):
+
+		oskit_timespec_t	start;
+		oskit_timespec_t	deadline;
+		oskit_timespec_t	period;
+		int			tickets;
+
+  The first three are for the realtime schedulers, which should be enough
+  to control the scheduling attributes of many kinds of realtime schedulers
+  (should you choose to write one!). The last one, tickets, is for the
+  Stride scheduler. As with the scheduler types above, new fields can be
+  added as needed.
+
+* The same fields have been added to the POSIX "pthread_attr" definition,
+  and are set via the standard POSIX call pthread_attr_setschedparam(),
+  whose prototype is in oskit/threads/pthread.h.
+
+  For example, this fragment of code arranges for a thread to be created
+  with the SCHED_EDF policy with certain scheduling parameters:
+
+		pthread_attr_t		threadattr;
+	
+		pthread_attr_init(&threadattr);
+		
+		param.start.tv_sec   = 0;
+		param.start.tv_nsec  = 0;	 /* Now */
+		param.period.tv_sec  = 0;
+		param.period.tv_nsec = 50000000; /* 50 ms */
+		
+		pthread_attr_setschedparam(&threadattr, &param);
+		pthread_attr_setschedpolicy(&threadattr, SCHED_EDF);
+
+* There is a scheduler test program that demonstrates this in the oskit
+  examples directory (examples/x86/threads/sched_test.c). See the
+  GNUmakerules in that directory, and the target for sched_test to see how
+  to link a program that uses a realtime scheduler. Another test program
+  called stride_test.c demonstrates the use of the Stride scheduler. 
+
+
+For working on the schedulers, or adding your own scheduler, you should
+look at how the EDF scheduler is plugged in. In the oskit/threads directory
+there are several files of interest with respect to the EDF scheduler.
+
+		sched_realtime.h
+		pthread_schedconf.c
+		sched_edf/sched_edf.h
+		sched_edf/sched_edf.c
+
+There are also a few other places where some minor support is needed.
+Grep for PTHREAD_SCHED_EDF to find those places. It should be self-
+explanatory as to what is required.
+
+
+**** Some performance numbers
+
+** Interrupt Latency
+
+Performance measurements on a 200MHZ Pentium Pro indicate that the
+interrupt latency for a realtime handler averages 994 cycles (~5 usec).
+Min latency is 942 cycles. Max latency is 1201 cycles.  Interrupt
+latency is defined as the time it takes to go from the first instruction of
+assembly language stub, to the first instruction of the realtime
+handler. This was in an OSKit kernel compiled with GCC 2.95.2, -O2, and
+configured with --disable-asserts.
+
+
+** Scheduler latency
+
+In a preliminary characterization, we ran a few tests to determine
+"scheduler latency," the time from when a high priority SCHED_RR
+thread is placed back on the runq, to when it starts to run again. We
+ran this test in several configurations on a 200MHZ Pentium Pro. The
+first was in a quiet system.
+
+	Scheduler Latency:	Average: 1410 cycles (7 usec)
+				Minimum: 1378 cycles
+				Maximum: 4725 cycles
+	
+We ran the same test, but using the realtime device support library to see
+how it affects latency. As you can see, there is a very slight performance
+penalty:
+
+	Scheduler Latency:	Average: 1514 cycles (7.6 usec)
+				Minimum: 1465 cycles
+				Maximum: 4564 cycles
+
+We will be doing further characterization work, with different workloads.

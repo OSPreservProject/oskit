@@ -1,0 +1,942 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Partitions and FileSystems
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+/*#
+Steve explains the BSD naming scheme:
+
+  wd = western digital (first maker of IDE hard disks)
+
+  0  = physical disk 0
+
+  s4 = slice 4 (ie 4th DOS partition)
+       (corresponds to hda4 which is what my disk contains)
+
+  a  = root "partition"  (logical partitions added by BSD)
+
+  b  = swap "partition"  
+
+  c  = alias for entire slice (wd0s4)
+
+  d  = alias for entire disk  (wd0)
+
+But now the tricky part: since we have already chosen the device, 
+there's no need to mention it again so we omit the wd0 part.
+#*/
+bundletype DiskPartition_T = 
+{ include "${OSKITDIR}/oskit/diskpart/diskpart.h",
+  diskpart_blkio_get_partition,
+  diskpart_blkio_lookup_bsd_compat,
+  diskpart_blkio_lookup_bsd_string,
+  diskpart_dump,
+  diskpart_fill_entry,
+  diskpart_get_disklabel,
+  diskpart_get_dos,
+  diskpart_get_partition,
+  diskpart_get_vtoc,
+  diskpart_lookup_bsd_compat,
+  diskpart_lookup_bsd_string,
+} with flags libc
+
+bundletype MemFS_T = 
+{ include "${OSKITDIR}/oskit/fs/memfs.h",
+  oskit_memfs_file_set_contents,
+  oskit_memfs_init,
+} with flags libc
+
+bundletype BSD_FS_T =
+{ include "${OSKITDIR}/oskit/fs/netbsd.h",
+  fs_netbsd_mount,
+} with flags libc
+
+bundletype FSRead_T =
+{ include "${OSKITDIR}/oskit/fs/read.h",
+  fsread_ext2_open,
+  fsread_ffs_open,
+  fsread_minix_open,
+  fsread_open,
+} with flags libc
+
+bundletype FSN_T = {
+  include "${OSKITDIR}/oskit/fs/fsnamespace.h",
+  oskit_create_fsnamespace
+} with flags libc
+
+bundletype FileWrappers_T = {
+  oskit_soa_openfile_from_absio,
+  oskit_soa_openfile_from_file,
+  oskit_soa_openfile_from_stream,
+  oskit_wrap_dir,
+  oskit_wrap_dirents,
+  oskit_wrap_file,
+  oskit_wrap_filesystem,
+  oskit_wrap_openfile,
+  oskit_wrap_openfile_with_file,
+}
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+// ToDo: osenv/lmm dependencies are hidden because they are arguments to init
+// mk_unit -o -nMemFS memfs/memfs_com.o 
+unit MemFS = {
+  imports[ string : String_T,
+           iids : { oskit_absio_iid
+                  , oskit_bufio_iid
+                  , oskit_dir_iid
+                  , oskit_dirents_iid
+                  , oskit_file_iid
+                  , oskit_filesystem_iid
+                  , oskit_iunknown_iid
+                  , oskit_posixio_iid
+                  },
+           osenv_mem : OSEnvMem_T // alloc/free
+         ];
+  exports[ out : MemFS_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "memfs/memfs_com.c" 
+  } with flags memfs
+}
+
+// mk_unit -o -n bmod_populate startup/bmod_populate.o
+unit bmod_populate = {
+  imports[ multiboot : { boot_info },
+           iids   : { oskit_absio_iid },
+           panic  : Panic_T,
+           vm     : VM_T,
+           stdout : Stdout_T,
+           string : String_T,
+         ];
+  exports[ out : { bmod_populate } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "startup/bmod_populate.c"
+  } with flags startup;
+}
+
+unit null_call_context = {
+  imports[];
+  exports[ out : CallContext_T ];
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/null_call_context.c"
+  } with flags libc;
+} 
+
+// mk_unit -o -nFSRead fsread/common.o fsread/ext2_file_io.o fsread/ffs_file_io.o fsread/minix_file_io.o fsread/open.o
+
+unit FSRead = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+           iids   : {
+               oskit_blkio_iid,
+               oskit_iunknown_iid,
+               },
+         ];
+  exports[ out : FSRead_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "fsread/common.c",
+         "fsread/ext2_file_io.c",
+         "fsread/ffs_file_io.c",
+         "fsread/minix_file_io.c",
+         "fsread/open.c",
+  } with flags fsread;
+}
+
+
+// mk_unit -o -n diskpart diskpart/dump.o diskpart/find_pcbios.o diskpart/fill.o diskpart/find_vtoc.o diskpart/find.o diskpart/lookup.o diskpart/find_blkio.o diskpart/lookup_blkio.o diskpart/find_dec.o diskpart/lookup_string.o diskpart/find_disklabel.o diskpart/lookup_string_blkio.o diskpart/find_omron.o
+unit diskpart = {
+  imports[ string : String_T,
+           stdout : Stdout_T,
+           malloc : Malloc_T,
+           iids   : { oskit_blkio_iid,
+                      oskit_iunknown_iid,
+                    },
+         ];
+  exports[ out : DiskPartition_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "diskpart/dump.c",
+         "diskpart/find_pcbios.c",
+         "diskpart/fill.c",
+         "diskpart/find_vtoc.c",
+         "diskpart/find.c",
+         "diskpart/lookup.c",
+         "diskpart/find_blkio.c",
+         "diskpart/lookup_blkio.c",
+         "diskpart/find_dec.c",
+         "diskpart/lookup_string.c",
+         "diskpart/find_disklabel.c",
+         "diskpart/lookup_string_blkio.c",
+         "diskpart/find_omron.c",
+  } with flags diskpart;
+  files{ "com/blk_io_subset.c"
+  } with flags com;
+}
+
+
+
+// mk_unit -o -n fsn fsnamespace/fsn/*.o
+unit fsn = {
+  imports[ panic  : Panic_T,
+           iids   : { oskit_dir_iid
+                    , oskit_fsnamespace_iid
+                    , oskit_iunknown_iid
+                    , oskit_posixio_iid
+                    , oskit_file_iid
+                    , oskit_absio_iid
+                    },
+           string : String_T, // memset, strcmp, strcpy, strrchr
+           malloc : Malloc_T, // smalloc, sfree
+           stdout : Stdout_T,
+         ];
+  exports[ fsn    : FSN_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "fsnamespace/src/dir_wrapper.c",
+         "fsnamespace/src/fsn_cache.c",
+         "fsnamespace/src/fsn_lookup.c",
+         "fsnamespace/src/fsn_mount.c",
+         "fsnamespace/src/fsnamespace.c",
+  } with flags { 
+    flags defines,
+    "-I${OSKITDIR}/oskit",
+    "-I${OSKITDIR}/fsnamespace/src",
+    flags defincs,
+  };
+}
+
+// mk_unit -o -n netbsd_fs netbsd/fs/bcmp.o netbsd/fs/qdivrem.o netbsd/fs/bcopy.o netbsd/fs/scanc.o netbsd/fs/bzero.o netbsd/fs/skpc.o netbsd/fs/conf.o netbsd/fs/spec_vnops.o netbsd/fs/dead_vnops.o netbsd/fs/strcat.o netbsd/fs/divdi3.o netbsd/fs/strncasecmp.o netbsd/fs/errno.o netbsd/fs/strncmp.o netbsd/fs/ffs_alloc.o netbsd/fs/strncpy.o netbsd/fs/ffs_balloc.o netbsd/fs/subr_xxx.o netbsd/fs/ffs_inode.o netbsd/fs/ffs_subr.o netbsd/fs/udivdi3.o netbsd/fs/ffs_tables.o netbsd/fs/ufs_bmap.o netbsd/fs/ffs_vfsops.o netbsd/fs/ufs_ihash.o netbsd/fs/ffs_vnops.o netbsd/fs/ufs_inode.o netbsd/fs/fs_fs.o netbsd/fs/ufs_lookup.o netbsd/fs/fs_netbsd.o netbsd/fs/ufs_quota.o netbsd/fs/fs_node.o netbsd/fs/ufs_vfsops.o netbsd/fs/fs_peropen.o netbsd/fs/ufs_vnops.o  netbsd/fs/vfs_bio.o netbsd/fs/getproc.o netbsd/fs/vfs_cache.o netbsd/fs/glue.o netbsd/fs/vfs_cluster.o netbsd/fs/hashtab.o netbsd/fs/vfs_conf.o netbsd/fs/kern_descrip.o netbsd/fs/vfs_init.o netbsd/fs/kern_prot.o netbsd/fs/vfs_lockf.o netbsd/fs/kern_subr.o netbsd/fs/vfs_lookup.o netbsd/fs/kern_synch.o netbsd/fs/vfs_subr.o netbsd/fs/memset.o netbsd/fs/vfs_syscalls.o netbsd/fs/moddi3.o netbsd/fs/vfs_vnops.o netbsd/fs/osenv.o netbsd/fs/vnode_if.o netbsd/fs/param.o
+
+// not needed in single-threaded build: 
+// (a little conditional compilation might be called for)
+// netbsd/fs/fs_thread.o netbsd/fs/sys_generic.o 
+
+unit netbsd_fs = {
+  imports[ string  : String_T,
+           sprintf : Sprintf_T,
+           intr    : OSEnvIntr_T,
+           mem     : OSEnvMem_T,
+           sleep   : OSEnvSleep_T,
+           log     : OSEnvLog_T,
+           panic   : OSEnvPanic_T,
+           timer   : OSEnvTimer_T,
+           time    : PosixTime_T,
+
+// These are needed in the multithreaded build (I think)
+//            : { fs_netbsd_hzto,
+//                fs_netbsd_itimerfix,
+//                fs_netbsd_oskit_osenv_init,
+//                fs_netbsd_setrunnable,
+//                osenv_process_lock,
+//                oskit_get_call_context,
+//                oskit_pthread_setprio,
+//                pthread_create,
+//                pthread_sigmask,
+//              }
+           iids : {
+                    oskit_absio_iid,
+                    oskit_dir_iid,
+                    oskit_dirents_iid,
+                    oskit_file_iid,
+                    oskit_filesystem_iid,
+                    oskit_iunknown_iid,
+                    oskit_openfile_iid,
+                    oskit_posixio_iid,
+                    oskit_principal_iid,
+                    oskit_stream_iid,
+                  },
+           ctxt : CallContext_T,
+         ];
+  exports[ out : BSD_FS_T ];
+  initializer fs_netbsd_init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "netbsd/fs/errno.c",
+         "netbsd/fs/fs_fs.c",
+         "netbsd/fs/fs_netbsd.c",
+         "netbsd/fs/fs_node.c",
+         "netbsd/fs/fs_peropen.c",
+         "netbsd/fs/fs_thread.c",
+         "netbsd/fs/getproc.c",
+         "netbsd/fs/glue.c",
+         "netbsd/fs/hashtab.c",
+         "netbsd/fs/kern_synch.c",
+
+         "netbsd/src/sys/arch/i386/i386/conf.c",
+
+         "netbsd/src/sys/conf/param.c",
+
+         "netbsd/src/sys/lib/libkern/bcmp.c",
+         "netbsd/src/sys/lib/libkern/bcopy.c",
+         "netbsd/src/sys/lib/libkern/bzero.c",
+         "netbsd/src/sys/lib/libkern/divdi3.c",
+         "netbsd/src/sys/lib/libkern/memset.c",
+         "netbsd/src/sys/lib/libkern/moddi3.c",
+         "netbsd/src/sys/lib/libkern/qdivrem.c",
+         "netbsd/src/sys/lib/libkern/scanc.c",
+         "netbsd/src/sys/lib/libkern/skpc.c",
+         "netbsd/src/sys/lib/libkern/strcat.c",
+         "netbsd/src/sys/lib/libkern/strncasecmp.c",
+         "netbsd/src/sys/lib/libkern/strncmp.c",
+         "netbsd/src/sys/lib/libkern/strncpy.c",
+         "netbsd/src/sys/lib/libkern/udivdi3.c",
+
+         "netbsd/src/sys/kern/kern_descrip.c",
+         "netbsd/src/sys/kern/kern_prot.c",
+         "netbsd/src/sys/kern/kern_subr.c",
+         "netbsd/src/sys/kern/subr_xxx.c",
+         "netbsd/src/sys/kern/sys_generic.c",
+         "netbsd/src/sys/kern/vfs_bio.c",
+         "netbsd/src/sys/kern/vfs_cache.c",
+         "netbsd/src/sys/kern/vfs_cluster.c",
+         "netbsd/src/sys/kern/vfs_conf.c",
+         "netbsd/src/sys/kern/vfs_init.c",
+         "netbsd/src/sys/kern/vfs_lockf.c",
+         "netbsd/src/sys/kern/vfs_lookup.c",
+         "netbsd/src/sys/kern/vfs_subr.c",
+         "netbsd/src/sys/kern/vfs_syscalls.c",
+         "netbsd/src/sys/kern/vfs_vnops.c",
+         "netbsd/src/sys/kern/vnode_if.c",
+
+         "netbsd/src/sys/miscfs/deadfs/dead_vnops.c",
+         "netbsd/src/sys/miscfs/specfs/spec_vnops.c",
+
+         "netbsd/src/sys/ufs/ffs/ffs_alloc.c",
+         "netbsd/src/sys/ufs/ffs/ffs_balloc.c",
+         "netbsd/src/sys/ufs/ffs/ffs_inode.c",
+         "netbsd/src/sys/ufs/ffs/ffs_subr.c",
+         "netbsd/src/sys/ufs/ffs/ffs_tables.c",
+         "netbsd/src/sys/ufs/ffs/ffs_vfsops.c",
+         "netbsd/src/sys/ufs/ffs/ffs_vnops.c",
+         "netbsd/src/sys/ufs/ufs/ufs_bmap.c",
+         "netbsd/src/sys/ufs/ufs/ufs_ihash.c",
+         "netbsd/src/sys/ufs/ufs/ufs_inode.c",
+         "netbsd/src/sys/ufs/ufs/ufs_lookup.c",
+         "netbsd/src/sys/ufs/ufs/ufs_quota.c",
+         "netbsd/src/sys/ufs/ufs/ufs_vfsops.c",
+         "netbsd/src/sys/ufs/ufs/ufs_vnops.c",
+  } with flags netbsd;
+}
+
+
+/*# 
+This Linux FS stuff is completely untested - in fact, it's
+probably not even finished.
+#*/
+
+// mk_unit -o -n linux_fs_base linux/fs/attr.o linux/fs/bad_inode.o linux/fs/buffer.o linux/fs/ctype.o linux/fs/current.o linux/fs/dcache.o linux/fs/delay.o linux/fs/dev.o linux/fs/errno.o linux/fs/file.o linux/fs/filesystem.o linux/fs/getuser.o linux/fs/glue.o linux/fs/init.o linux/fs/inode.o linux/fs/namei.o linux/fs/nls_base.o linux/fs/noquot.o linux/fs/openfile.o linux/fs/panic.o linux/fs/printf.o linux/fs/putuser.o linux/fs/s_init.o linux/fs/s_intr.o linux/fs/s_kmem.o linux/fs/s_misc.o linux/fs/s_sched.o linux/fs/semaphore.o linux/fs/super.o linux/fs/time.o linux/fs/vsprintf.o
+unit linux_fs_base = {
+  imports[ intr : OSEnvIntr_T,
+           log  : OSEnvLog_T,
+           mem  : OSEnvMem_T,
+           panic: OSEnvPanic_T,
+           sleep: OSEnvSleep_T,
+           iids : {
+                    oskit_absio_iid,
+                    oskit_dir_iid,
+                    oskit_dirents_iid,
+                    oskit_file_iid,
+                    oskit_filesystem_iid,
+                    oskit_iunknown_iid,
+                    oskit_openfile_iid,
+                    oskit_posixio_iid,
+                    oskit_principal_iid,
+                    oskit_stream_iid,
+                  },
+           misc : { base_cpuid,
+                    floppy_eject,
+                    gettimeofday,
+                    oskit_get_call_context,
+                    wait_for_keypress,
+                  },
+         ];
+  exports[ out : { FS_LINUX_ROOT_DEV,
+                FS_LINUX___bforget,
+                FS_LINUX___brelse,
+                FS_LINUX___const_udelay,
+                FS_LINUX___delay,
+                FS_LINUX___fput,
+                FS_LINUX___mark_inode_dirty,
+                FS_LINUX___namei,
+                FS_LINUX___udelay,
+                FS_LINUX___wait_on_super,
+                FS_LINUX_bad_inode_ops,
+                FS_LINUX_bdevname,
+                FS_LINUX_bdf_prm,
+                FS_LINUX_bdflush_max,
+                FS_LINUX_bdflush_min,
+                FS_LINUX_blk_size,
+                FS_LINUX_blkdev_inode_operations,
+                FS_LINUX_blkdev_open,
+                FS_LINUX_blksize_size,
+                FS_LINUX_bmap,
+                FS_LINUX_bread,
+                FS_LINUX_breada,
+                FS_LINUX_buffer_init,
+                FS_LINUX_buffermem,
+                FS_LINUX_charset2uni,
+                FS_LINUX_chrdev_inode_operations,
+                FS_LINUX_clean_inode,
+                FS_LINUX_clear_inode,
+                FS_LINUX_d_alloc,
+                FS_LINUX_d_alloc_root,
+                FS_LINUX_d_delete,
+                FS_LINUX_d_instantiate,
+                FS_LINUX_d_invalidate,
+                FS_LINUX_d_lookup,
+                FS_LINUX_d_move,
+                FS_LINUX_d_path,
+                FS_LINUX_d_rehash,
+                FS_LINUX_d_umount,
+                FS_LINUX_d_validate,
+                FS_LINUX_dcache_init,
+                FS_LINUX_dec_use_count,
+                FS_LINUX_dentry_cache,
+                FS_LINUX_dentry_stat,
+                FS_LINUX_do_link,
+                FS_LINUX_do_mkdir,
+                FS_LINUX_do_mknod,
+                FS_LINUX_do_rename,
+                FS_LINUX_do_rmdir,
+                FS_LINUX_do_symlink,
+                FS_LINUX_do_truncate,
+                FS_LINUX_do_unlink,
+                FS_LINUX_dput,
+                FS_LINUX_event,
+                FS_LINUX_file_fsync,
+                FS_LINUX_find_buffer,
+                FS_LINUX_find_inode_number,
+                FS_LINUX_find_nls,
+                FS_LINUX_fput,
+                FS_LINUX_free_inode_memory,
+                FS_LINUX_fsync_dev,
+                FS_LINUX_generic_file_read,
+                FS_LINUX_generic_readpage,
+                FS_LINUX_get_empty_inode,
+                FS_LINUX_get_fs_type,
+                FS_LINUX_get_hardblocksize,
+                FS_LINUX_get_hash_table,
+                FS_LINUX_get_super,
+                FS_LINUX_get_write_access,
+                FS_LINUX_getblk,
+                FS_LINUX_getname,
+                FS_LINUX_gfile_create,
+                FS_LINUX_gopenfile_create,
+                FS_LINUX_hardsect_size,
+                FS_LINUX_iget,
+                FS_LINUX_igrab,
+                FS_LINUX_in_group_p,
+                FS_LINUX_inc_use_count,
+                FS_LINUX_init_buffer,
+                FS_LINUX_init_nls,
+                FS_LINUX_inode_change_ok,
+                FS_LINUX_inode_in_use,
+                FS_LINUX_inode_init,
+                FS_LINUX_inode_lock,
+                FS_LINUX_inode_setattr,
+                FS_LINUX_inodes_stat,
+                FS_LINUX_insert_inode_hash,
+                FS_LINUX_invalidate_buffers,
+                FS_LINUX_invalidate_inodes,
+                FS_LINUX_iput,
+                FS_LINUX_is_bad_inode,
+                FS_LINUX_is_root_busy,
+                FS_LINUX_is_subdir,
+                FS_LINUX_iunique,
+                FS_LINUX_linux_errno_to_oskit_error,
+                FS_LINUX_linux_oskit_osenv_device,
+                FS_LINUX_ll_rw_block,
+                FS_LINUX_load_nls,
+                FS_LINUX_load_nls_default,
+                FS_LINUX_lookup_dentry,
+                FS_LINUX_make_bad_inode,
+                FS_LINUX_mark_buffer_uptodate,
+                FS_LINUX_max_dquots,
+                FS_LINUX_max_inodes,
+                FS_LINUX_max_super_blocks,
+                FS_LINUX_mem_map,
+                FS_LINUX_min_free_pages,
+                FS_LINUX_mount_root,
+                FS_LINUX_notify_change,
+                FS_LINUX_nr_dquots,
+                FS_LINUX_nr_free_dquots,
+                FS_LINUX_nr_free_pages,
+                FS_LINUX_nr_super_blocks,
+                FS_LINUX_open_namei,
+                FS_LINUX_permission,
+                FS_LINUX_prune_dcache,
+                FS_LINUX_put_write_access,
+                FS_LINUX_read_ahead,
+                FS_LINUX_refile_buffer,
+                FS_LINUX_register_filesystem,
+                FS_LINUX_register_nls,
+                FS_LINUX_remove_inode_hash,
+                FS_LINUX_securelevel,
+                FS_LINUX_select_dcache,
+                FS_LINUX_send_sig,
+                FS_LINUX_set_blocksize,
+                FS_LINUX_set_writetime,
+                FS_LINUX_show_buffers,
+                FS_LINUX_shrink_dcache_memory,
+                FS_LINUX_shrink_dcache_parent,
+                FS_LINUX_shrink_dcache_sb,
+                FS_LINUX_strnicmp,
+                FS_LINUX_super_blocks,
+                FS_LINUX_sync_dev,
+                FS_LINUX_sync_inodes,
+                FS_LINUX_sync_supers,
+                FS_LINUX_sys_getcwd,
+                FS_LINUX_sys_mkdir,
+                FS_LINUX_sys_mknod,
+                FS_LINUX_sys_quotactl,
+                FS_LINUX_sys_rename,
+                FS_LINUX_sys_rmdir,
+                FS_LINUX_sys_symlink,
+                FS_LINUX_sys_sync,
+                FS_LINUX_sys_tz,
+                FS_LINUX_sys_unlink,
+                FS_LINUX_tq_disk,
+                FS_LINUX_unload_nls,
+                FS_LINUX_unregister_nls,
+                FS_LINUX_update_atime,
+                FS_LINUX_utf8_mbstowcs,
+                FS_LINUX_utf8_mbtowc,
+                FS_LINUX_utf8_wcstombs,
+                FS_LINUX_utf8_wctomb,
+                FS_LINUX_vfs_rename,
+                FS_LINUX_vfs_rename_dir,
+                FS_LINUX_vfs_rename_other,
+                FS_LINUX_vfs_rmdir,
+                FS_LINUX_vfs_unlink,
+                FS_LINUX_wakeup_bdflush,
+                FS_LINUX_write_inode_now,
+                OSKIT_LINUX___down,
+                OSKIT_LINUX___get_free_pages,
+                OSKIT_LINUX___up,
+                OSKIT_LINUX___wait_on_buffer,
+                OSKIT_LINUX___wake_up,
+                OSKIT_LINUX__ctype,
+                OSKIT_LINUX_boot_cpu_data,
+                OSKIT_LINUX_current,
+                OSKIT_LINUX_free_pages,
+                OSKIT_LINUX_high_memory,
+                OSKIT_LINUX_interruptible_sleep_on,
+                OSKIT_LINUX_jiffies,
+                OSKIT_LINUX_kdevname,
+                OSKIT_LINUX_kfree,
+                OSKIT_LINUX_kfree_s,
+                OSKIT_LINUX_kmalloc,
+                OSKIT_LINUX_kmem_cache_alloc,
+                OSKIT_LINUX_kmem_cache_create,
+                OSKIT_LINUX_kmem_cache_free,
+                OSKIT_LINUX_linux_cli,
+                OSKIT_LINUX_linux_oskit_osenv_driver,
+                OSKIT_LINUX_linux_oskit_osenv_intr,
+                OSKIT_LINUX_linux_oskit_osenv_ioport,
+                OSKIT_LINUX_linux_oskit_osenv_irq,
+                OSKIT_LINUX_linux_oskit_osenv_isa,
+                OSKIT_LINUX_linux_oskit_osenv_log,
+                OSKIT_LINUX_linux_oskit_osenv_mem,
+                OSKIT_LINUX_linux_oskit_osenv_pci_config,
+                OSKIT_LINUX_linux_oskit_osenv_sleep,
+                OSKIT_LINUX_linux_oskit_osenv_timer,
+                OSKIT_LINUX_linux_restore_flags,
+                OSKIT_LINUX_linux_save_flags,
+                OSKIT_LINUX_linux_sti,
+                OSKIT_LINUX_oskit_linux_init,
+                OSKIT_LINUX_oskit_linux_mem_alloc,
+                OSKIT_LINUX_oskit_linux_mem_free,
+                OSKIT_LINUX_oskit_linux_osenv_init,
+                OSKIT_LINUX_panic,
+                OSKIT_LINUX_printk,
+                OSKIT_LINUX_schedule,
+                OSKIT_LINUX_semaphore_wake_lock,
+                OSKIT_LINUX_simple_strtoul,
+                OSKIT_LINUX_sleep_on,
+                OSKIT_LINUX_sprintf,
+                OSKIT_LINUX_unlock_buffer,
+                OSKIT_LINUX_verify_area,
+                OSKIT_LINUX_vfree,
+                OSKIT_LINUX_vmalloc,
+                OSKIT_LINUX_vsprintf,
+                __down_failed,
+                __get_user_1,
+                __get_user_2,
+                __get_user_4,
+                __put_user_1,
+                __put_user_2,
+                __put_user_4,
+                __up_wakeup,
+                fs_linux_create_current,
+                fs_linux_current_time,
+                fs_linux_destroy_current,
+                fs_linux_dev_init,
+                fs_linux_devtab_delete,
+                fs_linux_devtab_insert,
+                fs_linux_init,
+                fs_linux_mount,
+              }
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/fs/current.c",
+         "linux/fs/dev.c",
+         "linux/fs/errno.c",
+         "linux/fs/file.c",
+         "linux/fs/filesystem.c",
+         "linux/fs/glue.c",
+         "linux/fs/init.c",
+         "linux/fs/openfile.c",
+         "linux/fs/time.c",
+
+         "linux/shared/s_init.c",
+         "linux/shared/s_intr.c",
+         "linux/shared/s_kmem.c",
+         "linux/shared/s_misc.c",
+         "linux/shared/s_sched.c",
+
+         "linux/shared/libc/panic.c",
+         "linux/shared/libc/printf.c",
+         "linux/shared/libc/vsprintf.c",
+
+         "linux/src/fs/attr.c",
+         "linux/src/fs/bad_inode.c",
+         "linux/src/fs/buffer.c",
+         "linux/src/fs/dcache.c",
+         "linux/src/fs/inode.c",
+         "linux/src/fs/namei.c",
+         "linux/src/fs/noquot.c",
+         "linux/src/fs/super.c",
+
+         "linux/src/fs/nls/nls_base.c",
+
+         "linux/src/lib/ctype.c",
+
+         "linux/src/arch/i386/lib/getuser.S",
+         "linux/src/arch/i386/lib/putuser.S",
+         "linux/src/arch/i386/lib/semaphore.S",
+  } with flags linux;
+}
+
+// Linux filesystems provide the following symbols:
+//                FS_LINUX_init_affs_fs,
+//                FS_LINUX_init_ext2_fs,
+//                FS_LINUX_init_fat_fs,
+//                FS_LINUX_init_hpfs_fs,
+//                FS_LINUX_init_iso9660_fs,
+//                FS_LINUX_init_minix_fs,
+//                FS_LINUX_init_msdos_fs,
+//                FS_LINUX_init_sysv_fs,
+//                FS_LINUX_init_ufs_fs,
+//                FS_LINUX_init_vfat_fs,
+
+// mk_unit -o -n affs linux/fs/affs_amigaffs.o linux/fs/affs_bitmap.o linux/fs/affs_dir.o linux/fs/affs_file.o linux/fs/affs_inode.o linux/fs/affs_namei.o linux/fs/affs_super.o linux/fs/affs_symlink.o
+unit affs = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_affs_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/affs/amigaffs.c",
+         "linux/src/fs/affs/bitmap.c",
+         "linux/src/fs/affs/dir.c",
+         "linux/src/fs/affs/file.c",
+         "linux/src/fs/affs/inode.c",
+         "linux/src/fs/affs/namei.c",
+         "linux/src/fs/affs/super.c",
+         "linux/src/fs/affs/symlink.c",
+       };
+}
+
+
+// mk_unit -o -n ext2 linux/fs/ext2_acl.o linux/fs/ext2_balloc.o linux/fs/ext2_bitmap.o linux/fs/ext2_dir.o linux/fs/ext2_file.o linux/fs/ext2_fsync.o linux/fs/ext2_ialloc.o linux/fs/ext2_inode.o linux/fs/ext2_ioctl.o linux/fs/ext2_namei.o linux/fs/ext2_super.o linux/fs/ext2_symlink.o linux/fs/ext2_truncate.o
+unit ext2fs = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_ext2_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/ext2/acl.c",
+         "linux/src/fs/ext2/balloc.c",
+         "linux/src/fs/ext2/bitmap.c",
+         "linux/src/fs/ext2/dir.c",
+         "linux/src/fs/ext2/file.c",
+         "linux/src/fs/ext2/fsync.c",
+         "linux/src/fs/ext2/ialloc.c",
+         "linux/src/fs/ext2/inode.c",
+         "linux/src/fs/ext2/ioctl.c",
+         "linux/src/fs/ext2/namei.c",
+         "linux/src/fs/ext2/super.c",
+         "linux/src/fs/ext2/symlink.c",
+         "linux/src/fs/ext2/truncate.c",
+  };
+}
+ 
+// mk_unit -o -n fat linux/fs/fat_buffer.o linux/fs/fat_cache.o linux/fs/fat_cvf.o linux/fs/fat_dir.o linux/fs/fat_fatfs_syms.o linux/fs/fat_file.o linux/fs/fat_inode.o linux/fs/fat_misc.o linux/fs/fat_mmap.o linux/fs/fat_tables.o linux/fs/vfat_namei.o linux/fs/vfat_vfatfs_syms.o
+unit fat = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_fat_fs, FS_LINUX_init_vfat_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/fat/buffer.c",
+         "linux/src/fs/fat/cache.c",
+         "linux/src/fs/fat/cvf.c",
+         "linux/src/fs/fat/dir.c",
+         "linux/src/fs/fat/fatfs_syms.c",
+         "linux/src/fs/fat/file.c",
+         "linux/src/fs/fat/inode.c",
+         "linux/src/fs/fat/misc.c",
+         "linux/src/fs/fat/mmap.c",
+         "linux/src/fs/fat/tables.c",
+         "linux/src/fs/vfat/namei.c",
+         "linux/src/fs/vfat/vfatfs_syms.c",
+  };
+}
+
+
+// mk_unit -o -n hpfs linux/fs/hpfs_hpfs_caps.o linux/fs/hpfs_hpfs_fs.o
+unit hpfs = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_hpfs_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/hpfs/hpfs_caps.c",
+         "linux/src/fs/hpfs/hpfs_fs.c",
+       };
+}
+
+// mk_unit -o -n isofs linux/fs/isofs_dir.o linux/fs/isofs_file.o linux/fs/isofs_inode.o linux/fs/isofs_joliet.o linux/fs/isofs_namei.o linux/fs/isofs_rock.o linux/fs/isofs_symlink.o linux/fs/isofs_util.o
+unit isofs = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_isofs_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/isofs/dir.c",
+         "linux/src/fs/isofs/file.c",
+         "linux/src/fs/isofs/inode.c",
+         "linux/src/fs/isofs/joliet.c",
+         "linux/src/fs/isofs/namei.c",
+         "linux/src/fs/isofs/rock.c",
+         "linux/src/fs/isofs/symlink.c",
+         "linux/src/fs/isofs/util.c",
+  };
+}
+
+
+// mk_unit -o -n minix linux/fs/minix_bitmap.o linux/fs/minix_dir.o linux/fs/minix_file.o linux/fs/minix_fsync.o linux/fs/minix_inode.o linux/fs/minix_namei.o linux/fs/minix_symlink.o linux/fs/minix_truncate.o
+unit minix = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_minix_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/minix/bitmap.c",
+         "linux/src/fs/minix/dir.c",
+         "linux/src/fs/minix/file.c",
+         "linux/src/fs/minix/fsync.c",
+         "linux/src/fs/minix/inode.c",
+         "linux/src/fs/minix/namei.c",
+         "linux/src/fs/minix/symlink.c",
+         "linux/src/fs/minix/truncate.c",
+  };
+}
+
+
+// mk_unit -o -n msdos linux/fs/msdos_msdosfs_syms.o linux/fs/msdos_namei.o
+unit msdos = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_msdos_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/msdos/msdosfs_syms.c",
+         "linux/src/fs/msdos/namei.c",
+       };
+}
+
+// mk_unit -o -n sysv linux/fs/sysv_balloc.o linux/fs/sysv_dir.o linux/fs/sysv_file.o linux/fs/sysv_fsync.o linux/fs/sysv_ialloc.o linux/fs/sysv_inode.o linux/fs/sysv_namei.o linux/fs/sysv_symlink.o linux/fs/sysv_truncate.o
+unit sysv = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_sysv_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/sysv/balloc.c",
+         "linux/src/fs/sysv/dir.c",
+         "linux/src/fs/sysv/file.c",
+         "linux/src/fs/sysv/fsync.c",
+         "linux/src/fs/sysv/ialloc.c",
+         "linux/src/fs/sysv/inode.c",
+         "linux/src/fs/sysv/namei.c",
+         "linux/src/fs/sysv/symlink.c",
+         "linux/src/fs/sysv/truncate.c",
+  };
+}
+ 
+
+// mk_unit -o -n ufs linux/fs/ufs_acl.o linux/fs/ufs_balloc.o linux/fs/ufs_cylinder.o linux/fs/ufs_dir.o linux/fs/ufs_file.o linux/fs/ufs_ialloc.o linux/fs/ufs_inode.o linux/fs/ufs_namei.o linux/fs/ufs_super.o linux/fs/ufs_symlink.o linux/fs/ufs_truncate.o linux/fs/ufs_util.o
+
+unit ufs = {
+  imports[ base : LinuxFSBase_T ];
+  exports[ out : { FS_LINUX_init_ufs_fs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "linux/src/fs/ufs/acl.c",
+         "linux/src/fs/ufs/balloc.c",
+         "linux/src/fs/ufs/cylinder.c",
+         "linux/src/fs/ufs/dir.c",
+         "linux/src/fs/ufs/file.c",
+         "linux/src/fs/ufs/ialloc.c",
+         "linux/src/fs/ufs/inode.c",
+         "linux/src/fs/ufs/namei.c",
+         "linux/src/fs/ufs/super.c",
+         "linux/src/fs/ufs/symlink.c",
+         "linux/src/fs/ufs/truncate.c",
+         "linux/src/fs/ufs/util.c",
+  };
+}
+
+
+/************************************************************/
+// Wrappers
+/************************************************************/
+
+// mk_unit -n fs_wrappers com/fsnode_wrapper.o com/fs_wrapper.o com/fsopen_wrapper.o com/dirents_wrapper.o com/openfile_file.o com/openfile_absio.o com/openfile_stream.o 
+unit fs_wrappers = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+           panic  : Panic_T,
+           iids   : { oskit_absio_iid,
+                      oskit_blkio_iid,
+                      oskit_dir_iid,
+                      oskit_dirents_iid,
+                      oskit_file_iid,
+                      oskit_filesystem_iid,
+                      oskit_iunknown_iid,
+                      oskit_openfile_iid,
+                      oskit_posixio_iid,
+                      oskit_stream_iid,
+                    },
+         ];
+  exports[ out : FileWrappers_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "com/fsnode_wrapper.c",
+    "com/fs_wrapper.c",
+    "com/fsopen_wrapper.c",
+    "com/dirents_wrapper.c",
+    "com/openfile_file.c",
+    "com/openfile_absio.c",
+    "com/openfile_stream.c",
+  } with flags com;
+}
+
+
+/************************************************************/
+// Initialisation code
+/************************************************************/
+
+/*#
+Find a partition on a block device.
+
+ToDo: I strongly suspect that partition is a dangling reference into
+the stack.
+#*/
+unit partition_init = {
+  imports[ name     : { partition_name },
+           blkio    : { blkio },
+           diskpart : DiskPartition_T,
+           sleep : OSEnvSleep_T,
+         ];
+  exports[ out : {blkio} ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ inits + exports needs imports };
+  depends{ finis           needs blkio };
+  files { "knit/c/partition.c" } with flags startup;
+  rename{ blkio with prefix in_ };
+  rename{ out with prefix out_ };
+}
+
+/*#
+Turn a blkio device which hopefully contains a BSD-formatted partition
+into a BSD filesystem.
+#*/
+unit fs_init = {
+  imports[ mode      : { read_only },
+           blkio     : { blkio },
+           netbsd_fs : { fs_netbsd_mount },
+           sleep     : OSEnvSleep_T,  // for osenv_process_[un]lock
+           wrappers  : FileWrappers_T,
+         ];
+  exports[ fs : { fs } ];
+  initializer init for fs;
+  finalizer   fini for fs;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/fs_init.c",
+  } with flags startup;
+}
+
+/*#
+Use the MemFS factory to create a memfs object.
+#*/
+unit memfs_obj = {
+  imports[ memfs : MemFS_T ];
+  exports[ fs    : { fs } ];
+  initializer init for fs;
+  finalizer   fini for fs;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/memfs_obj.c",
+  } with flags startup;
+}
+
+/*#
+Imports a filesystem object (like the one from memfs_obj but you could
+also use the export from fs_init (which gives a netbsd filesystem).
+
+At initialisation time, it uses bmod populate to copy files from
+the bmods into the filesystem.  If this is a memfs, it does what you'd
+expect.  If this is a netbsd filesystem, it will actually copy the
+files onto your hard disk!
+
+The strange thing is that the exported filesystem object is exactly
+the same object as the imported one.  If another unit uses the
+imported filesystem object, it might or might not see the bmods
+depending on the order in which initialisation happens.  If the 
+other unit depends on the exported filesystem object, it is
+guaranteed that it will see the bmods because the exported fs will be
+initialised before the other unit can use it.
+I'm not totally happy with this approach.  I use a different one with
+the osenv_device registry and amn't happy with it either.
+
+ToDo: return bmod memory to the lmm.
+The only trick is that we maybe ought to tweak phys_mem_{min,max}
+while we do it - so maybe we have to extend the phys_lmm interface?
+#*/
+unit copy_bmod = {
+  imports[ fs : { fs },
+           bmod : { bmod_populate },
+         ];
+  exports[ out : {fs} ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits needs imports };
+  depends{ finis           needs {} };
+  files{ "knit/c/copy_bmod.c" } with flags startup;
+  rename{ fs with prefix in_ };
+  rename{ out with prefix out_ };
+}
+
+unit fsn_obj = {
+  imports[ fs  : { fs  }, fsn : FSN_T ];
+  exports[ out : { fsn } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/fsn_obj.c",
+  } with flags startup;
+}
+
+
+/************************************************************/
+// End
+/************************************************************/

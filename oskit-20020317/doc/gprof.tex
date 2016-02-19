@@ -1,0 +1,246 @@
+%
+% Copyright (c) 1998-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{gprof}
+
+\section{Introduction}
+
+The gprof program and associated libc and kernel routines provide
+a mechanism to produce an execution profile of an oskit-based
+kernel.  The gprof program is linked right into the kernel,
+performing its data reduction and analysis just before the kernel exits
+and producing output to the console device.
+See gprof(1) for more information.
+
+\section{Caveats}
+
+The application to be profiled must be called ``\texttt{a.out}''.
+
+It is expected that the current behavior of generating ASCII output to
+the console device will be changed in the future.  For example, the interface
+might be modified to allow specification of an {\tt oskit_stream} object
+(Section~\ref{com}) to which the binary ``gmon.out'' data would be written.
+Typically, this object would refer to a persistent file or a network
+connection with another machine.
+
+See Section~\ref{using-gprof} for line-by-line instructions on using
+gprof in the \oskit{}, including some non-obvious linking magic.
+You may need to link against additional libraries to use gprof
+on your kernel;  If your kernel does not use a bmod filesystem, you'll
+need to additionally link against the memfs library.
+
+
+\section{API reference}
+\api{profil}{Enable, disable, or change statistical sampling}
+\begin{apisyn}
+	\cinclude{oskit/c/sys/gmon.h}
+
+	\cinclude{oskit/c/sys/profile.h}
+
+	\funcproto int profil(char *samples, int size, int offset, int
+				scale);
+\end{apisyn}
+\begin{apidesc}
+	This function enables or disables the statistical sampling of
+	the program counter for the kernel.  If profiling is enabled,
+	at RTC clock tick (see below), the program counter is recorded
+	in the {\tt samples} buffer.  This function is most frequently
+	called by {\tt moncontrol()}.
+\end{apidesc}
+
+\begin{apiparm}
+	\item[samples]
+		A buffer containing {\tt size} bytes which is divided into 
+		a number of bins.  A bin represents a range of
+		addresses in which the PC was found when the profiling
+		sample was taken.
+
+	\item[size]
+		The size in bytes of the samples array.
+
+	\item[offset]
+		The lowest address at which PC samples should be
+		taken.  In the oskit, this defaults to the location
+		of the {\tt _start} symbol.
+
+	\item[scale]
+		The scale determines the granularity of the bins.
+		A scale of 65536 means each bin gets 2 bytes of
+		address range.  A scale of 32768 gives 4 byte, etc.
+		A scale value of 0 disables profiling.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 if all is OK, or -1 on error.  Sets {\tt errno} to the
+	reason for failure.
+\end{apiret}
+
+\api{moncontrol}{enable or disable profiling}
+\begin{apisyn}
+	\cinclude{oskit/c/sys/gmon.h}
+
+	\cinclude{oskit/c/sys/profile.h}
+
+	\funcproto void moncontrol(int mode);
+\end{apisyn}
+
+\begin{apidesc}
+
+If {\tt mode} is non-zero (true), enables profiling.  If {\tt mode} is zero, 
+disables profiling.
+\end{apidesc}
+
+\begin{apiparm}
+\item[mode]  Determines if profiling should be enabled or disabled
+\end{apiparm}
+
+\api{monstartup}{Start profiling for the first time}
+\begin{apisyn}
+	\cinclude{oskit/c/sys/gmon.h}
+
+	\cinclude{oskit/c/sys/profile.h}
+
+	\funcproto void monstartup(unsigned long *lowpc, unsigned long
+				*highpc);
+\end{apisyn}
+
+\begin{apidesc}
+	{\tt monstartup} initiates profiling of the kernel; it should only
+	be called once.  Note that by default, {\tt monstartup} is 
+	called by {\tt base_multiboot_main} when profiling is enabled
+	with {\tt configure}.  If you wish to delay profiling until
+	a later time, disable the monstartup call in
+	{\tt base_multiboot_main}, and place your own call to
+	{\tt monstartup} later in your code.
+\end{apidesc}
+\begin{apiparm}
+	\item[lowpc] The lowest address for which statistics should be
+		     collected.  Usually the location of the {\tt _start}
+		     symbol.
+	\item[highpc] The highest address for which statistics
+		     should be collected.  Usually the location of
+		     the {\tt etext} (end of text segment) symbol.
+\end{apiparm}
+
+\section{Using gprof}
+\label{using-gprof}
+
+\begin{enumerate}
+\item Configure your sources with --enable-profiling
+
+\item When you link your program, link against:
+	\begin{enumerate}
+
+	\item   the \texttt{_p} versions of all libraries you would normally use
+        \item   the \texttt{.po} versions of all \texttt{.o} files you would use
+             \emph{except} \texttt{crtn.o} and \texttt{multiboot.o} (if you use them)
+\sloppy{%
+	\item	Insert ``\texttt{-loskit_gprof -loskit_kern_p -loskit_c_p}''
+		immediately after the existing ``\texttt{-loskit_kern_p~-loskit_c_p}.''
+		That's right, \emph{another} instance of the kern and C libs.
+		If you use the FreeBSD C library, do the analogous thing.
+		If the above doesn't work, try including the libs more times
+		(yes, this is bogus).
+}
+	\item  Be sure to include the following libraries:
+		\begin{itemize}
+		\item \texttt{oskit\_dev\_p}
+		\item \texttt{oskit\_lmm\_p}
+		\item \texttt{oskit_memfs_p}
+		\end{itemize}
+	\end{enumerate}
+
+\item Run \texttt{mkbsdimage} \emph{multiboot_kernel multiboot_kernel}:\texttt{a.out} \\
+	or \\
+      \texttt{mkmbimage} \emph{multiboot_kernel multiboot_kernel}:\texttt{a.out}
+
+    This step is necessary so gprof can access the kernel's symbol
+    table via the bmodfs.
+
+\item Run the kernel (if created as above, it would be named \texttt{Image}).
+
+\item Profiling output will be spit out at its exit.
+
+\end{enumerate}
+
+\section{Files}
+\begin{itemize}
+	\item{gprof/*}
+		The gprof directory contains the files necessary for
+		the gprof program itself.
+	\item{libc/gmon/gmon.c}
+		contains moncontrol() and monstartup().
+	\item{libc/gmon/mcount.c}
+		contains the C-language \_mcount routine.
+	\item{libc/x86/mcount_md.S}
+		contains the asm routines which are linked into
+		functions compiled with -pg (mcount for C-language
+		functions).  The \_\_mcount routine must be called
+		manually by your assembly functions, though this call
+		is handled automatically if you use the ENTRY() macro.
+	\item{oskit/c/sys/gmon.h}
+	\item{oskit/c/sysprofile.h}
+		The profiling headers.
+	\item{kern/x86/pc/profil.c}
+		The profil() system call (architecture-dependent).
+\end{itemize}
+
+
+\section{Changing parameters and other FAQs}
+
+
+\subsection{The sampling rate}
+
+	The default sampling rate is 8192 Hz, using the RTC as the source
+	of the sampling interrupts.  You can adjust this by modifying
+	one \#define in gmon.h:
+
+	   Redefine \#define PROFHZ xxxx   to the sampling rate.
+
+	The rate you select must be a power of 2 between 128 and 8192.
+
+\subsection{How can I temporarily disable gprof's output while still linking it in?}
+
+     in base_console.c, change int enable\_gprof = 1;  to = 0.
+
+\subsection{Why isn't there a command line option for it?}
+
+     The FreeBSD boot manager won't pass in the -p flag.
+
+\subsection{Why don't my assembly routines register properly with mcount?}
+
+     You need to hand-code stubs for them which call \_\_mcount.  Sorry.
+     The compiler only autogenerates the \_mcount stubs for C
+     routines.  The call to \_\_mcount \emph{is} performed for you if
+     you use the oskit ENTRY() macro.
+
+\subsection{Why is the call graph wrong when a routine was called from an
+     assembly function?}
+
+     If you don't use one of the oskit ENTRY macros, then your function's
+     symbol may not be declared properly.  If you want to do it by hand,
+     then declare the symbol:
+	\begin{verbatim}
+            .globl symbol_name
+            .type  symbol_name,@function
+        \end{verbatim}
+
+     Note that this is taken care of for you by the macros in asm.h if
+     you simply declare a function with ENTRY(x) or NON_GPROF_ENTRY(x).
+
+\subsection{What will gprof break?}
+
+Gprof takes over the RTC (irq 8).  If you have code which uses the oskit
+interrupt request mechanism to grab irq 8, it won't work.  If your code
+just steals irq 8 by replacing the interrupt handler for it, you'll break
+gprof.
+
+Gprof installs some atexit handlers for the kernel `main'.  These are
+installed in {\tt base_multiboot_main.c}.

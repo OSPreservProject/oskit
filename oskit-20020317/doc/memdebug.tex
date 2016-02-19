@@ -1,0 +1,425 @@
+%
+% Copyright (c) 1996-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{libmemdebug}
+\label{memdebug}
+
+\section{Introduction}
+
+The Memory Debug Utilities Library is a 
+set of functions which replace the standard \oskit{}
+memory allocation functions, see Section~\ref{memalloc},
+of the minimal or FreeBSD C libraries.  The replacement routines detect
+problems with memory allocation, and can print out file and
+line information, along with a back-trace to the offending 
+allocation.
+
+All of the standard functions are covered:
+{\tt malloc}, {\tt memalign}, {\tt calloc}, {\tt realloc}, {\tt free},
+and {\tt smalloc}, {\tt smemalign}, and {\tt sfree}.
+
+To use the library, just include {\tt -lmemdebug}
+on the linker command line
+\emph{before} the standard C library (or wherever it is the standard
+allocation routines are coming from).
+
+The memdebug library implements a fence-post style {\tt malloc}
+debug library.  It
+detects the following problems:
+\begin{itemize}
+\item	{\bf Over-runs and under-runs.} 
+	Over-runs and under-runs of allocated memory blocks are
+	detected by ``fence-posts'' at each end of every allocated
+	block of memory.  
+\item	{\bf Allocation/release style mismatches.}
+	Mismatches between {\tt malloc} style
+	and {\tt smalloc} style allocations and the respective
+	{\tt free} function are detected.  This type of error
+	is corrected by the library and only a warning is printed. 
+\item 	{\bf Memory use after it is {\tt free}'d.}
+	Memory is wiped to a recognizable (nonzero) bit pattern
+	on allocation and when it is freed,
+	to force bugs to show up when memory is used after it is freed.  
+	(See below for which values are used where.)
+\item	{\bf Incorrect size passed to {\tt sfree}.}
+	The {\tt sfree} size is checked against that used
+	when the block is created.  
+\item	{\bf {\tt free} called on bad blocks.}
+	Freeing of blocks that were never allocated or were 
+	already released is detected.
+\end{itemize}
+
+Whenever a problem is encountered a back-trace (in the form of 
+program counter
+values) is dumped (back-tracing from the \emph{allocation} of the
+memory).  File and line number information from where the allocation
+call was made are also printed (if available).  If the failure was
+detected in a call to \texttt{free}, the file and line of that call are
+printed.  This is called a ``bogosity dump.''
+
+When correctable errors are detected (e.g., 
+{\tt sfree}'ing a {\tt malloc}'d block,
+or {\tt sfree}'ing with the wrong size block). 
+the correct thing will be
+done, and the program will continue as normal (except for the
+bogosity dump).
+
+Note that file and line number information is only available if
+you're using the macro wrappers for the allocators defined in
+{\tt memdebug.h}.  The call stack trace is always
+available.
+
+One of the shortcomings of the library is that errors are only
+detected during explicit calls into the library, and not at the time
+that they happen.  The {\tt memdebug_sweep} function will check the
+validity of all allocated blocks, and by judiciously sprinkling calls
+throughout your code you can narrow down memory trashing problems.
+Similarly, the {\tt memdebug_ptrchk} function will run a sanity
+check on a single pointer.  Both functions, when printing ``bogosity
+dumps'' will also print the file and line at which they were called.
+
+To help detect leaks of unfreed memory, use {\tt memdebug_mark} and 
+{\tt memdebug_check}.
+{\tt memdebug_mark} tags all allocated blocks, and then 
+{\tt memdebug_check} will check for untagged blocks.  In 
+this way, you can ``mark'' all blocks as okay 
+and at a later point when
+all memory allocated after the mark should have been released,
+insert a ``check''.  
+The library will print a bogosity dump for any allocation
+that is untagged.
+
+To help detect accesses after memory is released, or accesses to
+uninitialized memory, the library sets all bytes of an allocation to:
+\begin{itemize}
+\item{\tt 0xaa} after an {\tt smalloc}-style allocation.
+\item{\tt 0xbb} after a {\tt malloc}-style allocation.
+\item{\tt 0xdd} after {\tt free}.
+\item{\tt 0xee} after {\tt sfree}.
+\end{itemize}
+
+\subsection{Memdebug Library Configuration}
+
+There are several configuration options in the library-private
+{\tt memdebug.h} header file.  The {\tt NO_MEM_FATAL} \texttt{\#define}
+controls whether errors in an allocation are fatal (via {\tt panic})
+or if they return 0.
+The \texttt{\#define} {\tt ALLOW_MORALLY_QUESTIONABLE_PRACTICE}
+controls the library's
+handling of {\tt malloc(0)} and {\tt free(NULL)}.  While both of these
+constructs are technically legal, they usually signal errors in the
+caller; the option merely controls whether a message is printed or not.  
+The {\tt MALLOC_0_RET_NULL} option controls the behavior of {\tt
+malloc(0)}, either returning {\tt NULL} or returning a valid, unique
+(per-allocation) pointer.
+
+\subsection{Memdebug Library Internals}
+The memdebug library uses two internal routines,
+{\tt memdebug_untraced_alloc} and {\tt memdebug_untraced_free}
+to actually allocate and free the memory it tracks.
+The default implementations of these routines use
+% The following is not quite true, they use the libc memory object
+% which is inevitably the same as the ``system memory object.''
+% But I don't want to try to straighten this out right now...mike
+the initial system memory object (see Section~\ref{oskit-mem}).
+An implication of this is that the unwrapped {\tt malloc} and the memdebug
+wrapped {\tt malloc} \emph{can have different policies}.  This would be the
+case if the client OS has provided its own implementation of {\tt malloc}
+not based on the system memory object.
+
+When allocating memory on small alignment boundaries, those boundaries
+will actually be bumped up to the alignment necessary for the leading
+fence-post of the allocation.  Thus, when running under memdebug data
+may be aligned at a larger granularity than when running without
+memdebug.
+
+All of the routines use {\tt memdebug_printf} to print all output.
+This function should always be defined such that it guarantees that
+it will never cause any memory to be allocated.
+You should override this if you cannot guarantee that {\tt vfprintf} calls 
+will not allocate memory.  
+
+\subsection{External Dependencies}
+
+The memdebug library uses several functions, and one global variable
+that it does not define.  It
+uses {\tt panic} for flagging internal consistency failures, and
+{\tt memset} for wiping swaths of memory.
+The default implementation of {\tt memdebug_printf} requires 
+{\tt vprintf}.
+
+For memory allocation primitives, the memdebug library depends 
+on {\tt memdebug_untraced_alloc} and {\tt memdebug_untraced_free}.
+As mentioned, the default versions of these depend on
+% again, the following is not really correct
+the initial system memory object as provided by whatever C library is in use.
+Additionally, calls to {\tt mem_lock} and 
+{\tt mem_unlock} are used to protect accesses to memdebug's internal
+memory lists.
+These routines are described in more detail in
+the Memory Allocation section of the Minimal C Library chapter,
+Section~\ref{memalloc}.) 
+
+\apisec{Debugging versions of standard routines}
+
+The functions listed below are defined as macros in
+the header file {\tt oskit/memdebug.h}, they are
+also defined as simple wrappers in the library.
+The macro versions provide the library with file and
+line number information.
+
+They are drop-in replacements for the allocation functions
+described in Section~\ref{memalloc}.
+
+\begin{description}
+\item[malloc:] \funcproto void *malloc(size_t size);
+\item[realloc:] \funcproto void *realloc(void *buf, size_t new_size);
+\item[calloc:] \funcproto void *calloc(size_t nelt, size_t elt_size);
+\item[memalign:] \funcproto void *memalign(size_t alignment, size_t size);
+\item[free:] \funcproto void free(void *buf);
+\item[smalloc:] \funcproto void *smalloc(size_t size);
+\item[smemalign:] \funcproto void *smemalign(size_t alignment, size_t size);
+\item[sfree:] \funcproto void sfree(void *buf, size_t size);
+\end{description}
+
+\apisec{Additional Debugging Utilities}
+
+These routines provide 
+additional features useful for tracking down
+memory leaks and dynamic memory corruption.
+
+\begin{description}
+\item[memdebug_mark:] Mark all currently allocated blocks
+\item[memdebug_check:] Look for blocks allocated since mark that haven't been freed
+\item[memdebug_ptrchk:] Check validity of a pointer's fence-posts
+\item[memdebug_sweep:] Check validity of all allocated block's fence-posts
+\end{description}
+
+These routines are internal to the memdebug library, but may be
+worth overriding in your system.
+
+\begin{description}
+\item[memdebug_printf:] A standard printf-style routine that can be
+	guaranteed to not allocate any memory.
+\item[memdebug_bogosity:] Dumps information about an allocation block
+	when an error in the block is detected.
+\item[memdebug_store_backtrace:] Stores a back-trace (the call-stack)
+	in a provided buffer.
+\item[memdebug_untraced_alloc:] Obtain memory from the client OS.
+\item[memdebug_untraced_free:] Return memory to the client OS.
+\end{description}
+
+% ------------------------
+\api{memdebug_mark}{Mark all currently allocated blocks.}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void
+	memdebug_mark(void);
+\end{apisyn}
+\begin{apidesc}
+	This function walks the list of all allocated objects and
+	``marks'' them.  This is useful so that you can determine what
+	was allocated before a certain point in your program.
+
+	Objects only have one bit to keep track of marks, so calling
+	{\tt memdebug_mark} more than once may not have the effect
+	you would like.
+\end{apidesc}
+\begin{apirel}
+	{\tt memdebug_sweep}
+\end{apirel}
+
+% ------------------------
+\api{memdebug_check}{Look for blocks allocated since mark that haven't been freed.}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+	
+	\funcproto void 
+	memdebug_check(void);
+\end{apisyn}
+\begin{apidesc}
+	This functions walks the list of all allocated blocks and for
+	each block that is \emph{not} marked (by {\tt memdebug_mark}), 
+	it prints a bogosity dump.
+
+	For example, at the beginning of a server loop call
+	{\tt memdebug_mark}, then when the server loop is about
+	to iterate, call {\tt memdebug_check} to make sure that
+	the loop didn't leave any allocated objects lying about.
+\end{apidesc}
+\begin{apirel}
+	{\tt memdebug_bogosity}, {\tt memdebug_mark}
+\end{apirel}
+
+% ------------------------
+\api{memdebug_ptrchk}{Check validity of a pointer's fence-posts}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+	
+	\funcproto int
+	memdebug_ptrcheck(void* ptr);
+\end{apisyn}
+\begin{apidesc}
+	This function runs a host of sanity checks on a given
+	pointer.  Of course, these only work if the pointer, {\tt ptr} is
+	one returned by a memdebug-wrapped allocator.  For any
+	errors a bogosity dump is printed.
+\end{apidesc}
+\begin{apiparm}
+	\item[ptr] A pointer to a memory block allocated by some
+		memdebug wrapped allocator.
+\end{apiparm}
+\begin{apiret}
+	Returns -1 if the fence posts are trashed so badly that
+	the information in them cannot be trusted.  Returns 1
+	if there was a problem detected but it is not ``fatal''.
+	Returns 0 if everything is A-okay.
+\end{apiret}
+\begin{apirel}
+	{\tt memdebug_bogosity}
+\end{apirel}
+
+% ------------------------
+\api{memdebug_sweep}{Check validity of all allocated block's fence-posts}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void
+	memdebug_sweep(void);
+\end{apisyn}
+\begin{apidesc}
+	This function walks the list of all allocated blocks and calls
+	{\tt memdebug_ptrchk} on each entry.
+\end{apidesc}
+\begin{apirel}
+	{\tt memdebug_ptrchk}
+\end{apirel}
+
+% ------------------------
+\api{memdebug_printf}{A printf-style routine guaranteed not to
+allocate memory}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto int
+	memdebug_printf(const~char~*fmt, ...);
+\end{apisyn}
+\begin{apidesc}
+	Works just like standard libc {\tt printf}, but this
+	function must be guaranteed to not allocate any memory
+	while it runs.
+\end{apidesc}
+\begin{apiparm}
+	\item[fmt] 
+		The standard {\tt printf} format string.
+	\item[...]
+		The standard {\tt printf} arguments for the specific
+		format string.
+\end{apiparm}
+\begin{apiret}
+	Returns the standard {\tt printf} return value.
+\end{apiret}
+
+
+% ------------------------
+\api{memdebug_bogosity}{Prints a memdebug bogosity message}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void
+	memdebug_bogosity(memdebug_mhead *head);
+\end{apisyn}
+\begin{apidesc}
+	Prints a bogosity dump given the first fence-post of an
+	allocation.  Uses {\tt memdebug_printf} for all output.
+	
+	This routine is called by all others in the library to
+	dump information about an allocation.
+\end{apidesc}
+\begin{apiparm}
+	\item[head]
+		The head fence-post for the given allocation.
+		Contains the back-trace, file and line number
+		information, and allocation-style information.
+\end{apiparm}
+\begin{apirel}
+	{\tt memdebug_printf}
+\end{apirel}
+
+
+% ------------------------
+\api{memdebug_store_backtrace}{Stores call-stack trace in provided
+buffer}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void
+	memdebug_store_backtrace(unsigned *backtrace, int max_len);
+\end{apisyn}
+\begin{apidesc}
+	Stores a machine-specific back-trace in the provided buffer.
+	In conjunction with the object code and the {\tt nm} utility,
+	the back-trace can provide a function call stack.
+\end{apidesc}
+\begin{apiparm}
+	\item[backtrace]
+		A buffer of at least {\tt max_len} \texttt{unsigned ints}.
+	\item[max_len]
+		Size of back-trace buffer.
+\end{apiparm}
+
+% ------------------------
+\api{memdebug_untraced_alloc}{Obtain memory from the client OS}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void *memdebug_untraced_alloc(oskit_u32_t size,
+		oskit_u32_t align_bits, oskit_u32_t align_ofs);
+\end{apisyn}
+\begin{apidesc}
+	Obtains memory of the given size and alignment constraints
+	from the client OS\@.
+	Used by the memdebug library to get the ``raw'' memory that it tracks.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		The size (in bytes) of the chunk to allocate.
+	\item[align_bits]
+		The number of low bits of the returned memory chunk address
+		that must match the corresponding bits in \emph{align_ofs}.
+	\item[align_ofs]
+		The required offset from natural power-of-two alignment.
+		If \emph{align_ofs} is zero,
+		then the returned memory block will be naturally aligned
+		on a $2^{align_bits}$ boundary.
+\end{apiparm}
+
+% ------------------------
+\api{memdebug_untraced_free}{Return memory from the client OS}
+\begin{apisyn}
+	\cinclude{oskit/memdebug.h}
+
+	\funcproto void
+	memdebug_untraced_free(void *ptr, oskit_u32_t size);
+\end{apisyn}
+\begin{apidesc}
+	Returns the indicated memory with the given size to the client OS\@.
+	Used by the memdebug library to free the ``raw'' memory that it tracks.
+\end{apidesc}
+\begin{apiparm}
+	\item[ptr]
+		Memory to free.
+	\item[size]
+		The size (in bytes) of the chunk being freed.
+\end{apiparm}
+
+% eof

@@ -1,0 +1,12 @@
+
+Directories: oskit/hpfq
+Target: liboskit_hpfq.a
+Documentation: doc/hpfq.tex
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	A library implementing the H-PFQ link-sharing algorithm from the
+	SIGCOMM96 paper by J.C.R.Bennet and H.Zhang "Hierarchial Packet Fair
+	Queueing algorithms."  The actual H-PFQ algorithm is named W-F^{2}Q.
+
+	This is a first-cut implementation and is not thoroughly tested
+	nor tuned.

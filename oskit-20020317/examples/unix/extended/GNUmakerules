@@ -1,0 +1,95 @@
+#
+# Copyright (c) 1995-1996, 1998-2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_examples_unix_extended_makerules_
+_oskit_examples_unix_extended_makerules__ = yes
+
+#
+# Let's name all examples here to ensure the make rules don't get
+# out of date
+#
+TARGETS = hello bmodfs
+
+all: $(TARGETS)
+
+SRCDIRS +=  $(OSKIT_SRCDIR)/examples/x86				\
+	    $(OSKIT_SRCDIR)/examples/x86/extended			\
+	    $(OSKIT_SRCDIR)/examples/x86/more				\
+	    $(OSKIT_SRCDIR)/examples/x86/shared
+
+INCDIRS +=   $(OSKIT_SRCDIR)/freebsd/libc/include			\
+	     $(OSKIT_SRCDIR)/freebsd/3.x/src/include			\
+	     $(OSKIT_SRCDIR)/freebsd/3.x/src/sys			\
+	     $(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386		\
+	     $(OBJDIR)/freebsd/libc/objinclude				\
+	     $(OSKIT_SRCDIR)/examples/x86/shared
+
+CLEAN_FILES  +=	$(TARGETS) *.gdb
+
+# Get OSKIT_CFLAGS, CRT0, CRTEND, LDFLAGS and standard OSKit GNUmakerules
+include $(OSKIT_SRCDIR)/examples/unix/unixmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+# Convenience for linking agaist FreeBSD C library
+CLIB          = -loskit_freebsd_c -loskit_com -loskit_freebsd_c
+
+
+#
+# Specific targets for "real" device versions. Just add -DREALSTUFF.
+# (As opposed to using the OSKit's devices.)
+#
+%.real.o: %.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode extended example $@"
+	$(CC) -c -o $@ $(OSKIT_CFLAGS) $(CFLAGS) -DREALSTUFF $<
+
+
+hello: hello.o $(OBJDIR)/lib/unix_support.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode extended example $@"
+	$(CC) -o $@ $(CRT0) $@.o $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/unix_support.o \
+		-loskit_startup -loskit_clientos \
+		-loskit_unix -loskit_lmm -loskit_dev \
+		$(CLIB) $(CRTEND)
+
+bmodfs: bmodfs.o dols.o $(OBJDIR)/lib/unix_support.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode extended example $@"
+	$(CC) -o $@ $(CRT0) $@.o dols.o $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/unix_support.o \
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_unix -loskit_memfs -loskit_lmm -loskit_dev \
+		$(CLIB) $(CRTEND)
+
+gprof: gprof.o $(OBJDIR)/lib/unix_support.o \
+		$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode extended example $@"
+	$(CC) -o $@ $(CRT0) $@.o $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/unix_support.o \
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_unix -loskit_memfs \
+		-loskit_gprof -loskit_lmm -loskit_dev \
+		$(CLIB) $(CRTEND)
+
+lsfs: lsfs.o dols.o $(OBJDIR)/lib/unix_support.o \
+		$(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode extended example $@"
+	$(CC) -o $@ $(CRT0) $@.o dols.o $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/unix_support.o \
+		-loskit_startup -loskit_clientos -loskit_fsnamespace \
+		-loskit_unix -loskit_lmm -loskit_dev \
+		$(CLIB) $(CRTEND)
+endif

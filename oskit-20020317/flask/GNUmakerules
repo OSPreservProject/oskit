@@ -1,0 +1,80 @@
+#
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_flask_makerules_
+_oskit_flask_makerules_ = yes
+
+STARGET= flask.h \
+	 class_to_string.h initial_sid_to_string.h
+SDEPEND= $(addprefix $(OSKIT_SRCDIR)/flask/,security_classes initial_sids)
+
+
+ATARGET= av_permissions.h \
+	 av_inherit.h common_perm_to_string.h av_perm_to_string.h
+ADEPEND= $(OSKIT_SRCDIR)/flask/access_vectors
+
+HFILES=$(STARGET) $(ATARGET)
+
+QFILES= $(patsubst $(OSKIT_SRCDIR)/flask/%,%, \
+		$(addprefix $(OSKIT_SRCDIR)/flask/, \
+			security_classes initial_sids access_vectors))
+
+IHFILES=$(addprefix $(INSTALL_INCDIR)/flask/,$(HFILES))
+
+IQFILES=$(addprefix $(INSTALL_INCDIR)/flask/,$(QFILES))
+
+all:  $(STARGET) $(ATARGET)
+
+CLEAN_FILES += $(STARGET) $(ATARGET)
+
+# Include the makefile containing the generic rules.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+class_to_string.h initial_sid_to_string.h: flask.h
+flask.h: $(SDEPEND) $(OSKIT_SRCDIR)/flask/mkflask.sh
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(SHELL) $(OSKIT_SRCDIR)/flask/mkflask.sh $(AWK) $(SDEPEND)
+
+av_inherit.h common_perm_to_string.h av_perm_to_string.h: av_permissions.h
+av_permissions.h: $(ADEPEND) $(OSKIT_SRCDIR)/flask/mkaccess_vector.sh
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(SHELL) $(OSKIT_SRCDIR)/flask/mkaccess_vector.sh $(AWK) $(ADEPEND)
+
+prepare:: flask.h av_permissions.h 
+
+install: $(IHFILES) $(IQFILES)
+
+$(INSTALL_INCDIR)/flask/%.h: %.h
+	-mkdir -p $(patsubst %/,%,$(dir $@))
+	$(INSTALL_DATA) $< $@
+
+$(INSTALL_INCDIR)/flask/access_vectors: $(OSKIT_SRCDIR)/flask/access_vectors
+	-mkdir -p $(patsubst %/,%,$(dir $@))
+	$(INSTALL_DATA) $< $@
+
+$(INSTALL_INCDIR)/flask/initial_sids: $(OSKIT_SRCDIR)/flask/initial_sids
+	-mkdir -p $(patsubst %/,%,$(dir $@))
+	$(INSTALL_DATA) $< $@
+
+$(INSTALL_INCDIR)/flask/security_classes: $(OSKIT_SRCDIR)/flask/security_classes
+	-mkdir -p $(patsubst %/,%,$(dir $@))
+	$(INSTALL_DATA) $< $@
+
+endif

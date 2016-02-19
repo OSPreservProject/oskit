@@ -1,0 +1,31 @@
+%
+% Copyright (c) 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Define new `ifs' for our alternate target output formats, PDF and WWW (i.e.,
+%% HTML with auxiliary GIF and CSS files).  These are used in our `hyperref'
+%% configuration file (`hyperref.cfg') and can be used to tweak the generated
+%% document for each output format.
+%%
+%% If neither `\pdftrue' nor `\wwwtrue', then we assume that we're targeting
+%% regular old Postscript or DVI output.
+%%
+\newif\ifpdf
+\pdffalse
+\newif\ifwww
+\wwwfalse
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% End of file.
+

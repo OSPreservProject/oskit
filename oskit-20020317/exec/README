@@ -1,0 +1,11 @@
+
+Directories: oskit/exec, oskit/exec/x86
+Target: liboskit_exec.a
+Documentation: doc/exec.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	OSF Research Inst (elf.c)
+	Mach Project, Carnegie Mellon University (x86/aout.c)
+Description:
+	A generic and flexible library for recognizing and loading
+	a variety of linked executable object file formats.  

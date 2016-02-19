@@ -1,0 +1,20 @@
+
+Directories: oskit/dev, oskit/dev/x86
+Target: oskit_libdev.a
+Documentation: doc/dev.tex
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	This library implements the OSKit Device Driver	and
+	"OS environment" Framework, a framework designed to allow the
+	use in the OSKit of pre-existing device drivers and other
+	subsystems from other operating systems.
+
+	This is a default implementation of the dev and osenv support
+	code, and relies heavily on libkern and lmm, with a very
+	minimalistic environment.  (For example, it doesn't support
+	paging).
+
+	The device and osenv routines are mixed together here due to
+	historical reasons and will eventually be split up.  You will
+	see a lot of "fdev" references also, which is this code's
+	historical name.

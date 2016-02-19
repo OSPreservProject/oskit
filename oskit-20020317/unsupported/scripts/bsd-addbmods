@@ -1,0 +1,32 @@
+#!/bin/sh
+
+#
+# This script takes a kernel and and, optional, a list of directories 
+#
+# It uses mkbsdimage to create a boot image that has this kernel and
+# the contents of all directories as bmods, relative to their respective
+# roots.
+#
+# This allows you to prepare a boot filesystem somewhere in your filesystem
+# and then to build your boot image.
+#
+
+ARG=$1
+
+if [ $# = 0 ]; then
+    echo Usage: $0 kernel [bmoddir] {,bmoddir}
+    exit;
+else
+    shift
+    for DIR in "$@"
+    do
+	for FILE in `find $DIR -type f -print`
+	do
+	    ARG="$ARG $FILE:"`echo $FILE | sed "s|$DIR||g"`
+	done
+    done
+fi
+
+echo mkbsdimage $ARG
+mkbsdimage $ARG
+

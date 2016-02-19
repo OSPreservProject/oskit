@@ -1,0 +1,7 @@
+
+Directories: oskit/oskit/diskpart
+Target: liboskit_diskpart.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Header files for the disk partition reading library

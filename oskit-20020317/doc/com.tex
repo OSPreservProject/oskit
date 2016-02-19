@@ -1,0 +1,1508 @@
+%
+% Copyright (c) 1997-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{com}
+
+% XXX mention that COM interfaces should always use Unicode strings!
+
+The Component Object Model (COM)
+is an architecture and infrastructure
+for building fast, robust, and extensible component-based software.
+This chapter describes the basic subset of COM
+that is used by the \oskit{};
+the complete COM specification is available from
+\htmladdnormallinkfoot{Microsoft's web site}%
+% OLD	{http://www.microsoft.com/workshop/prog/com/}.
+	{http://www.microsoft.com/com/}.
+
+At its lowest level,
+COM is merely a language-independent binary-level standard
+defining how software components within a single address space
+can rendezvous and interact with each other efficiently,
+while retaining a sufficient degree of separation between these components
+so that they can be developed and evolved independently.
+\com{%
+and so that their interfaces can be understood and manipulated
+by automated tools such as RPC stub generators
+(e.g., Microsoft's MIDL compiler)
+and high-level interpreted languages
+(e.g., Java or Visual Basic).
+}
+To achieve this goal,
+COM specifies a standard format
+for \emph{dynamic dispatch tables} associated with objects.
+These dispatch tables are similar in function
+to the virtual function tables (``vtables'') used in C++,
+but they are specified at the binary level rather than the language level,
+and they include additional functionality:
+in particular,
+a standardized run-time type determination (``narrowing'') facility,
+and reference counting methods.
+This minimal basis allows a software component
+to dynamically determine the types of interfaces
+supported by another unknown component
+and negotiate a common ``language'' or set of interfaces
+through which further interaction can take place.
+(``Parlez vous Fran\,cais?  Sprechen Sie Deutsch?'')
+COM builds a whole range of services
+on top of this basic facility,
+such as cross-address-space RPC (MIDL),
+object linking and embedding (OLE),
+scripting (OLE Automation), etc.
+However, it is primarily this lowest-level facility
+that is used by and relevant to the \oskit.
+
+\section{Objects and Interfaces}
+
+The COM dynamic dispatch facility
+revolves around the fundamental concepts
+of \emph{objects} and \emph{interfaces}.
+An object in COM is a fairly abstract concept,
+not necessarily associated with a particular data structure in memory
+like C++ or Java objects.
+A COM object can be implemented in any language
+and can maintain its internal state in any way it chooses;
+as far as COM is concerned,
+the only thing relevant about the object is its interfaces.
+A client accessing a COM object
+generally does not have direct access
+to the actual data contained in the object;
+instead COM objects are only accessible
+through the set of interfaces the object exports.
+A reference to a COM object
+is really just a pointer to one of the object's interfaces.
+An object may support any number of interfaces;
+each interface represents one particular ``view'' of the object,
+or one ``protocol'' through which the object can be accessed.
+Each interface has its own dynamic dispatch table,
+consisting of a few standard methods (function pointers)
+whose calling conventions and semantics are defined by COM,
+followed by an arbitrary number of custom methods
+whose calling conventions and semantics are specific
+to that particular interface.
+
+Although the COM specification defines a few basic interfaces,
+anyone can independently define new COM interfaces,
+and in fact the \oskit{} defines quite a number of such interfaces.
+COM interfaces are identified by 128-bit globally unique identifiers (GUIDs),
+which are algorithmically generated through various standardized mechanisms;
+this avoids all the accidental collisions that can easily occur
+when human-readable names are used as identifiers.
+COM GUIDs are the equivalent to and compatible with
+the Universally Unique Identifiers (UUIDs)
+used in the Distributed Computing Environment (DCE)
+originally developed at Apollo and the Open Software Foundation (OSF).
+Although COM interfaces generally also have human-readable names
+such as \texttt{IUnknown} and \texttt{IStream},
+these names are only for the programmer's benefit at development time;
+they get compiled out in the final program
+and only the GUIDs are used at run-time.
+
+\subsection{Interface Inheritance and the \texttt{IUnknown} Interface}
+
+% XXX Mike sez - "a barrage of object-speak"
+
+COM interfaces can directly extend other COM interfaces
+in single-inheritance relationships,
+simply by adding additional methods
+to the dispatch table defined by the base interface
+and/or further restricting the semantic requirements
+defined by the base interface.
+(Derived interfaces cannot relax or weaken
+the requirements of the base interface,
+since that would violate the whole principle of subtyping.)
+Multiple inheritance of COM interfaces
+cannot be implemented simply by extending dispatch tables this way,
+since in this case there would be
+multiple mutually conflicting dispatch tables to extend;
+however, the effect of multiple inheritance
+can be achieved by making the object support multiple independent interfaces
+using the querying mechanism described below.
+Note that the only form of inheritance of relevance to COM
+is \emph{subtyping}, or inheritance of interfaces (types),
+as opposed to \emph{subclassing}, or implementation inheritance:
+COM doesn't care how an object is implemented,
+only what interfaces it exports.
+
+Ultimately, every COM interface is derived
+from a single standard universal base interface,
+known as \texttt{IUnknown} in the COM standard
+and \texttt{oskit_iunknown} in the \oskit{} headers.
+This minimal COM interface
+contains only three standard methods,
+\texttt{query}, \texttt{addref}, and \texttt{release},
+which provide the basic administrative facilities
+that all COM objects are expected to implement.
+These basic facilities,
+which essentially provide run-time type determination and reference counting,
+are described in the following sections.
+
+\subsection{Querying for Interfaces}
+
+The first function pointer slot
+in the dynamic dispatch table of any COM interface
+always points to the standard \texttt{query} method
+(called \texttt{QueryInterface} in the COM specification);
+this means that a reference to \emph{any} COM interface
+can always be used to find any of the other interfaces the object supports.
+To determine if a COM object supports a particular interface,
+the client simply calls the standard query method on the object,
+passing the GUID of the desired interface as a parameter.
+If the object supports the requested interface,
+it returns a pointer to that interface;
+this returned pointer is generally, though not always,
+a different pointer from the one the client already had,
+since it points to a different interface,
+even though the interface refers to the same underlying logical object.
+The client can then interact with the object
+through the methods defined by this interface.
+On the other hand,
+if the object doesn't support the requested interface,
+the query method simply returns an error.
+
+Since interfaces are identified only by simple GUIDs
+and do not directly contain any detailed information
+about the methods defined by the interface,
+the client must already know before it requests the interface
+what methods the interface supports
+and what their semantics are.
+In other words, the basic COM query mechanism
+only allows the client and to determine
+the common set of interfaces both it and the object already understand;
+it does not directly enable the client
+to learn about other arbitrary unknown interfaces the object might support.
+Such a dynamic invocation interface
+can be built on top of the basic COM infrastructure,
+and in fact that is exactly what is done
+in ActiveX/OLE Automation scripting;
+however, the \oskit{} currently does not support or use
+this extended invocation facility.
+
+\subsubsection{Semantics of the Query Operation}
+
+The COM standard specifies that
+all COM objects must support the standard query operation,
+and furthermore, the query operation must have certain well-defined semantics.
+In particular, an object's interfaces must be:
+
+\begin{itemize}
+\item	{\bf Static}:
+	If a query on one specific interface to obtain another interface
+	succeeds the first time, then it must also succeed on subsequent calls;
+	similarly, if it fails, it must continue to fail on subsequent calls.
+\item	{\bf Symmetric}:
+	A query on an interface for the \emph{same} interface must succeed.
+\item	{\bf Reflexive}:
+	If a query on interface A for interface B succeeds,
+	then a query on interface B for interface A must also succeed.
+\item	{\bf Transitive}:
+	If a query on interface A for interface B succeeds,
+	and a query on interface B for interface C succeeds,
+	then a query on interface C for interface A must succeed.
+\end{itemize}
+
+However,
+note that subsequent queries for a given interface identifier on a given object
+are not required always to return the same pointer.
+This allows objects to create interfaces dynamically upon request
+and free them later when they are no longer in use,
+independently of the lifetime of the object itself.
+
+As a special exception to this rule,
+queries on an object for the \texttt{IUnknown} interface
+must always return the same pointer;
+this allows clients to perform a reliable object identity test
+between two arbitrary COM interface pointers
+by querying each for their \texttt{IUnknown} interfaces
+and comparing the pointers.
+However, as an \emph{approximate} object identity test,
+in which occasional false negative answers can be tolerated
+(i.e., two objects appear different when they are in fact the same),
+it is sufficient simply to compare
+two pointers having the same interface type
+(i.e., the same interface identifier):
+although objects sometimes export multiple ``copies'' of an interface,
+as in certain multiple inheritance or interface caching scenarios,
+this is rare enough that simple pointer comparison
+can work well as a heuristic.
+
+\subsection{Reference Counting}
+
+In addition to the basic interface negotiation mechanism
+provided by standard query method,
+every COM interface must also export two additional standard methods,
+\texttt{addref} and \texttt{release},
+which are used to control the object's life cycle
+through reference counting.
+Whenever a client receives a pointer to a COM interface,
+e.g., as the result of a call to a method on a different interface,
+the client is considered to have one \emph{reference} to the interface.
+When the client is done using this reference,
+it must call the \texttt{release} method on that interface
+so that the object will know when it is no longer in use
+and can delete itself.
+If the client needs to copy the reference,
+e.g., to give it to some third party
+while still retaining a reference itself,
+the client must call the \texttt{addref} method on the interface.
+Eventually,
+both the client and the third party
+will call \texttt{release} on their respective pointers to this interface
+(possibly at different times and in arbitrary order);
+the object can then be destroyed
+only when \emph{both} outstanding references are released.
+
+In COM, only interfaces are reference counted, not the objects themselves.
+After a client has obtained a reference to a particular interface,
+it must call the \texttt{release} method on \emph{exactly} that interface,
+and not a different interface referring to the same object.
+This allows object implementations
+to maintain individual reference counts on each of their interfaces
+if they choose.
+Object implementations are also free to maintain
+only a single reference count for the entire object,
+in which case the \texttt{addref} and \texttt{release} methods
+on all the object's interfaces will happen to do the same thing;
+however, clients must not depend on this behavior.
+
+\subsubsection{Cycles}
+
+As with all reference counted systems,
+there is a danger of cycles developing among COM objects
+and preventing proper garbage collection.
+For example, if object A holds a reference to object B,
+and object B holds a reference to object A,
+then assuming nothing is specifically done to change this situation,
+the reference counts of both objects will remain nonzero
+and the objects will effectively ``keep each other alive'' indefinitely
+even if nothing else in the system
+still refers to either of those objects.
+COM does not provide any automatic facility to solve this problem:
+instead, it must be solved manually by careful design.
+
+One particular technique that can often be used to avoid cycles
+when two objects both need to maintain pointers to each other
+is to make one of the objects maintain a reference
+not to the other object itself,
+but rather to an \emph{inner object}
+which is logically (and possibly physically) part of the main object
+but is independently reference counted.
+For example,
+often a client needs to register a \emph{callback object} of some kind,
+such as the network-packet-receive callback object
+passed to the \texttt{open} method of the \texttt{oskit_netdev} interface.
+To avoid cycles,
+the client object should not pass a reference to \emph{itself} as the callback,
+but instead should create
+a separate, independently reference counted callback object
+which is logically contained in the main client object,
+and pass a reference to the callback object rather than the main object.
+This way, the client can keep a reference to the server object,
+and the server can keep a reference to the callback object,
+but no cycle will develop and garbage collection works properly.
+
+\section{Reference and Memory Management Conventions}
+
+Since the set of methods and semantics
+attached to a COM interface represented by a particular GUID
+only needs to be informally defined by the designer of the interface
+and understood by the programmers writing code that uses that interface,
+the exact semantics of the interface can be arbitrary -
+COM makes no explicit restrictions on the interface's methods and semantics
+as long as they are meaningful and well-defined.
+However, for convenience and consistency,
+and to make it more practical for COM interfaces
+to be defined in a form usable by automated tools such as IDL compilers,
+COM provides a set of method invocation conventions
+which interface designers are recommended to use when possible.
+These conventions mainly deal with
+the allocation and deallocation of memory across method calls,
+and similarly,
+the allocation and deallocation of COM object references.
+
+As with typical interface definition languages (IDLs),
+COM defines three basic logical types of parameters,
+each with its own standard semantic rules
+for memory and object reference management.
+Although COM interfaces do not need to be defined in any IDL,
+this categorization makes COM's conventions consistent with common IDLs
+and makes COM interfaces easier to define in IDLs when necessary:
+\begin{itemize}
+\item	\texttt{in} parameters
+	are parameters through which
+	the caller passes information to the callee.
+	Memory is allocated and freed by the caller:
+	if the callee wants to retain a copy of the data
+	after returning from the call,
+	it must allocate its own memory area and copy the data into it.
+	The callee must not modify or deallocate the memory
+	since it is merely ``on loan'' from the caller.
+	Similarly, COM object references are allocated and freed by the caller:
+	the callee merely ``borrows'' the object reference during the call,
+	and if it wants to retain its own reference to the object
+	after returning from the call,
+	it must call the \texttt{addref} method on the interface pointer
+	before returning.
+\item	\texttt{out} parameters
+	are parameters through which
+	the callee passes information back to the caller.
+	In this case,
+	memory buffers and object references
+	are allocated by the callee and freed by the caller:
+	in other words, the method allocates the buffers or references itself
+	and then hands the responsibility for their management
+	to the caller on return.
+\item	\texttt{in-out} parameters
+	are parameters through which
+	the caller passes information to the callee at call time,
+	and the callee later passes information back to the caller
+	at return time.
+	In this case, the caller initially allocates the parameters
+	and initializes them with their initial ``ingoing'' values;
+	however, during the call,
+	the callee may free and reallocate some or all of these parameters
+	and reinitialize them with the final ``outgoing'' values
+	to be passed back to the caller.
+	After the call is complete,
+	the caller is then responsible
+	for deallocating these final memory buffers and object references.
+\end{itemize}
+
+By convention,
+the return value of a COM interface method
+is normally used to return a generic success/failure code to the caller
+(see Section~\ref{com-error-handling}, below).
+However, sometimes methods are instead defined
+to return something else as their return value;
+in this case, the return value can be thought of
+as an \texttt{out} parameter
+for purposes of memory and object reference management.
+
+\section{Error Handling}
+\label{com-error-handling}
+
+The COM specification defines a standard 32-bit namespace for error codes,
+which the \oskit{} adopts as the error code namespace
+for all of its exported interfaces,
+both COM and conventional.
+COM error return values are divided into three fields:
+a one-bit \emph{severity} flag,
+indicating success (zero) or failure (one),
+a 15-bit \emph{facility},
+providing a broad categorization of error,
+and finally, a 16-bit \emph{code},
+which indicates the specific error
+and is only meaningful with respect to a particular facility.
+
+Unfortunately,
+the management of error codes is one of the relatively few parts of COM
+in which Microsoft-centrism appears in force.
+Ideally, error codes should be GUIDs, just like interface identifiers;
+however, this would be too cumbersome and inefficient in practice.
+Therefore, COM divides the error code namespace into two categories:
+globally-unique, centrally allocated error codes,
+and interface-specific error codes.
+Most interfaces are expected to use the interface-specific range;
+these error codes are only meaningful when returned
+from methods on a particular COM interface,
+and their meanings are defined as part of that COM interface.
+However, as may be expected,
+most of Microsoft's COM interfaces
+use centrally administrated error codes
+since they are much easier to deal with in large software systems
+and, conveniently, Microsoft happens to be
+the ``central administrative authority.''
+Furthermore, again as may be expected,
+Microsoft does not readily allocate facility codes to third parties.
+
+The \oskit{} defines a number of error codes
+that need to be valid across a large number of interfaces,
+both COM and non-COM;
+it would be difficult or impossible
+to make these error codes fit into the ``interface-specific'' paradigm.
+Further, since only one small 64K range
+has been assigned for interface-specific error codes,
+out of the two billion possible values,
+we felt that using values in the interface-specific range
+to represent errors that are treated as globally unique by \oskit{} components
+would be just asking for trouble in the long term,
+since in such a small namespace collisions are inevitable.
+Therefore, for global error codes used by the \oskit{},
+we have informally allocated (i.e., stolen) facility code 0xf10
+for our purposes.
+For the specific assignment of error codes in this range,
+see the description of \texttt{oskit/error.h},
+in Section~\ref{oskit-error-h}.
+However, the \oskit{} still uses the interface-specific error code range,
+when appropriate, for error codes only meaningful to a particular interface.
+
+% XXX out parameters must be set to NULL
+
+\section{Binary Issues}
+
+Since COM is a binary-level standard,
+it defines the exact in-memory layout
+of COM interfaces and their function tables
+as seen by clients of those interfaces.
+Any object can implement any COM interface in whatever way it chooses,
+as long as it conforms to these basic rules.
+
+\subsection{Interface Structure}
+
+\psfigure{com-interface}{%
+	Diagram of the structure of a COM interface.
+	The client holds a pointer
+	to a pointer to a table of function pointers;
+	the pointers in the function table
+	point to the object's implementations
+	of the methods exported to the client through the interface.
+}
+
+Figure~\ref{fig-com-interface} shows a diagram
+of the structure of a COM interface.
+From the client's viewpoint,
+a reference to a COM interface
+is a pointer to a pointer (the function table pointer)
+to a table of pointers to functions (the dynamic dispatch table).
+The function table pointer
+is generally just a part of a larger data structure
+representing the internal state of the object,
+illustrated in the figure by the dotted box;
+however, only the function table pointer itself is visible to the client.
+To call one of the interface's methods,
+the client follows the interface pointer to the function table pointer,
+then dereferences the function table pointer to find the function table,
+looks up the appropriate function pointer in the table,
+and finally calls the function.
+In general, the first parameter to this function
+will be a copy of the original interface pointer the client started with,
+allowing the object implementation
+to locate its private object state quickly and easily.
+
+\subsection{Calling Conventions}
+
+The specific calling conventions used in a method call
+is also standardized by the COM specification
+but depends on the processor architecture.
+On the Intel x86 architecture,
+where different types of calling conventions abound,
+the standard calling conventions for COM interfaces
+are the \texttt{stdcall} conventions defined by Microsoft
+and used throughout the Win32 API\@.
+Note that these calling conventions
+generally do \emph{not} match
+the default calling conventions of any particular C or C++ compiler,
+so implementors of COM interfaces
+must be careful to use the appropriate declarations.
+In the \oskit{},
+the \texttt{OSKIT_COMCALL} macro can be used
+to declare functions and function pointers
+to use standard COM calling conventions,
+regardless of the compiler or processor architecture in use;
+see~\ref{oskit-com-h} for more details.
+
+\section{Source Issues}
+
+The \oskit{} header files defining COM interfaces
+do not use the traditional Win32 type names
+used in the corresponding Microsoft header files;
+instead, they follow the naming and style conventions
+used in the rest of the \oskit{}.
+For example, the type representing a 32-bit unsigned integer
+is called \texttt{oskit_u32_t} instead of \texttt{DWORD} as in Win32,
+and the type representing the standard COM stream interface
+is named \texttt{oskit_stream_t} instead of \texttt{IStream}.
+This is done for two reasons:
+\begin{itemize}
+\item	To retain a consistent overall style with the rest of the \oskit{},
+	and present a consistent naming conventions to clients.
+\item	To avoid name conflicts with actual Win32 header files
+	if the \oskit{} is actually used in a Win32 or similar environment.
+\end{itemize}
+
+However, all of the COM interfaces in the \oskit{}
+use the standard COM function calling and interface layout conventions,
+so that binary-level compatibility with Win32 environments is possible
+(though it hasn't been tried yet).
+Since COM is primarily a binary-level rather than source-level standard,
+this appeared to be the best approach
+to retaining compatibility with COM
+while maximizing the flexibility and ease-of-use of the \oskit.
+
+
+\com{This ``two types stuff'' is not quite true, due to the oskit_off_t stuff.
+\subsection{Fundamental Types}
+
+This section explains the convention and rationale
+for choosing the basic integral types used
+in defining the COM interfaces in the \oskit.
+We can't just use \texttt{int, short, long}, etc.,
+since their sizes may vary from compiler to compiler,
+violating the COM rule of binary compatibility.
+We could use the \texttt{oskit_s32_t} \emph{et.\ al.} types defined in \texttt{<machine/types.h>},
+which will ensure that these types always have the same meaning.
+The problem with that scheme is that it binds the types a little \emph{too} strongly:
+for example, we really want a buffer size argument
+to be 32 bits on an x86 and 64 bits on an Alpha.
+
+The solution we've tentatively adopted
+is to use only two abstract ``kinds'' of types in the COM interfaces:
+exact-size types and pointer-size types.
+Exact-size types are the ones such as \texttt{oskit_s32_t}
+that are guaranteed always to be exactly the indicated size and signedness.
+Pointer-size types are defined to be exactly the size of a pointer
+on the architecture on which we're targeting;
+the particular types used are \texttt{oskit_addr_t} and \texttt{oskit_size_t}.
+All \oskit{} COM interface definitions must use only these basic integer types.
+
+COM interfaces that export file functionality use additional types, e.g.,
+oskit_off_t\ldots{}.
+XXX But there is the wide use of oskit_off_t, even in non-Posix interfaces.
+}%com
+
+
+\apisec{COM Header Files}
+
+This section describes the general COM-related public header files
+provided by the \oskit.
+
+\api{com.h}{basic COM types and constants}
+\label{oskit-com-h}
+\begin{apidesc}
+	This header file defines
+	various types and other symbols
+	for defining and using COM interfaces.
+	Most of these symbols correspond directly
+	to similar symbols in the Win32 API;
+	however, all of the names are prefixed with \texttt{oskit_}
+	to avoid conflicts with actual Win32 headers
+	or other symbols used in the client OS environment,
+	and they are named according to the standard \oskit{} conventions
+	for consistency with the rest of the \oskit.
+
+	The \texttt{oskit_guid} structure
+	and corresponding type \texttt{oskit_guid_t}
+	define the format of DCE/COM globally unique identifiers:
+
+	\cstruct{oskit_guid}{
+		oskit_u32_t	data1;		/* Data - often time stamp */
+		oskit_u16_t  	data2;		/* Data */
+		oskit_u16_t	data3;		/* Data */
+		oskit_u8_t	data4[8];	/* Data - often MAC address */
+	};
+
+	Additionally, the related preprocessor macro \texttt{OSKIT_GUID}
+	can be used to declare initializers for GUID structures.
+
+	The type \texttt{oskit_iid_t}\ttindex{oskit_iid_t}
+	is defined as an alias for \texttt{oskit_guid_t},
+	and is specifically used for COM interface identifiers (IIDs).
+
+	The following preprocessor symbols are defined
+	for constructing and testing COM error codes:
+	\begin{icsymlist}
+	\item[OSKIT_SUCCEEDED]
+		Evaluates to true if the error code parameter
+		indicates success (the high bit is zero).
+	\item[OSKIT_FAILED]
+		Evaluates to true if the error code parameter
+		indicates failure (the high bit is one).
+	\item[OSKIT_ERROR_SEVERITY]
+		Extracts the the severity (success/failure) flag
+		from the supplied error parameter.
+	\item[OSKIT_ERROR_FACILITY]
+		Extracts the the facility code (bits 16-30)
+		from the supplied error parameter.
+	\item[OSKIT_ERROR_CODE]
+		Extracts the the code portion (low 16 bits)
+		of the supplied error parameter.
+	\item[OSKIT_S_OK]
+		Defined as zero,
+		the standard return code for COM methods
+		indicating ``all's well, nothing to report.''
+	\item[OSKIT_S_TRUE]
+		Defined as zero, the same as \texttt{OSKIT_S_OK};
+		this is used when the method returns
+		a true/false flag of some kind on success.
+	\item[OSKIT_S_FALSE]
+		Defined as one
+		(which, as a COM error value, still indicates success);
+		used when the method returns
+		a true/false flag of some kind on success.
+		Note that this representation is exactly reversed
+		from normal C conventions for boolean flags;
+		it's a unfortunate inherited Microsoftism.
+	\end{icsymlist}
+
+	Finally, the following macros,
+	whose exact definitions are compiler-specific,
+	are used in declarations of functions and function pointers
+	for COM interfaces,
+	to ensure that the standard COM calling conventions are used:
+	\begin{icsymlist}
+	\item[OSKIT_COMCALL]
+		Declares a function to use standard COM calling conventions,
+		known as \texttt{stdcall} conventions in the COM specification.
+		This tag must be placed in the function prototype
+		between the return value and the symbol being declared,
+		e.g., \texttt{oskit_error_t OSKIT_COMCALL query(...)}.
+		(Note that the GNU C compiler
+		also allows the tag to be placed at the end of the prototype,
+		but this placement is not compatible with other compilers
+		and therefore not recommended.)
+	\item[OSKIT_COMDECL]
+		This is simply a shorthand for
+		\texttt{oskit_error_t OSKIT_COMCALL};
+		it is used in declarations of normal COM methods
+		which return an error code as the result.
+	\item[OSKIT_COMDECL_U]
+		This is simply a shorthand for
+		\texttt{oskit_u32_t OSKIT_COMCALL};
+		it is generally used in declarations
+		of the \texttt{addref} and \texttt{release} methods
+		common to all COM interfaces,
+		which return integer reference counts as their result.
+	\item[OSKIT_COMDECL_V]
+		This is simply a shorthand for
+		\texttt{void OSKIT_COMCALL};
+		it is used in declarations of COM methods
+		having no return value.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{error.h}{error codes used in the \oskit{} COM interfaces}
+\label{oskit-error-h}
+\begin{apidesc}
+	This header file defines
+	the type \texttt{oskit_error_t}\ttindex{oskit_error_t},
+	representing a COM error status;
+	it is equivalent to the \texttt{HRESULT} type in Win32.
+	It also defines a number of specific error codes
+	that are widely applicable and used throughout the \oskit{}.
+
+	The following symbols correspond directly to standard COM errors,
+	and use the standard values;
+	they differ only in the \texttt{OSKIT_} prefix added to the names
+	to avoid conflicts with other header files the client may use.
+	\begin{icsymlist}
+	\item[OSKIT_E_UNEXPECTED]	Unexpected error
+	\item[OSKIT_E_NOTIMPL]		Not implemented
+	\item[OSKIT_E_NOINTERFACE]	Interface not supported
+	\item[OSKIT_E_POINTER]		Bad pointer
+	\item[OSKIT_E_ABORT]		Operation aborted
+	\item[OSKIT_E_FAIL]		General failure
+	\item[OSKIT_E_ACCESSDENIED]	Access denied
+	\item[OSKIT_E_OUTOFMEMORY]	Out of memory
+	\item[OSKIT_E_INVALIDARG]	Invalid argument
+	\end{icsymlist}
+
+	The following symbols correspond to the \texttt{errno} values
+	defined by the 1990 ISO/ANSI C standard:
+	\begin{icsymlist}
+	\item[OSKIT_EDOM]		Argument out of domain
+	\item[OSKIT_ERANGE]		Result too large
+	\end{icsymlist}
+
+	The following symbols correspond to the \texttt{errno} values
+	defined by the 1990 POSIX.1 standard;
+	although many of them are never actually generated
+	by existing \oskit{} components,
+	the full set is included for completeness:
+	\begin{icsymlist}
+	\item[OSKIT_E2BIG]		Argument list too long
+	\item[OSKIT_EACCES]		Permission denied
+	\item[OSKIT_EAGAIN]		Resource temporarily unavailable
+	\item[OSKIT_EBADF]		Bad file descriptor
+	\item[OSKIT_EBUSY]		Device busy
+	\item[OSKIT_ECHILD]		No child processes
+	\item[OSKIT_EDEADLK]		Resource deadlock avoided
+	\item[OSKIT_EEXIST]		File exists
+	\item[OSKIT_EFAULT]		Bad address.
+					This is the same as
+					\texttt{OSKIT_E_POINTER}.
+	\item[OSKIT_EFBIG]		File too large
+	\item[OSKIT_EINTR]		Interrupted system call
+	\item[OSKIT_EINVAL]		Invalid argument.
+					This is the same as
+					\texttt{OSKIT_E_INVALIDARG}.
+	\item[OSKIT_EIO]			Input/output error
+	\item[OSKIT_EISDIR]		Is a directory
+	\item[OSKIT_EMFILE]		Too many open files
+	\item[OSKIT_EMLINK]		Too many links
+	\item[OSKIT_ENAMETOOLONG]	File name too long
+	\item[OSKIT_ENFILE]		Max files open in system
+	\item[OSKIT_ENODEV]		Operation not supported by device
+	\item[OSKIT_ENOENT]		No such file or directory
+	\item[OSKIT_ENOEXEC]		Exec format error
+	\item[OSKIT_ENOLCK]		No locks available
+	\item[OSKIT_ENOMEM]		Cannot allocate memory.
+					This is the same as
+					\texttt{OSKIT_E_OUTOFMEMORY}.
+	\item[OSKIT_ENOSPC]		No space left on device
+	\item[OSKIT_ENOSYS]		Function not implemented.
+					This is the same as
+					\texttt{OSKIT_E_NOTIMPL}.
+	\item[OSKIT_ENOTDIR]		Not a directory
+	\item[OSKIT_ENOTEMPTY]		Directory not empty
+	\item[OSKIT_ENOTTY]		Inappropriate ioctl
+	\item[OSKIT_ENXIO]		Device not configured
+	\item[OSKIT_EPERM]		Operation not permitted.
+					This is the same as
+					\texttt{OSKIT_E_ACCESSDENIED}.
+	\item[OSKIT_EPIPE]		Broken pipe
+	\item[OSKIT_EROFS]		Read-only file system
+	\item[OSKIT_ESPIPE]		Illegal seek
+	\item[OSKIT_ESRCH]		No such process
+	\item[OSKIT_EXDEV]		Cross-device link
+	\end{icsymlist}
+
+	The following symbols correspond to the \texttt{errno} values
+	added by the 1993 POSIX.1 standard (real-time extensions);
+	although most of them are never actually generated
+	by existing \oskit{} components,
+	they are included for completeness:
+	\begin{icsymlist}
+	\item[OSKIT_EBADMSG]		Bad message
+	\item[OSKIT_ECANCELED]		Operation canceled
+	\item[OSKIT_EINPROGRESS]		Operation in progress
+	\item[OSKIT_EMSGSIZE]		Bad message buffer length
+	\item[OSKIT_ENOTSUP]		Not supported
+	\end{icsymlist}
+
+	The following symbol corresponds to the \texttt{errno} value
+	added by the 1996 POSIX.1 standard:
+	\begin{icsymlist}
+	\item[OSKIT_ETIMEDOUT]		Operation timed out
+	\end{icsymlist}
+
+	The following symbols correspond to the \texttt{errno} values
+	defined by the 1994 X/Open Unix CAE standard,
+	and not defined by one of the above standards.
+	Most of them are related to networking,
+	and are therefore used by the \oskit{} networking components;
+	a few are not used at all by the \oskit{}
+	(such as the ``reserved'' and STREAMS-related codes),
+	but are included for completeness.
+	\begin{icsymlist}
+	\item[OSKIT_EADDRINUSE]		Address in use
+	\item[OSKIT_EADDRNOTAVAIL]	Address not available
+	\item[OSKIT_EAFNOSUPPORT]	Address family unsupported
+	\item[OSKIT_EALREADY]		Already connected
+	\item[OSKIT_ECONNABORTED]	Connection aborted
+	\item[OSKIT_ECONNREFUSED]	Connection refused
+	\item[OSKIT_ECONNRESET]		Connection reset
+	\item[OSKIT_EDESTADDRREQ]	Destination address required
+	\item[OSKIT_EDQUOT]		Reserved
+	\item[OSKIT_EHOSTUNREACH]	Host is unreachable
+	\item[OSKIT_EIDRM]		Identifier removed
+	\item[OSKIT_EILSEQ]		Illegal byte sequence
+	\item[OSKIT_EISCONN]		Connection in progress
+	\item[OSKIT_ELOOP]		Too many symbolic links
+	\item[OSKIT_EMULTIHOP]		Reserved
+	\item[OSKIT_ENETDOWN]		Network is down
+	\item[OSKIT_ENETUNREACH]		Network unreachable
+	\item[OSKIT_ENOBUFS]		No buffer space available
+	\item[OSKIT_ENODATA]		No message is available
+	\item[OSKIT_ENOLINK]		Reserved
+	\item[OSKIT_ENOMSG]		No message of desired type
+	\item[OSKIT_ENOPROTOOPT]		Protocol not available
+	\item[OSKIT_ENOSR]		No STREAM resources
+	\item[OSKIT_ENOSTR]		Not a STREAM
+	\item[OSKIT_ENOTCONN]		Socket not connected
+	\item[OSKIT_ENOTSOCK]		Not a socket
+	\item[OSKIT_EOPNOTSUPP]		Operation not supported on socket
+	\item[OSKIT_EOVERFLOW]		Value too large
+	\item[OSKIT_EPROTO]		Protocol error
+	\item[OSKIT_EPROTONOSUPPORT]	Protocol not supported
+	\item[OSKIT_EPROTOTYPE]		Socket type not supported
+	\item[OSKIT_ESTALE]		Reserved
+	\item[OSKIT_ETIME]		Stream ioctl timeout
+	\item[OSKIT_ETXTBSY]		Text file busy
+	\item[OSKIT_EWOULDBLOCK]		Operation would block
+	\end{icsymlist}
+\end{apidesc}
+
+\apiintf{oskit_iunknown}{base interface for all COM objects}
+
+The \texttt{oskit_iunknown} interface,
+known as \texttt{IUnknown} in the Win32 API,
+serves as the basis for all other COM interfaces;
+it provides the following three methods
+which all COM interfaces are required to support:
+\begin{csymlist}
+\item[query]
+	Query for a different interface to the same object.
+\item[addref]
+	Increment the reference count on the interface.
+\item[release]
+	Decrement the reference count on the interface.
+\end{csymlist}
+
+\api{query}{Query for a different interface to the same object}
+\begin{apisyn}
+	\cinclude{oskit/com.h}
+
+	\funcproto OSKIT_COMDECL
+	query(oskit_iunknown_t *obj, const~oskit_iid_t *iid,
+		\outparam void **ihandle);
+\end{apisyn}
+\begin{apidesc}
+	Given a reference to any of an object's COM interfaces,
+	this method allows the client to obtain a reference
+	to any of the other interfaces the object exports
+	by querying for a specific interface identifier (IID).
+\end{apidesc}
+\begin{apiparm}
+	\item[obj]
+		The object being queried.
+	\item[iid]
+		The interface identifier of the requested interface.
+	\item[ihandle]
+		On success,
+		the requested interface pointer is returned in this parameter.
+		The client must \texttt{release} the returned reference
+		when it is no longer needed.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+	Usually the only error code this method returns
+	is \texttt{OSKIT_E_NOINTERFACE},
+	indicating that the object does not support the requested interface.
+\end{apiret}
+
+\api{addref}{Increment an interface's reference count}
+\begin{apisyn}
+	\cinclude{oskit/com.h}
+
+	\funcproto OSKIT_COMDECL_U addref(oskit_iunknown_t *obj);
+\end{apisyn}
+\begin{apidesc}
+	This method adds one to the interface's reference count
+	(or to the object's reference count,
+	if the object implements only one counter for all its interfaces).
+	A corresponding call must later be made to the \texttt{release} method.
+\end{apidesc}
+\begin{apiparm}
+	\item[obj]
+		The interface on which to increment the reference count.
+\end{apiparm}
+\begin{apiret}
+	Returns the new reference count.
+	This return code should only be used for debugging purposes,
+	as its value is generally unstable at run time
+	and its behavior depends on the object's implementation.
+\end{apiret}
+
+\api{release}{Release a reference to an interface}
+\begin{apisyn}
+	\cinclude{oskit/com.h}
+
+	\funcproto OSKIT_COMDECL_U release(oskit_iunknown_t *obj);
+\end{apisyn}
+\begin{apidesc}
+	This method decrements the interface's reference count
+	(or the object's reference count,
+	if the object implements only one counter for all its interfaces).
+	The object destroys itself if its reference count drops to zero.
+	Note that the client must be careful
+	never to release a reference too many times,
+	or to release a reference to a different interface
+	from the one on which \texttt{addref} was called,
+	or chaos will surely ensue.
+\end{apidesc}
+\begin{apiparm}
+	\item[obj]
+		The interface on which to release a reference.
+\end{apiparm}
+\begin{apiret}
+	Returns the new reference count.
+	This return code should only be used for debugging purposes,
+	as its value is generally unstable at run time
+	and its behavior depends on the object's implementation.
+\end{apiret}
+
+
+\apiintf{oskit_stream}{standard interface for byte stream objects}
+
+	The {\tt oskit_stream} COM interface supports reading and writing to
+stream objects, and corresponds to the \htmladdnormallinkfoot{Microsoft COM {\tt IStream} interface}%
+{http://www.microsoft.com/msdn/sdk/platforms/doc/activex/src/if_r2z_62.htm}.
+
+	The {\tt oskit_stream} COM interface inherits from {\tt oskit_iunknown},
+and has the following additional methods:	
+\begin{csymlist}
+\item[read]
+	Read from this object, starting at the current seek pointer.
+\item[write]
+	Write to this object, starting at the current seek pointer.
+\item[seek]
+	Change the seek pointer of this object.
+\item[setsize]
+	Change the size of this object.
+\item[copyto]
+	Copy from this object to another stream object.
+\item[commit]
+	Commit all changes to this object.
+\item[revert]
+	Revert to last committed version of this object.
+\item[lockregion]
+	Lock a region of this object.
+\item[unlockregion]
+	Unlock a region of this object.
+\item[stat]
+	Get attributes of this object.
+\item[clone]
+	Create a new stream object for the same underlying object.
+\end{csymlist}
+
+%XXX
+
+\api{read}{Read from this stream, starting at the seek pointer}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_read(oskit_stream_t *f, 
+		         void *buf,
+	                 oskit_u32_t len,
+			 \outparam oskit_u32_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method reads no more than {\tt len} bytes into
+	{\tt buf} from this stream, starting at the current
+	seek pointer of this stream.  {\tt out_actual}
+	is set to the actual number of bytes read.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object from which to read.
+	\item[buf]
+		The buffer into which the data is to be copied.
+	\item[len]
+		The maximum number of bytes to read.	
+	\item[out_actual]
+		The actual number of bytes read.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{write}{Write to this stream, starting at the seek pointer}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_write(oskit_stream_t *f, 
+		          const~void *buf,
+	                 oskit_u32_t len,
+			 \outparam oskit_u32_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method writes no more than {\tt len} bytes from
+	{\tt buf} into this stream, starting at the current
+	seek pointer of this stream.  {\tt out_actual}
+	is set to the actual number of bytes written.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to which to write.
+	\item[buf]
+		The buffer from which the data is to be copied.
+	\item[len]
+		The maximum number of bytes to write.	
+	\item[out_actual]
+		The actual number of bytes written.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{seek}{Change the seek pointer of this stream}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_seek(oskit_stream_t *f, 
+		         oskit_s64_t ofs,
+	         	 oskit_seek_t whence,
+			 \outparam oskit_u64_t *out_newpos);
+\end{apisyn}
+\begin{apidesc}
+	This method changes the seek pointer of this 
+	stream.  If {\tt whence} is {\tt OSKIT_SEEK_SET},
+	then {\tt ofs} is used as the new seek
+	pointer value.  If {\tt whence} is {\tt OSKIT_SEEK_CUR},
+	then the new seek pointer value is set to the sum of
+	{\tt ofs} and the former seek pointer value.  
+	If {\tt whence} is  {\tt OSKIT_SEEK_END}, then the new
+	seek pointer value is set to the sum of {\tt ofs}
+	and the size of the stream object.  The
+	new seek pointer value is returned via {\tt out_newpos}.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose seek pointer is to be changed.
+	\item[ofs]
+		The relative offset used in computing the new seek pointer.
+	\item[whence]
+		The location that ofs to which ofs is relative.
+	\item[out_newpos]
+		The new seek pointer value.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setsize}{Set the size of this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_setsize(oskit_stream_t *f, 
+		            oskit_u64_t new_size);
+\end{apisyn}
+\begin{apidesc}
+	This method sets the size of this stream to
+	{\tt new_size} bytes.  If {\tt new_size}
+	is larger than the former size of this stream,
+	then the contents of the stream between its
+	former end and its new end are undefined.
+
+	The seek pointer is not affected by this method.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose size is to be changed.
+	\item[new_size]
+		The new size in bytes for this object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{copyto}{Copy data from this object to another stream object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_copyto(oskit_stream_t *f, 
+		           oskit_stream_t *dst,
+		           oskit_u64_t size,
+		           \outparam oskit_u64_t *out_read,
+	                   \outparam oskit_u64_t *out_written);
+\end{apisyn}
+\begin{apidesc}
+	This method copies {\tt size} bytes from
+	the current seek pointer in this stream to
+	the current seek pointer in {\tt dst}.
+
+	Both seek pointers are updated by this method.
+	This method is functionally equivalent to
+	performing an {\tt oskit_stream_read} on the
+	source stream followed by an {\tt oskit_stream_write}
+	on the destination stream.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The source stream from which to copy.
+	\item[dst]
+		The destination stream to which to copy.
+	\item[size]
+		The number of bytes to copy.
+	\item[out_read]
+		The actual number of bytes read from the source.
+	\item[out_written]
+		The actual number of bytes written to the destination. 
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{commit}{Commit all changes to this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_commit(oskit_stream_t *f, 
+		           oskit_u32_t commit_flags);
+\end{apisyn}
+\begin{apidesc}
+	This method flushes all changes made to
+	this stream object to the next level storage
+	object.  
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to commit.
+	\item[commit_flags]
+		Conditions for performing the commit operation.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{revert}{Revert to last committed version of this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_revert(oskit_stream_t *f); 
+\end{apisyn}
+\begin{apidesc}
+	This method changes the state of this stream object
+	to its last committed state if the stream is a
+	transacted object.  Otherwise, this method
+	does nothing.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to revert.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{lockregion}{Lock a region of this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_lockregion(oskit_stream_t *f, 
+			       oskit_u64_t offset, 
+	                       oskit_u64_t size,
+			       oskit_u32_t lock_type);
+\end{apisyn}
+\begin{apidesc}
+	This method locks a range of this stream object,
+	where the range starts at the specified byte {\tt offset}
+	and extends for the specified {\tt size} bytes. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to lock.
+	\item[offset]
+		The starting byte offset of the range to be locked.
+	\item[size]
+		The length in bytes of the range.
+	\item[lock_type]
+		The type of lock to apply.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{unlockregion}{Unlock a region of this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_unlockregion(oskit_stream_t *f, 
+			       oskit_u64_t offset, 
+	                       oskit_u64_t size,
+			       oskit_u32_t lock_type);
+\end{apisyn}
+\begin{apidesc}
+	This method unlocks a range of this stream object,
+	where the range starts at the specified byte {\tt offset}
+	and extends for the specified {\tt size} bytes. 
+
+	The parameters must match the parameters used in
+	a prior {\tt oskit_stream_lockregion} call.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to unlock.
+	\item[offset]
+		The starting byte offset of the range to be unlocked.
+	\item[size]
+		The length in bytes of the range.
+	\item[lock_type]
+		The type of lock to release.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{stat}{Get attributes of this object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_stream_stat(oskit_stream_t *f, 
+			 \outparam oskit_stream_stat_t *out_stat, 
+	                 oskit_u32_t stat_flags);
+\end{apisyn}
+\begin{apidesc}
+	This method returns the attributes of this stream object.
+	{\tt out_stat} is a pointer to an {\tt oskit_stream_stat_t}
+	structure, defined as follows:
+	\cstruct{oskit_stream_stat}{
+		oskit_char_t	*name;	/* string name (optional) */
+		oskit_u32_t	type;	/* type of object */
+		oskit_u64_t	size;	/* size in bytes */
+	};
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose attributes are desired.
+	\item[out_stat]
+		The attributes of the stream object.
+	\item[stat_flags]
+		Which attributes to obtain.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{clone}{Create a new stream object for the same underlying object}
+\begin{apisyn}
+	\cinclude{oskit/com/stream.h}
+	
+	\funcproto OSKIT_COMDECL
+	oskit_stream_clone(oskit_stream_t *f, 
+			 \outparam oskit_stream_t **out_stream); 
+\end{apisyn}
+\begin{apidesc}
+	This method creates a new stream object for the same
+	underlying object, with a distinct seek pointer.  The
+	seek pointer of the new object is initially set to
+	the current seek pointer of this object.  
+	
+	Subsequent modifications of data within one stream
+	object are visible to readers of the other object;
+	likewise, locking on either object affects the
+	other object.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to be cloned.
+	\item[out_stream]
+		The new stream object
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\apiintf{oskit_listener}{callback interface for event notification}
+\label{oskit-listener}
+The {\tt oskit_listener} interface encapsulates an event notification function.
+When associated with another object, the creator of the \texttt{oskit_listener}
+may be informed whenever an event occurs on that object.
+Associating an \texttt{oskit_listener} with some object is done via methods
+on the object.
+See the description of the Asynchronous I/O interface
+(Section~\ref{oskit-asyncio}) for an example use of this interface.
+The {\tt oskit_listener} COM interface inherits from {\tt oskit_iunknown},
+and has the following additional method:
+\begin{csymlist}
+\item[notify]
+	Inform a listener that an event of interest has occurred.
+\end{csymlist}
+The \texttt{oskit_create_listener} function can be used to create instances of
+the listener interface.
+
+\api{create}{Create a new listener object}
+\begin{apisyn}
+	\cinclude{oskit/com/listener.h}
+
+	\funcproto oskit_listener_t *oskit_listener_create(
+		oskit_listener_callback_t *handler, void *arg);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \texttt{oskit_listener} object.
+	Whenever the \texttt{notify} method is invoked on the object, 
+	the function \texttt{handler} will be called with the parameter
+	passed to \texttt{notify} and \texttt{arg}.
+\end{apidesc}
+\begin{apiparm}
+	\item[handler]
+		Function to be called when the listener object is notified.
+	\item[arg]
+		Parameter to pass to \texttt{function}.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the new listener object,
+	or 0 if none could be allocated.
+\end{apiret}
+
+\api{notify}{Inform a listener that an event of interest has occurred}
+\begin{apisyn}
+	\cinclude{oskit/com/listener.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_listener_notify(oskit_listener_t *l, oskit_iunknown_t *obj);
+\end{apisyn}
+\begin{apidesc}
+	Invokes a listener's event notification function.
+	The \texttt{obj} parameter should indicate the COM object with
+	which the listener was associated.
+\end{apidesc}
+\begin{apiparm}
+	\item[l]
+		The listener object.
+	\item[obj]
+		The associated COM object.
+\end{apiparm}
+\begin{apiret}
+	Returns the result of the notification function which should be
+	0 on success, or an error code as specified in
+	{\tt <oskit/error.h>}.
+\end{apiret}
+
+\apiintf{oskit_listener_mgr}{Interface for managing multiple listeners}
+\label{oskit-listener-mgr}
+
+The \texttt{oskit_listener_mgr} support routines can be used to create
+and manage lists of listener objects.
+An object supporting listeners can create an \texttt{oskit_listener_mgr}
+per event, add and remove \texttt{oskit_listener} objects, and notify
+listeners en masse using this interface.
+\textbf{Note:} this is not a COM interface but could (and probably should)
+be cast as such in the future.  See \texttt{listenter_fanout.[hc]} as a
+possible alternative.
+
+\api{create}{Create a listener manager instance}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto struct~listener_mgr *oskit_create_listener_mgr(
+		oskit_iunknown_t *obj);
+\end{apisyn}
+\begin{apidesc}
+	Create a manager object associated with \texttt{obj}.
+	The \texttt{obj} parameter will be passed to all listener
+	\texttt{notify} methods when \texttt{oskit_listener_mgr_notify}
+	is called.
+\end{apidesc}
+\begin{apiparm}
+	\item[obj]
+		Object with which the listeners are associated.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the new listener manager object,
+	or 0 if none could be allocated.
+\end{apiret}
+
+\api{destroy}{Destroy a listener manager instance}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto void
+	oskit_destroy_listener_mgr(struct listener_mgr *mgr);
+\end{apisyn}
+\begin{apidesc}
+	Destroys the indicated manager object.
+	All listeners associated with the manager are removed with
+	\texttt{oskit_listener_mgr_remove}.
+\end{apidesc}
+\begin{apiparm}
+	\item[mgr]
+		Manager object.
+\end{apiparm}
+
+\api{add}{Add a listener to a manager}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto oskit_error_t
+	oskit_listener_mgr_add(struct listener_mgr *mgr, oskit_listener_t *l);
+\end{apisyn}
+\begin{apidesc}
+	Associate a listener object with a manager.
+\end{apidesc}
+\begin{apiparm}
+	\item[mgr]
+		Manager object.
+	\item[l]
+		Listener object to add.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{remove}{Remove a listener from a manager}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto oskit_error_t
+	oskit_listener_mgr_remove(struct listener_mgr *mgr,
+				  oskit_listener_t *l);
+\end{apisyn}
+\begin{apidesc}
+	Disassociates a listener object from a manager.
+\end{apidesc}
+\begin{apiparm}
+	\item[mgr]
+		Manager object.
+	\item[l]
+		Listener object to remove.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{notify}{Notify all listeners associated with a manager}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto void
+	oskit_listener_mgr_notify(struct listener_mgr *mgr);
+\end{apisyn}
+\begin{apidesc}
+	Invokes the \texttt{notify} method on all listeners associated
+	with the given manager.
+\end{apidesc}
+\begin{apiparm}
+	\item[mgr]
+		Manager object.
+\end{apiparm}
+
+\api{count}{Return the number of listeners associated with a manager}
+\begin{apisyn}
+	\cinclude{oskit/com/listener_mgr.h}
+
+	\funcproto int
+	oskit_listener_mgr_count(struct listener_mgr *mgr);
+\end{apisyn}
+\begin{apidesc}
+	Returns the number of listeners associated with this manager.
+\end{apidesc}
+\begin{apiparm}
+	\item[mgr]
+		Manager object.
+\end{apiparm}
+\begin{apiret}
+	Returns the number of listeners.
+\end{apiret}

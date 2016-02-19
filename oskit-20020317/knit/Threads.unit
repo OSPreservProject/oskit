@@ -1,0 +1,871 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Threads
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype Panic_T =
+{ include "${OSKITDIR}/oskit/debug.h",
+  panic,
+// , vpanic  // commonly available but not in libc (ToDo?)
+} with flags libc
+
+/*#
+The osenv_sleep interface is intended for use by legacy code.
+You must hold the process_lock when calling osenv_sleep
+(since osenv_sleep releases the process_lock).  You don't need the 
+process lock at any other time.
+
+Since taking the process lock "locks out" other legacy components,
+we might expect to have multiple instances of this interface.
+eg One for FreeBSD drivers, one for Linux drivers and one for
+the main program.  (Or the main program might use oskit_pthread_sleep).
+
+osenv_wrap_blkio is a convenience function that wraps blkio devices in
+the process lock.
+#*/
+bundletype OSEnvSleep_T =
+{ include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_sleep_init,
+  osenv_sleep,
+  osenv_wakeup,
+  osenv_process_lock,
+  osenv_process_unlock,
+  osenv_process_locked,
+  osenv_wrap_blkio,
+} with flags osenv
+
+/*#
+The oskit sleep interface is intended for use by user-level code
+(it was originally part of libcenv and used to implement select).
+#*/
+bundletype Sleep_T =
+{ include "${OSKITDIR}/knit/c/sleep.h",
+  oskit_sleep_init,
+  oskit_sleep,
+  oskit_wakeup,
+} with flags clientos           
+
+/*#
+ToDo: Turn this into a generic lock interface, cf Critical_T.
+#*/
+bundletype MemLock_T =
+{ include "${OSKITDIR}/oskit/c/malloc.h",
+  mem_lock,
+  mem_unlock,
+} with flags libc
+
+bundletype FSLock_T =  // XXX: need prototypes
+{ fs_master_lock, 
+  fs_master_unlock, 
+}
+
+bundletype PosixSignals_T =
+{ include "${OSKITDIR}/oskit/c/sys/signal.h",
+  kill,
+  raise,
+  sigaction,
+  sigprocmask,
+  sigtimedwait,
+  sigwait,
+  sigwaitinfo,
+
+  oskit_libc_sendsig,  // how traps raise signals (should be in a separate signature?)
+
+//  signals_init,   // initializer
+//  really_deliver_signal, // I don't think this is an export
+} with flags libc
+
+bundletype IPC_T = {
+// Knit's parser chokes on this  include "${OSKITDIR}/oskit/threads/pthread.h",
+// Knit's parser chokes on this  include "${OSKITDIR}/oskit/threads/ipc.h",
+  oskit_ipc_call,
+  oskit_ipc_recv,
+  oskit_ipc_reply,
+  oskit_ipc_send,
+  oskit_ipc_wait,
+} with flags pthread
+
+bundletype PThreadLocks_T = {
+  pthread_cond_broadcast,
+  pthread_cond_destroy,
+  pthread_cond_init,
+  pthread_cond_signal,
+  pthread_cond_timedwait,
+  pthread_cond_wait,
+  pthread_mutex_destroy,
+  pthread_mutex_init,
+  pthread_mutex_lock,
+  pthread_mutex_trylock,
+  pthread_mutex_unlock,
+}
+
+bundletype PThread_T = {
+  oskit_pthread_attr_setopaque, // in .h file but not defined
+  oskit_pthread_attr_setprio,
+  oskit_pthread_childtime,  // in .h file but not defined
+  oskit_pthread_cputime,
+  oskit_pthread_getstate,
+  oskit_pthread_realtime,
+  oskit_pthread_setprio,
+  oskit_pthread_sleep, 
+  oskit_pthread_wakeup,
+  oskit_pthread_whichcpu,
+  oskit_pthread_cleanup_pop,   // used in pthread_cleanup_
+  oskit_pthread_cleanup_push,  // {push,pop} macros
+  pthread_attr_default,
+  pthread_condattr_default,
+  pthread_condwait_timeout,
+  pthread_attr_init,
+  pthread_attr_setstacksize,
+  pthread_attr_setstackaddr,
+  pthread_attr_setguardsize,
+  pthread_attr_setdetachstate,
+  pthread_attr_setschedpolicy,
+  pthread_attr_setschedparam,
+  pthread_attr_setscheduler, // not provided but in .h file
+  pthread_cancel,
+  pthread_condattr_init,
+  pthread_create,
+  pthread_detach,
+  pthread_exit,
+  pthread_getspecific,
+//  pthread_init,            // not quite an initializer
+  pthread_init_withhooks,
+  pthread_join,
+  pthread_key_create,
+  pthread_key_delete,
+  pthread_kill,
+  pthread_mutexattr_init,
+  pthread_mutexattr_default,
+  pthread_mutexattr_setprotocol,
+  pthread_mutexattr_settype,
+  pthread_self,
+  pthread_setcancelstate,
+  pthread_setcanceltype,
+  pthread_setschedparam,
+  pthread_setspecific,
+  pthread_sigmask,
+  pthread_testcancel,
+  sched_yield,
+}
+
+/************************************************************/
+// Implementation
+//
+// There's two versions of threads:
+// o single-threads (simple versions of sleep, etc for single-threaded 
+//   environment)
+// o pthreads
+/************************************************************/
+
+/*#
+This compound unit exports single-threaded versions of some
+of the interfaces provided by real threads.
+#*/
+unit null_threads = {
+  imports[ intr     : OSEnvIntr_T,
+           exit     : Exit_T,
+           stack_trace : StackTrace_T,
+           trap     : Trap_T,
+           stdout   : Stdout_T,
+           string   : String_T,
+           errno    : Errno_T,
+           listener : CreateListener_T,
+           clock    : OSEnvClock_T,    
+           critical : Critical_T,                
+         ];
+  exports[ panic       : Panic_T,
+           osenv_sleep : OSEnvSleep_T,
+           sleep       : Sleep_T,
+           softint     : SoftInt_T,
+           signals     : { extends PosixSignals_T, sigblock, sigsetmask },
+           mem_lock    : MemLock_T,
+           isthreaded  : { __isthreaded, __cleanup },
+         ];
+  link{
+    [panic]       <- libc_panic  <- [exit,stdout,stack_trace];
+    [osenv_sleep] <- osenv_sleep <- [intr];
+    [sleep]       <- oskit_sleep_unthreaded <- [osenv_sleep,listener,clock,panic];
+    [softint]     <- null_softint <- [panic,trap];
+    [mem_lock]    <- top_and_bottom_safe_mem_lock <- [critical];
+    [signals]     <- posix_signals <- [string,errno,panic,trap];
+    [isthreaded]  <- %{ int __isthreaded=0; void* __cleanup=0; %}; 
+  };
+}
+
+// mk_unit -n oskit_sleep_unthreaded knit/c/sleep.o
+unit oskit_sleep_unthreaded = {
+  imports[ osenv_sleep : OSEnvSleep_T,
+           listener : CreateListener_T,
+           clock    : OSEnvClock_T,                    
+           panic    : Panic_T,
+         ];
+  exports[ out : Sleep_T ];
+  initializer init for out;
+  depends{ exports needs imports };
+  depends{ inits   needs listener + clock };
+  files{ "knit/c/sleep.c" } with flags { flags libc };
+}
+
+// mk_unit -o -n libc_panic libc/panic.o 
+unit libc_panic = {
+  imports[ exit   : Exit_T,
+           stdout : Stdout_T,
+           stack_trace : StackTrace_T,
+         ];
+  exports[ panic : Panic_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/gen/panic.c"
+       }
+   with flags libc;
+}
+
+// mk_unit -o -nosenv_sleep  dev/sleep.o dev/osenv_lock.o
+unit osenv_sleep = {
+  imports[ intr : OSEnvIntr_T ];
+  exports[ out  : OSEnvSleep_T ];
+  constraints{ context exports <= ProcessContext; 
+               context exports <= context imports // probably redundant
+             };
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "dev/sleep.c",
+  } with flags osenv;
+}
+
+/*#
+panics if it gets called
+#*/
+// mk_unit -o -n null_softint kern/base_irq_softint_handler.o 
+unit null_softint = {
+  imports[ panic : Panic_T,
+           trap  : { trap_dump },
+         ];
+  exports[ softint : SoftInt_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "kern/x86/pc/base_irq_softint.c",
+    "kern/x86/pc/base_irq_softint_handler.c",
+  } with flags kern;
+}
+
+// The signal path is like this:
+// 
+//  signals_init 
+//  -> libc_sendsig_init 
+//  -> oskit_libcenv_signals_init(machdep_deliver_signal) (freebsd/libc/x86/glue)
+//  -> oskit_sendsig_init(machdep_deliver_signal)
+//  -> installs handler in base_trap_handlers (kern/x86/sendsig.c)
+
+//  kill                      (posix/sys/sigaction.c)
+//  -> raise
+//  -> really_deliver_signal  // checks if it's blocked
+//  -> user defined handler
+
+//  
+//  -> machdep_deliver_signal  (freebsd/libc/x86/glue)
+//  -> oskit_libc_sendsig      (posix/sys/sigaction.c)
+//  -> really_deliver_signal
+//  -> user defined handler
+
+// This is one of those awkward cases where liveness flows back up the
+// call tree:
+//
+//   If someone registers a signal handler then we'd better have made sure
+//   that traps are initialised.  But the trap stuff calls us rather than
+//   the other way around.
+//
+//   As one might expect, the heart of the problem is a mutable variable.
+//   Specifically, the sigactions array.  If it weren't for this, 
+//   calls to sigaction would require a call to the next level up the 
+//   call-graph which would introduce the dependency we need.
+//
+// For now, we hack around this by simply gluing the two together.
+// Long term, we should figure out how to solve this kind of problem
+// and then split them up.
+
+// ToDo: export oskit_sendsig too
+
+// mk_unit -o -n posix_signals posix/sys/sigaction.o kern/sendsig.o freebsd/libc/sendsig.o
+
+unit posix_signals = {
+  imports[ string : String_T,
+           errno  : Errno_T,
+           panic  : Panic_T,
+           trap   : Trap_T,
+         ];
+  exports[ out : { extends PosixSignals_T, sigblock, sigsetmask } ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "posix/sys/sigaction.c",
+    "kern/x86/sendsig.c",
+    "knit/c/signals_init.c",
+  } with flags posix;
+  files{
+    "freebsd/libc/x86/glue/sendsig.c",
+  } with flags freebsd_libc;
+}
+
+/*#
+Does nothing at all (empty functions)
+ToDo: Might be able to unify with null_critical
+threaded version uses lock_mgr stuff
+#*/
+// mk_unit -o -n null_mem_lock libc/mem_lock.o
+unit null_mem_lock = {
+  imports[];
+  exports[ mem_lock : MemLock_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/malloc/mem_lock.c" }
+  with flags libc;
+}
+
+/*#
+This version disables interrupts. Required when your interrupt handlers
+allocate memory.   Works in multithreaded case too.
+#*/
+// mk_unit -o -n single_threaded_mem_lock kern/mem_lock.o
+unit top_and_bottom_safe_mem_lock = {
+  imports[ base_critical : Critical_T ];
+  exports[ mem_lock : MemLock_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/mem_lock.c" }
+  with flags kern;
+}
+
+/************************************************************/
+// Real Threads
+/************************************************************/
+
+/*#
+ToDo: there's a lot more to changing the scheduler than just this
+Use 'r grep INHERIT' to get an idea of the scope of the changes.
+I'll need to look closely at these before I know how to cope with them.
+#*/
+
+// mk_unit -o -n pthreads_cpuinheritance threads/hash.o threads/pthread_cpuinherit.o threads/pthread_lotto.o threads/pthread_message.o threads/pthread_ratemono.o threads/pthread_rootsched.o threads/pthread_stride.o 
+
+unit pthreads_cpuinheritance = {
+  imports[ malloc : Malloc_T,
+           env    : GetEnv_T,
+           panic  : Panic_T,
+           stdout : Stdout_T,
+           string : String_T,
+           sprintf: Sprintf_T,
+           fd     : PosixFD_T,
+           in : { base_irq_nest,
+               osenv_process_locked,
+               oskit_deliver_pending_signals,
+               oskit_pthread_childtime,
+               oskit_pthread_cleanup_push,
+               oskit_pthread_sleep,
+               pthread_create,
+               pthread_exit,
+               pthread_exit_locked,
+               pthread_lock_debug,
+               pthread_self,
+               pthread_testcancel,
+               thread_switch,
+               threads_curthreads,
+               threads_idlethreads,
+               threads_preempt_enable,
+               threads_preempt_needed,
+               threads_preempt_ready,
+               threads_switch_mode,
+               threads_tidtothread,
+             }
+         ];
+  exports[ out : { bootstrap_root_scheduler,
+                cpuinherit_debug,
+                cpuprintf,
+                create_fixedpri_scheduler,
+                create_lotto_scheduler,
+                create_ratemono_scheduler,
+                create_stride_scheduler,
+                fixedpri_schedloop,
+                lotto_schedloop,
+                lotto_thread_init,
+                msg_sched_flagnames,
+                msg_sched_rcodes,
+                msg_sched_typenames,
+
+                // these symbols declared in pthread_schedule.h
+                pthread_init_scheduler,
+                pthread_sched_reschedule,
+                pthread_sched_setrunnable,
+                // missing: pthread_sched_deschedule,
+                pthread_sched_change_state,
+                pthread_sched_handoff,
+                // missing: pthread_sched_thread_wakeup,
+
+                threads_tidtothread,
+
+
+                pthread_root_scheduler,
+                pthread_sched_become_scheduler,
+                pthread_sched_clocktick,
+                pthread_sched_dispatch,
+                pthread_sched_donate_wait_recv,
+                pthread_sched_message_recv,
+                pthread_sched_message_send,
+                pthread_sched_recv_cancel,
+                pthread_sched_recv_unwait,
+                pthread_sched_recv_wait,
+                pthread_sched_setstate,
+                pthread_sched_special_send,
+                pthread_sched_switchto,
+                pthread_sched_thread_donate,
+                pthread_sched_thread_wait,
+                pthread_sched_wakeup,
+                ratemono_schedloop,
+                ratemono_thread_init,
+                schedmsg_queue_allocate,
+                schedmsg_queue_deallocate,
+                stride_schedloop,
+                stride_thread_init,
+                // tidhash_add,
+                // tidhash_create,
+                // tidhash_destroy,
+                // tidhash_lookup,
+                // tidhash_rem,
+              }
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/cpuinherit/hash.c",
+         "threads/cpuinherit/pthread_cpuinherit.c",
+         "threads/cpuinherit/pthread_lotto.c",
+         "threads/cpuinherit/pthread_message.c",
+         "threads/cpuinherit/pthread_ratemono.c",
+         "threads/cpuinherit/pthread_rootsched.c",
+         "threads/cpuinherit/pthread_stride.c",
+  } with flags { flags pthread, "-DCPU_INHERIT" };
+}
+         
+
+// mk_unit -o -n reentrant_socket_factory threads/osenv_safe_socket_factory.o 
+unit reentrant_socket_factory = {
+  imports[ panic : Panic_T,
+           lock  : OSEnvSleep_T, // osenv_process_lock, osenv_process_unlock
+           unwrapped : SocketFactory_T,
+           wrap_socket : { oskit_wrap_sockio },
+           iids : {
+               oskit_iunknown_iid,
+               oskit_socket_factory_iid,
+           },
+         ];
+  exports[ out : SocketFactory_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/osenv_safe_socket_factory.c",
+  } with flags pthread;
+  rename{ unwrapped.oskit_socket_factory to oskit_unsafe_socket_factory };
+  rename{ out.oskit_socket_factory to oskit_safe_socket_factory };
+}
+
+// mk_unit -o -n reentrant_ threads/osenv_safe.o
+// a funny looking unit
+
+// mk_unit -o -n reentrant_ threads/osenv_lock.o
+// almost entirely built on top of the official pthread interface
+// but used by the scheduler
+
+/*#
+Runs listeners in their own thread context.
+
+Quote from original:
+"This implementation is rather doggy. If it becomes useful, we can get
+ serious about making it better."
+#*/
+// mk_unit -o -n threaded_listener threads/listener.o
+unit threaded_listener = {
+  imports[ listener : CreateListener_T,
+           iids : {
+               oskit_iunknown_iid,
+               oskit_listener_iid,
+           },
+           pthreads : PThread_T,
+           panic    : Panic_T,
+           malloc   : Malloc_T,
+         ];
+  exports[ out : { oskit_create_threaded_listener } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/listener.c",
+  } with flags pthreads;
+}
+
+/*#
+Runs netio pushes in their own thread context - essentially the
+same as threaded_listener (including dogginess?).
+#*/
+// mk_unit -o -n threaded_netio threads/netio.o         
+unit threaded_netio = {
+  imports[ netio    : NetIO_T,
+           iids : { 
+               oskit_iunknown_iid,
+               oskit_netio_iid,
+           },
+           pthreads : PThread_T,
+           panic    : Panic_T,
+           malloc   : Malloc_T,
+         ];
+  exports[ out : NetIO_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/netio.c",
+  } with flags pthread;
+  rename{ out.oskit_netio_create to oskit_threaded_netio_create };
+  // todo: netio_create_cleanup?
+}
+
+/*#
+A little ugly since it lets you allocate 3 different kinds of lock -
+don't know if this does any harm.
+#*/
+// mk_unit -o -n lock_mgr threads/pthread_comlock.o 
+unit lock_mgr = {
+  imports[ string : String_T,
+           mem    : OSEnvMem_T,
+           iids : {
+               oskit_condvar_iid,
+               oskit_iunknown_iid,
+               oskit_lock_iid,
+               oskit_lock_mgr_iid,
+           },
+           pthread : PThread_T,
+           panic : Panic_T,
+         ];
+  exports[ out : LockMgr_T ];
+  constraints{ context exports <= ProcessContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/pthread_comlock.c",
+  } with flags pthread;
+}
+
+/*#
+The dependencies here are slightly strange:
+
+1) We can use lock/unlock _before_ initialisation (and after
+   finalisation).  (In which case, they just return.)
+
+2) Initialisation must happen before any thread functions are used
+   and finalisation must not happen until after thread functions
+   are done with (we're hoping that corresonds to threads being off).
+
+Thus, init and fini act as initialisers for the thread functions not
+for the lock functions and we have to pass the thread interface as a
+dummy parameter.
+
+Note that this is _NOT_ safe for use in bottom-half code.
+#*/
+// mk_unit -o -n multi_threaded_mem_lock freebsd/libc_r/mem_lock.o
+unit multi_threaded_mem_lock = {
+  imports[ lock_mgr : LockMgr_T,
+           threads  : PThread_T,  // here to let us write the dependency
+         ];
+  exports[ mem_lock : MemLock_T ];
+  constraints{ context exports <= context imports };
+  initializer init for threads;
+  finalizer   fini for threads;
+  depends{ exports needs imports }; // ToDo: not sure about this
+  depends{ inits + finis needs lock_mgr };
+  files{ "freebsd/libc/malloc/mem_lock.c" }
+  with flags { "-DTHREAD_SAFE", flags freebsd_libc };
+}
+
+// threads/pthread_setprio.o 
+// threads/pthread_setschedparam.o 
+// threads/pthread_delay.o 
+// threads/pthread_guard.o 
+
+/*#
+Morally, pthread_delay feels like an implementation of osenv_sleep
+(I don't mean an implementation that a thread user would use - I mean
+ one that a thread package would use.)
+In practice, they look a bit different - but I think they could be
+made to look similar if there was any reason to do so.
+Would it make the UnixEmulation layer any cleaner?
+#*/
+
+// mk_unit -o -n null_delay threads/pthread_delay.o 
+unit null_delay = {
+  imports[];
+  exports[ out : { pthread_delay } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "threads/x86/pthread_delay.c",
+  } with flags pthread;
+}
+
+// mk_unit -n oskit_sleep_unthreaded knit/c/sleep.o
+unit oskit_sleep_pthreads = {
+  imports[ intr    : OSEnvIntr_T, 
+           pthread : PThread_T,
+           panic   : Panic_T,
+         ];
+  exports[ out : Sleep_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/sleep.c" } with flags { flags libc, "-DPTHREADS" };
+}
+
+
+unit pthread = {
+  imports[ intr    : OSEnvIntr_T,
+           timer  : OSEnvTimer_T,
+           clock  : OSEnvClock_T,
+           mem    : OSEnvMem_T,
+           osenv_irq : OSEnvIRQ_T,
+           stdout : Stdout_T,
+           malloc : Malloc_T,
+           string : String_T,
+           exit   : Exit_T,
+           _exit  : _Exit_T,
+           errno  : Errno_T,
+           irq    : IRQ_T,
+           trap   : Trap_T,
+           critical : Critical_T,
+           stack  : { base_stack_start }, // from base_stack
+           listener : CreateListener_T,  // used for timer callback
+           delay  : { pthread_delay },  // called when no threads to schedule
+           quad   : Quad_T,
+           stack_trace : StackTrace_T,
+           signal_dump : SignalDump_T,
+           usermode : { 
+               oskit_usermode_simulation,
+             },
+           iids : { 
+               oskit_condvar_iid,
+               oskit_iunknown_iid,
+               oskit_lock_iid,
+               oskit_lock_mgr_iid,
+           },
+// #ifdef STACKGUARD
+//         svm : { mprotect, svm_init },
+// #endif
+// #ifdef SMP
+//         smp : SMP_T,
+// #endif
+         ];
+  exports[ pthread : PThread_T,
+           locks   : PThreadLocks_T,
+           fs_lock : FSLock_T, // clone of lock!
+           ipc     : IPC_T,
+           panic   : Panic_T,                     
+           osenv_sleep : OSEnvSleep_T,   
+           sleep   : Sleep_T,             
+           softint : SoftInt_T,                 
+           signals : {
+               extends PosixSignals_T,
+               sigqueue,
+               // signals_init,   // ToDo: initialiser
+               // really_deliver_signal,
+               // oskit_sigwait_internal,
+               oskit_deliver_async_signal,
+               oskit_deliver_pending_signals,
+               oskit_deliver_process_signal,
+             },     
+           mem_lock   : MemLock_T,
+           isthreaded : { __isthreaded, __cleanup },
+         ];
+  link{
+    [pthread, locks, fs_lock, ipc, signals, osenv_sleep, panic, softint]
+         <- pthreads_base <- { intr, timer, clock, osenv_irq, 
+                               stdout, malloc, string, exit, _exit,
+                               errno, irq, trap, stack, listener, delay, 
+                               quad, stack_trace, signal_dump, usermode,
+                             };
+    [sleep]      <- oskit_sleep_pthread <- {pthread,intr,panic};
+    [lock_mgr]   <- lock_mgr            <- {string,mem,iids,pthread,panic};
+
+// We don't use this because it gives no protection against interrupt
+// handlers which allocate memory.
+//    [mem_lock]   <- multi_threaded_mem_lock <- [lock_mgr,pthread];
+    [mem_lock]   <- top_and_bottom_safe_mem_lock <- [critical];
+
+    // ToDo: clean this up and worry that __isthreaded is 0
+    [isthreaded] <- %{ int __isthreaded=1; void* __cleanup=0; %}; // quick hack
+  }
+}
+
+// mk_unit -n oskit_sleep_pthread knit/c/sleep_pthread.o
+unit oskit_sleep_pthread = {
+  imports[ pthread  : PThread_T, // pthread_{self,sleep,wakeup}
+           intr     : OSEnvIntr_T, 
+           panic    : Panic_T,
+         ];
+  exports[ out : Sleep_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/sleep.c" } with flags { flags libc, "-DPTHREADS" };
+}
+
+// mk_unit -o -n pthread_sleep threads/osenv_lock.o threads/osenv_sleep.o 
+
+// mk_unit -o -n pthreads threads/fs_support.o threads/panic.o threads/pthread_attr.o threads/pthread_cancel.o threads/pthread_cond.o threads/pthread_create.o threads/pthread_default_attr.o threads/pthread_destroy.o threads/pthread_detach.o threads/pthread_exit.o threads/pthread_getstate.o threads/pthread_init.o threads/pthread_internal.o threads/pthread_ipc.o threads/pthread_join.o threads/pthread_key.o threads/pthread_memory.o threads/pthread_mutex.o threads/pthread_resource.o threads/pthread_scheduler.o threads/pthread_self.o threads/pthread_signal.o threads/pthread_sleep.o threads/pthread_specific.o threads/pthread_yield.o threads/switch.o threads/thread_setup.o kern/sendsig.o threads/osenv_lock.o threads/osenv_sleep.o 
+
+/*#
+A full-blown pthread implementation.
+#*/
+unit pthreads_base = {
+  imports[ intr   : OSEnvIntr_T,
+           timer  : OSEnvTimer_T,
+           clock  : OSEnvClock_T,
+           osenv_irq : OSEnvIRQ_T,
+           stdout : Stdout_T,
+           malloc : Malloc_T,
+           string : String_T,
+           exit   : Exit_T,
+           _exit  : _Exit_T,
+           errno  : Errno_T,
+           irq    : IRQ_T,
+           trap   : Trap_T,
+           stack  : { base_stack_start }, // from base_stack
+           listener : CreateListener_T,  // used for timer callback
+           delay  : { pthread_delay },  // called when no threads to schedule
+           quad   : Quad_T,
+           stack_trace : StackTrace_T,
+           signal_dump : SignalDump_T,
+           usermode : { 
+               oskit_usermode_simulation,
+             },
+// #ifdef STACKGUARD
+//         svm : { mprotect, svm_init },
+// #endif
+// #ifdef SMP
+//         smp : SMP_T,
+// #endif
+         ];
+  exports[ pthread : PThread_T,
+           locks   : PThreadLocks_T,
+           fslock  : FSLock_T, // clone of lock!
+           ipc     : IPC_T,
+           signals : {
+                       extends PosixSignals_T,
+                       sigqueue,
+                       // signals_init,   // ToDo: initialiser
+                       // really_deliver_signal,
+                       // oskit_sigwait_internal,
+                       oskit_deliver_async_signal,
+                       oskit_deliver_pending_signals,
+                       oskit_deliver_process_signal,
+                     },                                    // overrides
+           sleep   : OSEnvSleep_T,                // overrides
+           panic   : Panic_T,                     // overrides
+           softint : SoftInt_T,                   // overrides
+         ];
+  constraints{ context panic   <= NoContext;
+               context softint >= NoContext;
+               context (locks+fslock+ipc+signals+sleep) <= ProcessContext;
+             };
+  initializer init for exports;
+  depends{ (exports - (panic + softint)) + inits + finis needs imports };
+  // ToDo: this omits some essential dependencies - to avoid a 
+  // cyclic dependency
+  depends{ panic needs stdout + stack_trace + _exit };
+  // dependency on other features doesn't kick in until they've
+  // initialised themselves.
+  depends{ softint needs intr };
+  files{ "com/blkio_wrapper.c",
+         "threads/wrap_blkio.c",
+  } with flags com;
+  files "$(BUILDDIR)" { 
+         "com/oskit_iunknown_iid.c",
+         "com/oskit_blkio_iid.c",
+  } with flags com;
+  files{ "threads/osenv_lock.c",
+         "threads/osenv_sleep.c",
+         "threads/panic.c",
+         "threads/pthread_attr.c",
+         "threads/pthread_cancel.c",
+         "threads/pthread_cond.c",
+         "threads/pthread_create.c",
+         "threads/pthread_default_attr.c",
+         "threads/pthread_destroy.c",
+         "threads/pthread_detach.c",
+         "threads/pthread_exit.c",
+         "threads/pthread_getstate.c",
+         "threads/pthread_internal.c",
+         "threads/pthread_ipc.c",
+         "threads/pthread_join.c",
+         "threads/pthread_key.c",
+         "threads/pthread_memory.c",
+         "threads/pthread_mutex.c",
+         "threads/pthread_resource.c",
+         "threads/pthread_scheduler.c",
+         "threads/pthread_schedconf.c",
+         "threads/pthread_schedmode.c",
+         "threads/pthread_self.c",
+         "threads/pthread_setprio.c",
+         "threads/pthread_setschedparam.c",
+         "threads/pthread_signal.c",
+         "threads/pthread_sleep.c",
+         "threads/pthread_specific.c",
+         "threads/pthread_yield.c",
+         "threads/pthread_init.c",
+
+         "threads/sched_posix/sched_posix.c",
+//         "threads/sched_edf/sched_edf.c",
+//         "threads/pthread_realtime.c",
+
+         "threads/x86/pthread_guard.c",
+         "threads/x86/thread_setup.c",
+  } with flags {
+    flags pthread,
+    "-DSIMPLE_PRI_INHERIT",  // conflicts with use of cpu inheritance
+    "-DDEFAULT_SCHEDULER",
+    "-DPTHREAD_SCHED_POSIX",
+//    "-DPTHREAD_SCHED_EDF",
+//    "-DPTHREAD_REALTIME",
+    // "-DSTACKGUARD",      // pulls in svm/mprotect
+  };
+  files{
+         "threads/x86/switch.S",
+  } with flags {
+    "-DASSEMBLER",
+    flags pthread,
+    "-DPRI_INHERIT",        // conflicts with use of cpu inheritance
+    "-DDEFAULT_SCHEDULER",
+    "-DPTHREAD_SCHED_POSIX",
+    "-DPTHREAD_SCHED_EDF",
+    // "-DSTACKGUARD",      // pulls in svm/mprotect
+  };
+  files{ 
+    "kern/x86/sendsig.c",
+  } with flags kern;
+  files{ 
+    "freebsd/libc/x86/glue/sendsig.c",
+  } with flags freebsd_libc;
+  files{ "knit/c/init_pthreads.c"
+  } with flags examples;
+}
+
+// uses lockmgr
+// mk_unit com/pipe.o
+
+// mk_unit -o -n examples_ipc     examples/x86/threads/ipctest.o
+// mk_unit -o -n examples_disk    examples/x86/threads/disktest.o
+// mk_unit -o -n examples_http    examples/x86/threads/http_proxy.o
+// mk_unit -o -n examples_console examples/x86/threads/console_tty.o
+// mk_unit -o -n examples_disknet examples/x86/threads/disknet.o
+// mk_unit -o -n examples_dphils  examples/x86/threads/dphils.o
+// mk_unit -o -n examples_sig     examples/x86/threads/sigtest.o
+
+/************************************************************/
+// End
+/************************************************************/

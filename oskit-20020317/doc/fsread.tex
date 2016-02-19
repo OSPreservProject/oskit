@@ -1,0 +1,132 @@
+%
+% Copyright (c) 1997-1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{fsread}
+
+\section{Introduction}
+
+The \texttt{fsread} library provides simple read-only access to
+Linux ext2fs, BSD FFS, and MINIX filesystems and is useful for small programs,
+such as boot loaders, that need to read files from the local disk but
+don't have the space for or need the features of the larger \oskit{}
+filesystem libraries.
+
+Typically this library is used with the disk partitioning library
+(Section~\ref{diskpart}) and one of the driver libraries.
+
+\section{External dependencies}
+
+This depends on several memory and string routines from the \oskit{} C library,
+more specifically it depends on
+
+% nm -u liboskit_fsread.a | sort -u
+\begin{itemize}
+\item \texttt{free}, \texttt{malloc}
+\item \texttt{memcpy}, \texttt{memmove}, \texttt{memset}
+\item \texttt{oskit_blkio_iid}, \texttt{oskit_iunknown_iid}
+\item \texttt{strcmp}, \texttt{strcpy}, \texttt{strncpy} 
+\end{itemize}
+
+\section{Limitations}
+
+\begin{itemize}
+\item Absolute symbolic links are interpreted relative to the root of the FS,
+      since the FS readers have no notion of a ``global root.''
+\item For ext2fs, the ``sb'' mount option is not supported,
+      the super block is assumed to be at block 1.
+\item The MINIX support has not been tested in the \oskit{}.
+      but worked in a previous incarnation in Mach.
+\end{itemize}
+
+\section{API reference}
+
+Each of these functions takes an
+\texttt{oskit_blkio_t} (Section~\ref{oskit-blkio})
+interface to the underlying device
+and a pathname relative to the root directory of the file system,
+and if the specified file can be found,
+returns an \texttt{oskit_blkio_t} object that can be used to
+read from that file.
+The \texttt{blkio} object returned will have a block size of 1,
+meaning that there are no alignment restrictions on file reads.
+The \texttt{blkio} object passed, representing the underlying device,
+can have a block size greater than 1,
+but if it is larger than the file system's block size,
+file system interpretation will fail.
+Also, any absolute symlinks followed during the open
+will be interpreted as if this is the root file system.
+
+\api{fsread_open}{Open a file on various filesystems}
+\begin{apisyn}
+	\cinclude{oskit/fs/read.h}
+
+	\funcproto oskit_error_t fsread_open(oskit_blkio_t *device,
+				const~char *path,
+				\outparam oskit_blkio_t **out_file);
+\end{apisyn}
+\begin{apidesc}
+	Tries to open a file named by \emph{path} in the filesystem
+	on \emph{device}.
+	If successful, returns a \texttt{blkio} into \emph{out_file}
+	that can be used to read the file.
+
+	This function is just a wrapper that calls the various
+	filesystem-specific \texttt{fsread} functions,
+	failing if none of them recognize the filesystem.
+\end{apidesc}
+\begin{apiparm}
+	\item[device]
+		An \texttt{oskit_blkio_t} (Section~\ref{oskit-blkio})
+		representing a device containing a filesystem.
+	\item[path]
+		A pathname indicating an existing file to open.
+		This pathname is taken relative to the root of the filesystem
+	\item[out_file]
+		Upon success, this is set to an \texttt{oskit_blkio_t}
+		that can be used to read from the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{fsread_\emph{FSTYPE}_open}{Open a file on the \emph{FSTYPE} filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/read.h}
+
+	\funcproto oskit_error_t fsread_\emph{FSTYPE}_open(oskit_blkio_t *device,
+				const~char *path,
+				\outparam oskit_blkio_t **out_file);
+\end{apisyn}
+\begin{apidesc}
+	Tries to open a file named by \emph{path} in the
+	\emph{FSTYPE} filesystem
+	on \emph{device}.
+	If successful, returns a \texttt{blkio} into \emph{out_file}
+	that can be used to read the file.
+
+	\emph{FSTYPE} can be one of \texttt{ext2}, \texttt{ffs}, \texttt{minix}.
+\end{apidesc}
+\begin{apiparm}
+	\item[device]
+		An \texttt{oskit_blkio_t} (Section~\ref{oskit-blkio})
+		representing a device containing a \emph{FSTYPE} filesystem.
+	\item[path]
+		A pathname indicating an existing file to open.
+		This pathname is taken relative to the root of the filesystem
+	\item[out_file]
+		Upon success, this is set to an \texttt{oskit_blkio_t}
+		that can be used to read from the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}

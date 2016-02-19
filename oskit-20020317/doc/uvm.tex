@@ -1,0 +1,723 @@
+%
+% Copyright (c) 2001, 2002 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{netbsd-uvm}
+
+\section{Introduction}
+
+The NetBSD UVM library provides real \emph{virtual memory} support including
+separation of address spaces, demand paging, memory mapped file, memory
+protection, and so on.  This library is based on NetBSD's new
+virtual memory system UVM (see
+\htmladdnormallink{http://www.netbsd.org/Documentation/kernel/uvm.html}
+{http://www.netbsd.org/Documentation/kernel/uvm.html}).  Since this library
+is derived from a virtual memory system for UNIX, the services provided
+are almost the same as for a traditional UNIX virtual memory
+system.  With the UVM library, applications are able to manage multiple user
+address spaces and map them onto CPU's virtual address space.  Also,
+applications can allocate more memory than there is physical memory
+available on machines where a disk swap partition is available.
+
+Although the UVM library provides a method to separate kernel and user
+address space, it does not offer a way to switch between user and
+kernel mode.  Such functions are separately provided by the Simple
+Process Library (See Section~\ref{sproc}).
+
+The UVM library depends on the \oskit{}'s POSIX Threads library
+(See Section~\ref{pthread}).  The
+UVM library is thread safe, multiple threads can manipulate the same user
+address space.
+
+\section{Restrictions}
+
+Currently only the x86 implementation is available but it will be not
+difficult to port to another architecture where NetBSD has already
+ported.
+
+The x86 LDT (Local Descriptor Table) is not supported.
+
+No single threaded implementation is provided.
+
+\section{Virtual Address Space Layout}
+\label{netbsd-uvm-address-space}
+
+The address space layout is shown in figure~\ref{uvm-address-layout}.
+Since UVM was originally designed for UNIX, the address space layout is similar
+to traditional UNIXes; virtual address spaces are separated into two
+regions, the kernel and user regions.  The same kernel image appears
+in every virtual address space and only one user address space can be
+mapped in the user region.  Unlike NetBSD, the kernel does not reside
+at higher addresses but remains at its loaded address.  The user region is
+above the kernel region.  The base address of a user address space is
+fixed at 0x40000000.  A thread running in kernel mode (CPL
+(\emph{Current Privilege Level} $<$ 3) can access both the kernel and
+the user region and a thread running in user mode (CPL$=$3) can access
+only the user region.
+
+At the initialization of the UVM library, all physical memory (0 to
+\texttt{phys_max_lmm}) are mapped as $V=R$ (virtual address $=$ real
+(physical) address).  The kernel pages are changed to read-only but
+all other pages in the $V=R$ range are left read-write since the \oskit{} LMM
+library needs write access.  A stack redzone is also created, although
+stack overflows are currently fatal since there is not enough support to allow
+recovery.
+
+The kernel heap area used for memory allocation (See
+Section~\ref{uvm-mem}) starts at 0x30000000.  The area 0x3f800000 to
+0x3fffffff is used by the UVM internally for page table manipulation.
+
+\begin{figure}
+\centering
+\begin{verbatim}
+/*
+ *  +---------------+ 0x00000000 (OSKIT_UVM_MIN_KERNEL_ADDRESS)     --+    ---+
+ *  |               |                                                 |       |
+ *  +---------------+                                                 |       |
+ *  | OSKit Kernel  |                                                 |       |
+ *  +---------------+                                                 | V=R   |
+ *  |  BMODs etc.   |                                                 | range |
+ *  +---------------+ ?                                               |       |
+ *  |               |                                                 |       |
+ *  +---------------+            (phys_max_lmm)                     --+       | 
+ *  |    unused     |                                                         | kernel
+ *  +---------------+ 0x30000000 (OSKIT_UVM_MIN_KERNEL_VIRTUAL_AVAIL)         | region
+ *  |  Kernel heap  |                                                         |
+ *  +---------------+ (grows upward)                                          |
+ *  |               |                                                         |
+ *  +---------------+ 0x3f800000                                              |
+ *  | Recursive PTE |                                                         |
+ *  +---------------+ 0x3fc00000                                              |
+ *  | Alternative   |                                                         |
+ *  | Recursive PTE |                                                         |
+ *  +---------------+ 0x40000000 (OSKIT_UVM_MINUSER_ADDRESS)               ---+
+ *  |               |                                                         | user
+ *  | User Process  |                                                         | region
+ *  |               |                                                         | 
+ *  +---------------+ 0xffffffff (OSKIT_UVM_MAXUSER_ADDRESS)               ---+
+ */
+\end{verbatim}
+Symbols starting with OSKIT_UVM_ are defined in \texttt{$<$oskit/uvm.h$>$}.
+
+\caption{UVM Address Space Layout}
+\label{uvm-address-layout}
+\end{figure}
+
+\section{Memory Interface} 
+\label{uvm-mem}
+The UVM library also provides an implementation of the \texttt{oskit_mem}
+COM interface (See Section~\ref{oskit-mem}).  This implementation
+allocates memory from the kernel heap area described above.  The
+kernel heap area can grow automatically and might be paged out.  This
+interface will be the default memory allocator if the UVM library is
+used and thus, the default \texttt{malloc} implementation
+uses this interface.
+
+There are some restrictions with this implementation of the \texttt{oskit_mem}
+interface:
+
+\begin{itemize}
+
+\item Before the UVM library is initialized, or if flags other than
+\texttt{OSKIT_MEM_AUTO_SIZE} and \texttt{OSKIT_MEM_NONBLOCKING} are
+specified on a memory allocation request, the implementation allocates
+memory from \texttt{malloc_lmm} memory pool.
+
+\item Currently the \texttt{avail} method returns an incorrect value.
+\end{itemize}
+
+Also, the UVM library provides the following \texttt{osenv_mem_*} APIs
+for the \oskit{} device driver framework (See Section~\ref{dev}).
+
+\begin{itemize}
+\item \csymbol{osenv_mem_alloc}
+\item \csymbol{osenv_mem_free}
+\item \csymbol{osenv_mem_map_phys}
+\item \csymbol{osenv_mem_phys_max}
+\item \csymbol{osenv_mem_get_phys}
+\item \csymbol{osenv_mem_get_virt}
+\end{itemize}
+
+\section{Threads}
+With the UVM library, all threads are associated with a particular
+virtual address space.  Initially all threads are associated with the
+kernel-only virtual address space, which maps only the kernel area.
+{\tt oskit_uvm_vmspace_set} associates a calling thread with a
+specified virtual address space.  Once such an association is made,
+that virtual address space is used for all memory access from
+the thread.
+
+\section{Page Faults}
+\label{uvm-page-faults}
+All page faults are processed by the page fault handler ({\tt
+oskit_uvm_pfault_handler}).  The page fault handler runs using the
+context of the thread that caused the page fault.  If a page fault is
+processed successfully, the context of the thread that caused the page
+fault is automatically restored.  In case of an error such as
+a page protection violation or an invalid memory access,
+the application's handler is called if one was installed with
+{\tt oskit_uvm_handler_set}.  Otherwise, the SIGSEGV or SIGKILL
+signal is raised by {\tt oskit_sendsig}.
+
+The signature of an application fault handler is as follows:
+\begin{quote}
+\begin{verbatim}
+typedef void    (*oskit_uvm_handler)(struct oskit_vmspace *vm,
+                                     int signo, struct trap_state *frame);
+\end{verbatim}
+where 
+\begin{description}
+        \item[vm]
+                The virtual address space in which the page fault occurred.
+        \item[signo]
+                A UNIX signal number.  Normally, the value will be
+                SIGSEGV, but it might also be SIGKILL in the case of
+		a memory resource shortage.  This is hint only.
+        \item[frame]
+    	        A pointer to the stack frame of the page fault handler.
+\end{description}
+
+A page fault handler should either map a page of memory at the indicated
+virtual address or terminate the thread which caused the page fault.
+\end{quote}
+
+\section{Virtual memory system calls}
+
+The UVM library provides implementations of the \texttt{mmap},
+\texttt{munmap}, \texttt{mprotect}, and \texttt{madvise} system calls.
+
+\section{API reference}
+
+\api{oskit_uvm_init}{initialize the UVM library}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto void oskit_uvm_init(void);
+\end{apisyn}
+\begin{apidesc}
+        Initialize the UVM library.  It does:
+
+        \begin{itemize}
+        \item Reserve 70\% of the available physical memory block
+        from the {\tt malloc_lmm} memory pool (See
+        Section~\ref{malloc-lmm}) for the use of later memory
+        allocation.
+
+        \item Installs a default page fault handler.
+
+        \item Initialize the page table as described in
+        Section~\ref{netbsd-uvm-address-space}.
+
+        \item Turn on paging.
+
+        \end{itemize}
+
+        This function must be called after \texttt{pthread_init}
+        but before any other threads have been created.
+        This is because the \oskit{} UVM library associates
+        information with every
+        thread and currently the implementation relies on that
+        information being set before the thread starts.
+
+\end{apidesc}
+
+\api{oskit_uvm_swap_init}{Initialize the swap subsystem}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto void oskit_uvm_swap_init(void);
+\end{apisyn}
+\begin{apidesc}
+        Initialize the swap subsystem.  This function must be called
+        before calling \texttt{oskit_uvm_swap_on}.
+\end{apidesc}
+\begin{apirel}
+        {\tt oskit_uvm_swap_on}, {\tt oskit_uvm_swap_off}
+\end{apirel}
+
+\api{oskit_uvm_swap_on}{Add a swap area}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_swap_on(oskit_iunknown_t *iunknown);
+\end{apisyn}
+\begin{apidesc}
+        Add a swap area.  Multiple such areas are possible.
+\end{apidesc}
+\begin{apiparm}
+        \item[iunknown]
+                An \emph{oskit_absio_t~*} or \emph{oskit_blkio_t~*} that is
+                suitable for use as the swap area.  This object should not be
+                accessed directly while the UVM system is active.
+\end{apiparm}
+\begin{apirel}
+        {\tt oskit_uvm_swap_init}, {\tt oskit_uvm_swap_off}, {\tt swapon}
+\end{apirel}
+
+\api{oskit_uvm_swap_off}{Remove a swap area}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_swap_off(oskit_iunknown_t *iunknown);
+\end{apisyn}
+\begin{apidesc}
+        Remove a swap area.   Currently this function is broken
+        due to a bug in the NetBSD code on which this library is based.
+\end{apidesc}
+\begin{apirel}
+        {\tt oskit_uvm_swap_init}, {\tt oskit_uvm_swap_on}, {\tt swapoff}
+\end{apirel}
+
+\api{oskit_uvm_start_pagedaemon}{start the pagedaemon}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto void oskit_uvm_start_pagedaemon(void);
+\end{apisyn}
+\begin{apidesc}
+        Start the page daemon thread.  Must be called after calling
+        {\tt oskit_uvm_swap_init}.
+\end{apidesc}
+\begin{apirel}
+        {\tt oskit_uvm_swap_init}
+\end{apirel}
+
+\api{oskit_uvm_create}{Create a virtual address space}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_create(oskit_size_t size, \outparam oskit_vmspace_t *out_vm);
+\end{apisyn}
+\begin{apidesc}
+        Create a virtual address space.  The virtual address space
+        information is stored in the opaque \texttt{oskit_vmspace_t}
+        structure which is defined in \texttt{$<$oskit/uvm.h$>$}. This
+        function does not map the created address space as the current
+        address space.  Use {\tt oskit_uvm_vmspace_set} to access
+        the created virtual address space.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[size]
+                The size of the address space in bytes.
+        \item[out_vm]
+                A pointer to where the created
+                \texttt{oskit_vmspace_t} is stored.  Caller must
+                allocate the memory for that \texttt{oskit_vmspace_t}
+                structure.
+\end{apiparm}
+\begin{apirel}
+        {\tt oskit_uvm_destroy}
+\end{apirel}
+
+\api{oskit_uvm_destroy}{Destroy a virtual address space}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_destroy(oskit_vmspace_t vm);
+\end{apisyn}
+\begin{apidesc}
+        Destroy a virtual address space.  No thread must be associated
+        with the specified virtual address space.
+\end{apidesc}
+\begin{apirel}
+        {\tt oskit_uvm_create}
+\end{apirel}
+
+\api{oskit_uvm_mmap}{Map an object into memory}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_mmap(oskit_vmspace_t vm,
+        \inoutparam oskit_addr_t *addr,
+                               oskit_size_t size, int prot, int flags,
+                               oskit_iunknown_t *iunknown, oskit_off_t foff);
+\end{apisyn}
+\begin{apidesc}
+        Map an object into a virtual address space.  This is similar to
+        \texttt{mmap} but allows the virtual address space affected to be
+        explicitly specified.
+\end{apidesc}
+\begin{apiparm}
+        \item[vm]
+                The virtual address space to be used for this operation.
+
+        \item[addr]
+                On entry, the value pointed to by this parameter is the
+                the preferable virtual address to map.  Must be a multiple
+                of the page size.  This is a hint only and can be specified
+                as zero.  On return, it contains the start address of the
+                mapped object.
+
+        \item[size]
+                The length to map.  Must be a multiple of the page size.
+
+        \item[prot]
+                The desired memory protection.  Bitwise combination of
+                PROT_EXEC, PROT_READ, PROT_WRITE or PROT_NONE.
+
+        \item[flags]
+                Specifies the type of the mapped object.
+                \begin{description}
+                  \item[MAP_FIXED]
+                    Must use the specified address exactly.
+                  \item[MAP_SHARED]
+                    Writes change the underlying object; modifications
+                    are shared.
+                  \item[MAP_PRIVATE]
+                    Writes only change our mapping; modifications are private.
+                  \item[MAP_ANON]
+                    Maps anonymous memory not associated with any specific
+                    object.  The {\tt iunknown} parameter may be specified
+                    as NULL.
+                \end{description}
+
+        \item[iunknown]
+                An \emph{oskit_absio_t~*} or \emph{oskit_blkio_t~*} object to
+                map.  The object reference is added by the UVM.  In
+                the case of multiple threads accessing the same mapped
+                object, {\tt iunknown} must be a properly wrapped
+                object (see Section~\ref{pthread-wrappers}).
+
+        \item[foff]
+                The offset of the object to map.  Must be a multiple
+                of the page size.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+{\tt oskit_uvm_munmap}
+\end{apirel}
+
+\api{oskit_uvm_unmap}{Remove a mapping}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_munmap(oskit_vmspace_t vm, oskit_addr_t addr,
+                                 oskit_size_t len);
+\end{apisyn}
+\begin{apidesc}
+        Deletes the mapping of the specified address range from the given
+	address space.  Causes further references to addresses within the
+        range to generate invalid memory references.
+\end{apidesc}
+\begin{apiparm}
+        \item[vm]
+                The virtual address space to be used for this operation.
+
+        \item[addr]
+                The base address of the region to unmap.  Must be a multiple of
+                the page size.
+
+        \item[len]
+                The length to unmap.  Must be a multiple of the page size.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_uvm_mmap}
+\end{apirel}
+
+\api{oskit_uvm_mprotect}{Control the protection of pages}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_mprotect(oskit_vmspace_t vm, oskit_addr_t addr,
+                                   oskit_size_t len, int prot);
+\end{apisyn}
+\begin{apidesc}
+        Changes the specified pages to have protection \emph{prot}.
+\end{apidesc}
+\begin{apiparm}
+        \item[vm]
+                The virtual address space to be used for this operation.
+
+        \item[addr]
+                The base address of the region.  Must be a multiple of
+                the page size.
+
+        \item[size]
+                The length of the region.  Must be a multiple of the page size.
+
+        \item[prot]
+                The desired memory protection.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_uvm_mmap}
+\end{apirel}
+
+\api{oskit_uvm_madvise}{Give advise about use of memory}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t oskit_uvm_madvise(struct~oskit_vmspace *vm, oskit_addr_t addr,
+                                  oskit_size_t len, int behav);
+\end{apisyn}
+\begin{apidesc}
+        Gives the UVM a hint of the memory access behavior of the
+        application.  Known behaviors are given in
+        \cinclude{oskit/c/sys/mman.h}:
+\begin{verbatim}
+#define MADV_NORMAL     0       /* no further special treatment */
+#define MADV_RANDOM     1       /* expect random page references */
+#define MADV_SEQUENTIAL 2       /* expect sequential page references */
+#define MADV_WILLNEED   3       /* will need these pages */
+#define MADV_DONTNEED   4       /* dont need these pages */
+#define MADV_SPACEAVAIL 5       /* insure that resources are reserved */
+#define MADV_FREE       6       /* pages are empty, free them */
+\end{verbatim}
+\end{apidesc}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        \cinclude{oskit/errno.h}, on error.
+\end{apiret}
+
+\api{oskit_uvm_vmspace_set}{Associate a thread with a virtual address space}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_vmspace_t      oskit_uvm_vmspace_set(oskit_vmspace_t vm);
+        oskit_vmspace_t      \csymbol{oskit_uvm_kvmspace};
+\end{apisyn}
+\begin{apidesc}
+        Associate the calling thread with specified virtual memory
+        space.  Once a thread is associated, all memory accesses from
+        the thread refer to the associated virtual address space.
+        Initially all threads are associated with the virtual address
+        space \texttt{oskit_uvm_kvmspace} which maps the kernel region only.
+\end{apidesc}
+\begin{apiret}
+        Returns the previous virtual address space associated with the
+        calling thread.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_uvm_vmspace_get}
+\end{apirel}
+
+\api{oskit_uvm_vmspace_get}{Get the virtual address space associated with a thread}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_vmspace_t      oskit_uvm_vmspace_get(void);
+\end{apisyn}
+\begin{apidesc}
+        Obtain the virtual address space associated with the calling thread.
+\end{apidesc}
+\begin{apiret}
+        Returns the virtual address space associated with the calling thread.
+\end{apiret}
+\begin{apirel}
+        {\tt oskit_uvm_vmspace_set}
+\end{apirel}
+
+\api{copyin}{Copy a range of data from user to kernel}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t
+		copyin(const~void *from, void *to, oskit_size_t len);
+\end{apisyn}
+\begin{apidesc}
+	Copy data
+	from a user address space into the kernel address space
+	if allowed by the current memory protection bits.
+        The entire source memory region specified by \texttt{from}
+	and \texttt{len} must be accessible for read by the current
+	thread's address space.
+\end{apidesc}
+\begin{apiparm}
+	\item[from]
+		User-space virtual address to copy from.
+	\item[to]
+		Kernel-space virtual address to copy into.
+	\item[len]
+		Length of data to copy.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, \texttt{OSKIT_E_POINTER} if the user memory
+	region is not accessible.
+\end{apiret}
+
+\api{copyinstr}{Copy a string from user to kernel}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t
+		copyinstr(const~void *from, void *to, oskit_size_t len,
+		        \outparam oskit_size_t *lencopied);
+\end{apisyn}
+\begin{apidesc}
+	Copy a zero-terminated string of at most \texttt{len} bytes
+	from a user address space into the kernel address space
+	if allowed by the current memory protection bits.
+        The source string specified by \texttt{from}
+	must be accessible for read by the current
+	thread's address space.
+\end{apidesc}
+\begin{apiparm}
+	\item[from]
+		User-space virtual address to copy from.
+	\item[to]
+		Kernel-space virtual address to copy into.
+	\item[len]
+		Maximum bytes to copy.
+	\item[lencopied]
+		Actual length of string copied, including terminating zero.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, \texttt{OSKIT_E_POINTER} if the user memory
+	region is not accessible.
+\end{apiret}
+
+\api{copyout}{Copy a range of data from kernel to user}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t
+		copyout(const~void *from, void *to, oskit_size_t len);
+\end{apisyn}
+\begin{apidesc}
+	Copy data
+	from the kernel address space into a user address space
+	if allowed by the current memory protection bits.
+        The entire destination memory region specified by \texttt{to}
+	and \texttt{len} must be accessible for write by the current
+	thread's address space.
+\end{apidesc}
+\begin{apiparm}
+	\item[from]
+		Kernel-space virtual address to copy from.
+	\item[to]
+		User-space virtual address to copy into.
+	\item[len]
+		Length of data to copy.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, \texttt{OSKIT_E_POINTER} if the user memory
+	region is not accessible.
+\end{apiret}
+
+\api{copyinstr}{Copy a string from kernel to user}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_error_t
+		copyoutstr(const~void *from, void *to, oskit_size_t len,
+		        \outparam oskit_size_t *lencopied);
+\end{apisyn}
+\begin{apidesc}
+	Copy a zero-terminated string of at most \texttt{len} bytes
+	from the kernel address space into a user address space
+	if allowed by the current memory protection bits.
+        The destination string memory specified by \texttt{to}
+	must be accessible for write by the current
+	thread's address space.
+\end{apidesc}
+\begin{apiparm}
+	\item[from]
+		Kernel-space virtual address to copy from.
+	\item[to]
+		User-space virtual address to copy into.
+	\item[len]
+		Maximum bytes to copy.
+	\item[lencopied]
+		Actual length of string copied, including terminating zero.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, \texttt{OSKIT_E_POINTER} if the user memory
+	region is not accessible.
+\end{apiret}
+
+
+\api{oskit_uvm_mem_map_phys}{Map a physical memory range into a virtual address space}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto int          oskit_uvm_mem_map_phys(oskit_addr_t pa, oskit_size_t size,
+                                       void **addr, int flags);
+\end{apisyn}
+\begin{apidesc}
+Map the specified physical memory range into a virtual address space.
+This call is exactly the same as \texttt{osenv_mem_map_phys}.
+\end{apidesc}
+\begin{apiparm}
+        \item[pa]
+                Starting physical address.
+        \item[length]
+                Amount of memory to map.
+        \item[kaddr]
+                Kernel virtual address allocated and
+                returned by the kernel that maps the
+                specified memory.
+        \item[flags]
+                Memory mapping attributes, as described above.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, non-zero on error.
+\end{apiret}
+\begin{apirel}
+        {\tt osenv_mem_map_phys}
+\end{apirel}
+
+\api{oskit_handler_set}{Install a fault handler}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto void         oskit_uvm_handler_set(oskit_vmspace_t vm,
+                                      oskit_uvm_handler handler);
+\end{apisyn}
+\begin{apidesc}
+Install a handler that is called when the default page fault handler
+fails.  See Section~\ref{uvm-page-faults}.
+\end{apidesc}
+\begin{apiparm}
+        \item[vm]
+                The virtual address space where the handler is installed.
+        \item[handler]
+                The pointer to the handler.
+\end{apiparm}
+\begin{apirel}
+        {\tt oskit_uvm_handler_get}
+\end{apirel}
+\api{oskit_uvm_handler_get}{Get the fault handler for an address space}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto oskit_uvm_handler    oskit_uvm_handler_get(oskit_vmspace_t vm);
+\end{apisyn}
+\begin{apidesc}
+        Obtain the handler installed for the specified virtual address space.
+\end{apidesc}
+\begin{apirel}
+        {\tt oskit_uvm_handler_set}
+\end{apirel}
+
+\api{oskit_uvm_csw_hook_set}{Install a context switch hook}
+\begin{apisyn}
+        \cinclude{oskit/uvm.h}
+
+        \funcproto void         oskit_uvm_csw_hook_set(void (*hook)(void));
+\end{apisyn}
+\begin{apidesc}
+        Install a hook that is called on every context switch.  This API is
+        intended to be used from the Simple Process Library.
+\end{apidesc}
+\begin{apiparm}
+        \item[hook]     
+                A pointer to the hook function.
+\end{apiparm}

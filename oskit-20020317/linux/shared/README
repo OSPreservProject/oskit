@@ -1,0 +1,8 @@
+Directories: oskit/linux/shared
+Target: liboskit_linux_dev.a & liboskit_linux_fs.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Shared glue code for the linux dev and fs
+	glue libraries.
+

@@ -1,0 +1,10 @@
+
+Directories: oskit/memedebug, oskit/memedebug/x86
+Target: liboskit_memdebug.a
+Documentation: doc/memdebug.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Debugging routines that replace standard
+	memory alloation routines and can help track
+	down a variety of memory related bugs.
+

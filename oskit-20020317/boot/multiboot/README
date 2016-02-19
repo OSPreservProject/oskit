@@ -1,0 +1,23 @@
+
+Directories: oskit/boot/multiboot
+Target: mbboot.o mkmbimage
+Documentation: some in doc/intro.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:
+	This directory implements a MultiBoot->MultiBoot boot-adaptor.
+	It allows the user to create another MultiBoot-compliant
+	kernel from a MultiBoot-compliant kernel plus any arbitrary
+	boot-modules.
+	If no boot-modules are specified, then this directory basically
+	implements the identity function.
+
+	mkmbimage is a script for linking a MultiBoot kernel image and
+	arbitrary boot-modules with mbboot.o to create an image
+	loadable by a MultiBoot-compliant boot loader,
+	such as GRUB or netboot.
+
+	mbboot.o creates a multiboot_info struct from the information
+	in its own multiboot_info struct,
+	as well as information about any boot-modules the mkmbimage
+	script may have added.
+	It then passes this to the kernel it will boot.

@@ -1,0 +1,128 @@
+#!/usr/local/bin/perl
+#
+# Copyright (c) 1998 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# This program extracts the original files from a BSD boot image
+# It makes use of the objdump program corresponding to the linker
+# used to create the image.  (so i386-mach-ld == i386-mach-objdump).
+#
+# If you want to override which objdump it uses, set your OBJDUMP
+# environment variable to the proper version of objdump.
+#
+# It outputs its files in the current directory.  It _will_ overwrite
+# existing files, so be careful.
+
+if (!$ENV{"OBJDUMP"}) 
+{
+	$ld = "@LD@";
+	if ($ENV{"LD"}) { $ld = $ENV{"LD"}; }
+    
+# This is ugly black magic to try to figure out the proper objdump to use.
+# We use the same prefix that the linker has.  If the linker
+# isn't <something>ld, this will fail.
+    
+	$ldprefix = $ld;
+	$ldprefix =~ s/ld$//;
+	$objdump = "$ldprefix" . "objdump";
+} else {
+	$objdump = $ENV{"OBJDUMP"};
+}
+
+$objdumpflags = "-x --demangle";
+$offset = 1048576;   # 0x100000
+$headerlength = 32;  # Files in the binary have a 32 byte descriptive header.
+
+sub usage {
+	print STDERR "usage:  unmkbsdimage <Imagename>\n";
+	exit -1;
+}
+
+##
+# Convert an address from hex to decimal,
+# and subtract the offset
+##
+
+sub cvt {
+	local($hexnum) = $_[0];
+	local($decv) = hex($hexnum);
+	return ($decv - $offset + $headerlength);
+}
+
+##
+# Get down to work
+##
+$image = $ARGV[0];
+
+if (!$image) {
+	usage();
+}
+
+if (!( -f "$image")) {
+	print STDERR "No such file $image\n";
+	exit -1;
+}
+
+print "Beginning extraction of $image\n\n";
+
+##
+# Get the information we need out of objdump
+##
+
+open(OBJDUMP, "$objdump $objdumpflags $image|") ||
+    die "could not open objdump: $!\n";
+
+while (<OBJDUMP>)
+{
+	chomp;
+	($addr, $flags, $loc, $a, $b, $c, $name) = split;
+	$daddr = &cvt($addr);
+	if ($name =~ /binary_([a-zA-Z0-9_]+)_start/) {
+		$START{$1} = $daddr; 
+#		print "Start of $1:  $daddr\n";
+	}
+	if ($name =~ /binary_([a-zA-Z0-9_]+)_end/) {
+		$END{$1} = $daddr; 
+#		print "End of $1:  $daddr\n";
+	}
+}
+
+close(OBJDUMP);
+
+##
+# Now extract the data from the Image file
+##
+
+open(IMAGE, $image) || die "Could not open $image: $!\n";
+
+@files = keys %START;
+foreach $file (@files)
+{
+	$start = $START{$file};
+	$end = $END{$file};
+	$length = $end - $start;
+	printf("Extracting $file\n");
+
+    # Seek to the offset in the image, read the binary, and then write it out.
+
+	seek IMAGE,$start,SEEK_SET;
+	read(IMAGE, $objdata, $length);
+	open(OUT, ">$file") || die "Could not write to $file: $!\n";
+	syswrite(OUT, $objdata, $length);
+	close(OUT);
+}
+
+close(IMAGE);

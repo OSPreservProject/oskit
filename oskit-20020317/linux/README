@@ -1,0 +1,24 @@
+
+Directories: oskit/linux
+Target: liboskit_linux_dev.a
+Documentation: doc/linux-dev.tex doc/linux-fs.tex
+Original Code Source: 
+	Flux Research Group, University of Utah 
+	Linux v2.2.12, Linux Project
+Description:  
+	This directory contains subdirectories containing all the 
+	of the OSKit, Linux-derived, assimilated code (fs and
+	device drivers), as well as the locally developed
+	infrastructure glue, adapting the drivers to the
+	fdev interfaces.
+
+	The dev/ and fs/ subdirectories contain glue code for
+	the Linux device drivers and file systems.  The shared/
+	subdirectory contains glue code shared between the 
+	dev/ and fs/ glue.  The src/ directory contains a
+	subset of the Linux v2.2.12 source code.
+	
+	All of the code in these subdirectories is covered by
+	the GNU General Public License.  As stipulated in the
+	GPL, any code linked against this source is also covered
+	under GPL and must be distributed according to its terms.

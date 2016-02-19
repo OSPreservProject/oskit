@@ -1,0 +1,62 @@
+#
+# Copyright (c) 1995-1996, 1998 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# This is a generic set of rules to build DOS executables (.exe files).
+# TARGET must be set to the executable filename without the .exe suffix.
+# Assumes the build tools support the i386msdos format and emulation.
+# Currently also assumes we're using ELF for object files and such.
+#
+ifndef _oskit_makerules_i386_exe_
+_oskit_makerules_i386_exe_ = yes
+
+
+all: $(TARGET).exe
+
+CLEAN_FILES += $(TARGET) $(TARGET).exe
+
+
+include $(OSKIT_SRCDIR)/Makerules
+
+
+# Make sure crt0 gets put is at the very beginning,
+# and crtn gets put at the very end.
+OBJFILES := i16_crt0.o $(filter-out i16_crt0.o crtn.o,$(OBJFILES)) crtn.o
+
+
+# First link the program as an ELF executable,
+# but with the proper MS-DOS memory layout;
+# then use objcopy to transform the result into an MSDOS executable.
+# This approach has three advantages:
+#	* It avoids some bugs in the MSDOS BFD backend.
+#	* It allows some ELF features unsupported
+#	  by the MSDOS backend to be used.
+#	* It provides with a convenient nm-able and objdump-able
+#	  version of the executable, for debugging purposes.
+
+$(TARGET): $(OBJFILES)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-m i386msdos -oformat elf32-i386 \
+		-o $@ $(OBJFILES) $(LDLIBS)
+
+$(TARGET).exe: $(TARGET)
+	$(OBJCOPY) -O msdos $< $@
+
+
+install: $(INSTALL_BINDIR)/$(TARGET).exe
+
+
+endif

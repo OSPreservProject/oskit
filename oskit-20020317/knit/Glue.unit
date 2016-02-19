@@ -1,0 +1,490 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Example kernels
+//
+// Test: Cat_Glue
+// Test: Hello_Glue
+// Test: Timer_Glue
+// Test: Timer_COM_Glue
+// Test: MemFS_COM_Glue
+// Test: MemFS_Posix_Glue
+// Test: Blkio_Glue
+// Test: DiskPart_Glue
+// Test: NetBSD_Posix_Glue
+// Test: PingReply_Glue
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+include "All.unit"
+
+package Memory = { 
+  libc_malloc, mem_obj, LMM, multiboot_physlmm, osenv_mem,
+}
+
+package X86Support = { 
+  x86, base_anno, null_segments, null_VM, breakpoint, base_stack, 
+  stack_trace, null_delay,
+}
+
+package Bootstrap = {
+  progress, version, multiboot_main2,
+}
+
+package Process = {
+  invoke_main, libc_env, cmdline, libc_exit, libc_error,
+}
+
+package Pure = {
+  libc_sprintf, libc_string, libc_longjmp, libc_net,
+  oskit_IIDs, 
+  buf_io, net_io, listener, SOA_openfile, 
+}
+
+package Files = {
+  libc_files, posix_file_descriptors, posix_files, fsn_obj, fsn,
+}
+
+package OSEnv = {
+  osenv_log, osenv_intr, osenv_irq, osenv_panic,
+  osenv_clock, osenv_timer, osenv_rtc, rtclock,
+  osenv_dump, osenv_device, osenv_driver, services,
+  osenv_isa, osenv_pci, osenv_ioport,
+}
+
+/************************************************************/
+/*#
+Standard hello kernel that includes selectable console + gdb. 
+#*/
+/************************************************************/
+
+unit Hello_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_hello,                  // Main
+    version_print,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard "cat" kernel using MemFS that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit Cat_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    cat,                             // Main
+    copy_bmod, bmod_populate, MemFS, // Memory filesystem (aka bmod)
+    Console,
+    package Files, package OSEnv,
+    base_critical, set_irq_handler,  // Interrupts
+    null_threads,                    // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]     <- netboot_reset <- {raw_reset,...};
+    [raw_reset] <- base_reset    <- {...};
+  }
+}
+
+unit Console = {
+  imports[ string     : String_T, //  atol, strtol, strtoul
+           critical   : Critical_T,
+           trap       : Trap_T,
+           getenv     : GetEnv_T,
+// #ifdef HAVE_DEBUG_REGS
+           main       : Main_T,
+// #endif             
+           panic      : Panic_T, 
+           sprintf    : Sprintf_T,
+           vm         : VM_T,
+           cmdline    : CmdLine_T,
+           breakpoint : Breakpoint_T,
+           set_irq    : SetIRQHandler_T,
+           iids       : {
+                          oskit_asyncio_iid,
+                          oskit_iunknown_iid,
+                          oskit_posixio_iid,
+                          oskit_stream_iid,
+                          oskit_ttystream_iid,
+                        },
+         ];
+  exports[ console_obj : DefaultConsole_T,
+           direct      : DirectConsole_T,
+           stdin       : Stdin_T,
+           stdout      : Stdout_T,
+         ];
+  depends{ console_obj needs {console.fully_initialized} };
+  link{
+    [console,direct] <- base_console_w_direct
+                        <- { string, critical, trap, stdin, stdout,
+	                     getenv, main, panic, sprintf, vm, iids,
+	                     cmdline, breakpoint, set_irq };
+    [console_obj] <- console_obj <- {console,string,iids};
+    [stdout]      <- libc_stdout <- {putchar=console};
+    [stdin]       <- libc_stdin  <- {console,stdout};
+  }
+}
+  
+
+/************************************************************/
+/*#
+Standard timer kernel that includes selectable console + gdb. 
+#*/
+/************************************************************/
+
+unit Timer_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_timer,                  // Main
+    Console, 
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]     <- netboot_reset <- {raw_reset,...};
+    [raw_reset] <- base_reset    <- {...};
+  }
+}
+
+
+/************************************************************/
+/*#
+Standard timer_com kernel that includes selectable console + gdb.
+Doubles as timer_com2.
+#*/
+/************************************************************/
+
+unit Timer_COM_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_timer_com2,             // Main
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]     <- netboot_reset <- {raw_reset,...};
+    [raw_reset] <- base_reset    <- {...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard memfs_com kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+
+unit MemFS_COM_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_memfs_com, principal,   // Main
+    copy_bmod, bmod_populate, MemFS, // Memory filesystem (aka bmod)
+    package Files, package OSEnv,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]     <- netboot_reset <- {raw_reset,...};
+    [raw_reset] <- base_reset    <- {...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard memfs_fs_posix kernel that includes selectable console + gdb.
+This combines a bmod/memfs with the FreeBSD C library and Posix libraries
+to do Posix style files stuff.
+#*/
+/************************************************************/
+
+unit MemFS_Posix_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_memfs_posix, principal,   // Main
+    copy_bmod, bmod_populate, MemFS, // Memory filesystem (aka bmod)
+    Console,
+    package Files, package OSEnv,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out      = find { multiboot_main_wrapped, boot_info }
+               + find Stack_T
+               + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard blkio kernel that includes selectable console + gdb.
+Supports just IDE drives. 
+#*/
+/************************************************************/
+
+unit Blkio_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_blkio,                  // Main
+    package OSEnv,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, ide, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+                                   
+    [linux_dev]   <- linux_dev     <- {...};
+    [ide]         <- linux_ide     <- {dev=linux_dev,...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard diskpart kernel that includes selectable console + gdb.
+Supports just IDE drives. 
+#*/
+/************************************************************/
+
+unit DiskPart_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_diskpart, diskpart,     // Main
+    package OSEnv,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, ide, };
+  link{
+    out      = find { multiboot_main_wrapped, boot_info }
+               + find Stack_T
+               + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+                  
+    [linux_dev]   <- linux_dev     <- {...};
+    [ide]         <- linux_ide     <- {dev=linux_dev,...};
+  }
+}
+
+/************************************************************/
+/*#
+Standard netbsd_fs_posix kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit NetBSD_Posix_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_netbsdfs_posix,         // Main
+    package Files, 
+    diskpart, netbsd_fs, null_call_context,
+    Console,
+    package OSEnv,
+    gettimeofday_fromrtc,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, 
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, rootfs, };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+
+    [linux_dev]   <- linux_dev     <- {...};
+    [ide]         <- linux_ide     <- {dev=linux_dev,...};
+
+    // Customization: a filesystem, a disk partition, an IDE drive
+    [rootfs] <- fs_init        <- {args=(%{ int read_only=0; %}),blkio=wd1b,...};
+    [wd1b]   <- partition_init <- {args=(%{ char* name="b"; %}), blkio=wd1,...};
+    [wd1]    <- ide_block_init <- {args=(%{ char* name="wd1"; int read_only=0; %}), ide };
+  }
+}
+
+/************************************************************/
+/*#
+Standard pingreply kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit PingReply_Glue = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  glue{ 
+    example_pingreply,              // Main
+    examples_ipinfo, bootp,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, eth, drivers };
+  link{
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+
+    [linux_dev]   <- linux_dev           <- {...};
+    [eth,drivers] <- linux_ether_support <- {dev=linux_dev,...};
+    [tulip]       <- tulip               <- {dev=linux_dev, eth, ...};
+  }
+}
+
+/************************************************************/
+// End
+/************************************************************/

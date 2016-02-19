@@ -1,0 +1,8 @@
+Directories: oskit/unix/linux
+Target: part of liboskit_unix.a
+Documentation: unix-support.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	The Linux-specific bits of liboskit_unix.a.  These functions
+	map various OSKit routines to underlying Linux system calls.

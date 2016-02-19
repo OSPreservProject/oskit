@@ -1,0 +1,167 @@
+#
+# Copyright (c) 1996-2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _boot_net_makerules_
+_boot_net_makerules_ = yes
+
+# For FreeBSD C library to compile correctly.
+OSKIT_CFLAGS += -DOSKIT
+
+# Transports to support
+OSKIT_CFLAGS += -DFILEOPS_NFS -DFILEOPS_TFTP
+
+# For the Utah testbed version.  Limits the number of device drivers linked
+# in, forces it to BOOTP only on the fifth (control) interface, and forces
+# it to use the serial line as its console.
+# Note: don't need FORCESERIALCONSOLE here if booted via "fored" pxeboot.
+OSKIT_CFLAGS += -DUTAHTESTBED #-DBOOTP_IF=4 #-DFORCESERIALCONSOLE
+
+TARGETS = netboot
+CLEAN_FILES += $(TARGETS)
+# This must come before any includes since make runs the first rule
+# found if not explicitly told not to.
+all: $(TARGETS)
+
+# Where to look for src files.
+SRCDIRS += $(OSKIT_SRCDIR)/boot/net
+MOSTLY_SRCDIRS = $(OSKIT_SRCDIR)/boot
+
+INCDIRS +=	$(OSKIT_SRCDIR)/freebsd/libc/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/sys			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386		\
+		$(OBJDIR)/freebsd/libc/objinclude			\
+		$(OSKIT_SRCDIR)/boot/net
+
+# We need this before including the generic rules so it
+# doesn't get in there twice.
+OBJFILES += version.o
+
+# Include the makefile containing the generic rules.  This must come
+# here since it depends on SRCDIRS and sets OBJFILES.  Yuck, I hate
+# order dependence.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+# DEPENDLIBS is kind of bogus.  It makes it so we get rebuilt if *any*
+# of the LIBS are newer than us.  It doesn't cause any libraries we
+# need to be built though.
+LIBS = -loskit_startup -loskit_clientos -loskit_memfs -loskit_fsnamespace \
+	-loskit_udp -loskit_bootp \
+	-loskit_linux_dev \
+	-loskit_dev -loskit_exec -loskit_kern -loskit_lmm \
+	-loskit_freebsd_c -loskit_com
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+DEPS = $(OBJDIR)/lib/multiboot.o $(OBJFILES) $(DEPENDLIBS) $(OBJDIR)/lib/crtn.o
+
+version.c: $(filter-out version.o,$(DEPS))
+	echo >$@ "char version[] = \"NetBoot metakernel v3.1.0\";"
+	echo >>$@ "char build_info[] = \"Built `date +%d-%b-%Y` by `id -nu`@`hostname | sed 's/\..*//'`:`pwd`\";"
+CLEAN_FILES += version.c
+
+## Debugging hint: set the -Ttext to 3MB or so so you can run GDB and
+## trace through the booted kernel (which presumably loads lower than
+## 3MB).  Also, you can use the GDB `symbol-file' command to load the booted
+## kernel's symbols once you get inside of it.
+netboot: $(DEPS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking $@"
+	$(LD) -o $@ -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/multiboot.o \
+		$(OBJFILES) $(LIBS) \
+		$(OBJDIR)/lib/crtn.o
+	cp $@ $@.debug
+	$(STRIP) $@
+CLEAN_FILES += netboot.debug
+
+# How to install it.
+install: netboot
+	-mkdir -p $(INSTALL_LIBDIR)/boot
+	$(INSTALL_PROGRAM) netboot $(INSTALL_LIBDIR)/boot/netboot.mb
+	$(INSTALL_PROGRAM) netboot.debug $(INSTALL_LIBDIR)/boot/netboot.mb.debug
+
+
+# Rules to make special netboot binaries with specified drivers.
+comma := ,
+*-list = $(subst $(comma), ,$(subst -, -,$*))
+*-drivers = $(filter-out -%,$(*-list))
+*-options = $(subst @,=,$(patsubst -%,%,$(filter -%,$(*-list))))
+*-DOs = $(patsubst %,print \"DO(%);\"; ,$(*-drivers))
+
+netboot-%.mb: init-%.o $(DEPS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking $@"
+	$(LD) -o $@ -s -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/multiboot.o \
+		$(OBJFILES) $< $(LIBS) \
+		$(OBJDIR)/lib/crtn.o
+
+init-all-%.c:
+	echo "/* Stub */" > $@
+
+init-%.c: special-init.in drivers_desc.h
+	awk '$$1 == "@DRIVERS@" { '"$(*-DOs)"' next } { print }' $< > $@
+
+do-cpp = $(filter-out -MD,$(CC) $(OSKIT_CFLAGS) $(CFLAGS)) -x c -E
+
+drivers_desc.h: drivers_desc.in $(OSKIT_SRCDIR)/oskit/dev/linux_ethernet.h
+	$(do-cpp) -E -x c $< > $@
+
+%.img.gz: %.img; gzip -9vc $< > $@
+%.mb.gz: %.mb; gzip -9vc $< > $@
+%.gz: %; gzip -9vc $< > $@
+
+#%.uue: %; uuencode < $< > $@ $<
+%:: %.uue; uudecode < $<
+
+# Make a GRUB floppy with a given netboot on it.
+grubnetboot-%.img: $(OSKIT_SRCDIR)/boot/mkdosfloppy \
+		netboot-%.mb.gz grubnetboot-%.lst \
+		grub-msdos-floppy.img.gz
+	$(<D)/$(<F) -img grub-msdos-floppy.img.gz -o $@ \
+		grubnetboot-$*.lst:/boot/grub/menu.lst \
+		netboot-$*.mb.gz:/netboot.gz
+
+grubnetboot-%.lst:	$(OSKIT_SRCDIR)/boot/net/grubnetboot.lst
+	($(foreach o,$(*-options),echo '$o'; )echo ''; cat $<) > $@
+
+grub-msdos-floppy.img.gz: $(OSKIT_SRCDIR)/boot/grub-msdos-floppy.img.gz.uue
+	uudecode $< > $@
+
+#
+# Build a default set of boot images.
+#
+etherdrivers: $(OSKIT_SRCDIR)/oskit/dev/linux_ethernet.h \
+	      $(OSKIT_SRCDIR)/boot/net/GNUmakerules
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking $@"
+	(echo "#define driver(n,d,v,a,f,p) FOO n"; echo "#include \"$<\"") \
+	| $(do-cpp) - \
+	| sed '/^#/d;s/"//g' \
+	| (echo 'etherdrivers := \'; awk '/^FOO/ { printf "%s ", $$2; }') >$@
+-include etherdrivers
+
+.PHONY: alldrivers
+alldrivers: $(etherdrivers:%=%.image.gz)
+
+grubnetboot-default-params = timeout@10-default@0
+%.image.gz: grubnetboot-%-$(grubnetboot-default-params).img.gz
+	ln -f $< $@
+
+CLEAN_FILES += *.img *.gz drivers_desc.h etherdrivers
+
+prepare:: drivers_desc.h etherdrivers
+
+endif

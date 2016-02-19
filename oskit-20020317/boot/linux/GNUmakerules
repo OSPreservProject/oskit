@@ -1,0 +1,91 @@
+#
+# Copyright (c) 1994-1998, 2001 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Boot Loader, which is free software,
+# also known as "open source;" you can redistribute it and/or modify it under
+# the terms of the GNU General Public License (GPL), version 2, as published
+# by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _boot_bsd_makerules_
+_boot_bsd_makerules_ = yes
+
+
+TARGETS = mklinuximage mklinux2 linuxboot.bin
+INSTALL_TARGETS =	$(INSTALL_BINDIR)/mklinuximage \
+			$(INSTALL_BINDIR)/mklinux2 \
+			$(INSTALL_LIBDIR)/boot/linuxboot.bin
+
+CLEAN_FILES += linuxboot.bin linuxboot
+
+# Having DEBUG defined does bad things for some of this code.
+DEFINES := $(filter-out -DDEBUG,$(DEFINES))
+
+# Defines to control the gunzip code
+DEFINES += -DHAVE_STRING_H -DDYN_ALLOC -Dnear=""
+
+# Where to look for src files.
+SRCDIRS += $(OSKIT_SRCDIR)/boot/linux $(OSKIT_SRCDIR)/boot
+
+# Libraries we need to link with
+LIBS = -loskit_exec -loskit_kern -loskit_c -loskit_lmm
+DEPENDLIBS := $(patsubst -l%,$(OBJDIR)/lib/lib%.a,$(LIBS))
+
+# Some of the Linux files want to include <linux/...> headers.
+INCDIRS += $(OSKIT_SRCDIR)/oskit/c $(OSKIT_SRCDIR)/boot
+
+all: $(TARGETS)
+install: $(INSTALL_TARGETS)
+prepare::
+
+# Include the makefile containing the generic rules.
+# This must come here since it depends on SRCDIRS and sets OBJFILES.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+
+# Make sure the boot sector and setup header come first.
+OBJFILES :=	i16_bootsect.o i16_setup.o \
+		$(filter-out i16_bootsect.o i16_setup.o,$(OBJFILES))
+
+# Need --traditional due to '#' style comments in assembly code
+i16_bootsect.o: i16_bootsect.S
+	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
+	$(CC) --traditional -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD \
+	      -x assembler-with-cpp $<
+
+
+## How to build the binary Linux boot image prefix
+linuxboot.bin: $(OBJFILES) $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-Ttext 0 -oformat binary -o linuxboot.bin $(OBJFILES) $(LIBS)
+
+# For now, just use the already built one that we know works!
+# We avoid potential CVS clobberation by uuencoding this.
+#linuxboot.bin: linuxboot.bin.uue
+#	uudecode $<
+
+# For debugging - something you can 'nm' and 'gdb'.
+linuxboot: $(OBJFILES) $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-Ttext 0 -o $@ $(OBJFILES) $(LIBS)
+
+.PHONY: mklinuximage
+mklinuximage:
+	chmod +x $@
+
+.PHONY: mklinux2
+mklinux2:
+	chmod +x $@
+
+$(INSTALL_LIBDIR)/boot/%: %
+	-mkdir -p $(@D)
+	$(INSTALL_PROGRAM) $< $@
+
+
+endif

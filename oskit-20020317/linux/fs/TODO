@@ -1,0 +1,4 @@
+- getdirentries memory alloc issue
+	should use the COM allocator.  Currently just uses
+	"malloc"
+- look for XXX's

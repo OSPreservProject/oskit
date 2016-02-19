@@ -1,0 +1,182 @@
+%
+% Copyright (c) 1997-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{freebsd-libc}
+
+\section{Introduction}
+
+The \freebsd{} C library is provided as an alternative to the \oskit's
+minimal C library (see Section~\ref{libc}) so that more sophisicated
+applications can be built. It is derived from version 2.2.2. In addition to
+the standard single threaded version of the library, a multi threaded
+version is also built which relies on the pthread library (see
+Section~\ref{pthread}) to supply the locking primitives.
+Both of these libraries
+can be found in the lib directory as oskit_freebsd_c.a and
+oskit_freebsd_c_r.a. In order to link with the \freebsd{} C library, the
+application must be compiled against the \freebsd{} C header files. Example
+kernels that are built with the \freebsd{} libraries can be found in the
+examples/extended and examples/threads directories.
+
+The following sections briefly describe the \oskit's implementation of the
+\freebsd{} C library. Not all of the library is built since some parts do not
+make sense in the \oskit's basic environment. Those functions are listed
+below, as well as a list of the extended initialization functions.
+
+\section{\textnormal{\posix{}} Interface}
+
+Like the minimal C library, the \freebsd{} C library depends on the
+\posix{} library (see Section~\ref{posix-lib}) to provide mappings to the
+appropriate \oskit{} COM interfaces. For example, \texttt{fopen} in the C
+library will chain to \texttt{open} in the \posix{} library, which in turn
+will chain to the appropriate {\tt oskit_dir} and {\tt oskit_file} COM
+operations. Applications that link with the \freebsd{} C library must also
+link with the COM library (but not the \posix{} library since that is
+included as part of the \freebsd{} C library archive file). A
+multi-threaded version of the \posix{} library is also provided for
+applications that link with the multi-threaded version of the \freebsd{} C
+library.
+
+\section{Malloc Support}
+
+The \freebsd{} malloc has been completely replaced with the \oskit's basic
+memory allocator. Please refer to to Section~\ref{memalloc} for a
+description of the \oskit's allocator interface. \emph{This is a temporary
+measure; a future release will include a more traditional ``fast'' memory
+allocator.}
+
+\section{Signal Support}
+\label{freebsd-signals}
+
+Rudimentary signal support is provided in both the single and
+multi-threaded versions of the library. As part of the C library
+initialization, a delivery handler is provided to the kernel library that
+is used to pass up hardware exceptions (see Section~\ref{kern-signals}).
+Assuming the application has made the necessary calls to {\tt sigaction}
+(see Section~\ref{posix-signals} in the \posix{} library documentation) to
+arrange for catching signals, an exception causes the delivery function to
+be invoked, which converts the machine trap state into a more standard {\tt
+sigcontext} structure, and passes that to the application via the signal
+handler. The application can freely modify the sigcontext structure; the
+sigcontext is copied back into the trap state when the handler returns,
+which then becomes the new machine state. Use caution! Note that the
+default action for \emph{all} signals is to call panic and reboot the
+machine. Any hardware exception that that results in a signal that is
+blocked, also generates a panic and reboot.
+
+\section{Missing Functionality}
+
+Not all of the \freebsd{} C library has been compiled. In some cases, the
+functions missing simply cannot be implemented in the \oskit's basic
+environment. In other cases, they are on the yet to be done list, and will
+eventually be added. The list of the missing functions follows is:
+
+All of the external data representation (xdr) functions, all of the remote
+procedure call (rpc) functions, gethostid, sethostid, getwd, killpg,
+setpgrp, setrgid, setruid, sigvec, sigpause, catopen, catclose, catgets,
+clock, confstr, crypt, ctermid, daemon, devname, errlst, execve, execl,
+execlp, execle, exect, execv, execvp, getfsent, getfsspec, getfsfile,
+setfsent, endfsent, getbootfile, getbsize, cgetent, cgetset, cgetmatch,
+cgetcap, cgetnum, cgetstr, cgetustr, cgetfirst, cgetnext, cgetclose getcwd,
+getdomainname, getgrent, getgrnam, getgrgid, setgroupent, setgrent,
+endgrent, getlogin, getmntinfo, getnetgrent, innetgr, setnetgrent,
+endnetgrent getosreldate, getpass, getpwent, getpwnam, getpwuid,
+setpassent, setpwent, endpwent, getttyent, getttynam, setttyent, endttyent,
+getusershell, setusershell, endusershell, getvfsbyname, getvfsbytype,
+getvfsent, setvfsent, endvfsent, vfsisloadable, vfsload, glob, globfree,
+initgroups, msgctl, msgget, msgrcv, msgsnd, nice, nlist, ntp_gettime,
+pause, popen, psignal, user_from_uid, group_from_gid, scandir, seekdir,
+semconfig, semctl, semget, semop, setdomainname, sethostname, longjmperror,
+setmode, getmode, shmat, shmctl, shmdt, shmget, siginterrupt, siglist,
+sleep, sysconf, sysctl, times, timezone, ttyname, ttyslot, ualarm, unvis,
+usleep, valloc, vis, wait, wait3, and waitpid.
+
+\section{errno.h}
+% Stolen from Minimal C library documentation.
+
+The symbolic constants defined in {\tt errno.h} have been redefined with
+the corresponding symbols defined in \texttt{oskit/error.h}
+(see~\ref{oskit-error-h}), which are the error codes used through the \oskit's
+COM interfaces; this way, error codes from arbitrary \oskit{} components
+can be used directly as \texttt{errno} values at least by programs that use
+the FreeBSD C library. The main disadvantage of using COM error codes as
+\texttt{errno} values is that, since they don't start from around 0 like
+typical Unix errno values, it's impossible to provide a traditional
+Unix-style \texttt{sys_errlist} table for them.  However, they are fully
+compatible with the \texttt{strerror} and \texttt{perror} routines.
+
+\apisec{Client Operating System Dependencies}
+
+The \freebsd{} C library (and by extension the \posix{} library) derive a
+number of its external interfaces from the client OS (see
+Section~\ref{clientos}).
+Rather than relying on linktime dependencies for these
+interfaces, the C library uses a services database (see
+Section~\ref{oskit-services}) that was provided when it was initialized. This
+services database is pre-loaded (by the client OS when the kernel boots)
+with certain COM objects that make the C library functional. One such
+interface object is the \texttt{oskit_libcenv_t} COM interface, which
+provides hooks that are very specific to the \posix{} and C libraries. This,
+and other interfaces, are looked up in the database as required.  For
+example, the malloc implementation depends on a lower level ``memory
+object'' to satisfy memory requests. The first call to \texttt{malloc} will
+result in a lookup in the services database for the \texttt{oskit_mem_t}
+COM object. The malloc routines then use this lower level allocator
+interface. The intent of this ``indirection'' is to reduce (eventually to
+zero) the number of linktime dependencies between the C/Posix library and
+the rest of the \oskit{} libraries.
+
+\apisec{Library Initialization}
+
+Typically, the C library is initialized by the Client OS library when the
+kernel boots (See Section~\ref{clientos}.) The initialization function is
+passed a reference to an \texttt{oskit_services_t} COM object (see
+Section~\ref{oskit-services}),
+which is a services database that has been preloaded
+with a number of interface objects that the C library needs to operate
+properly. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%	oskit_load_libc
+%
+\api{oskit_init_libc}{Load the \freebsd{} C library}
+\label{oskit-init-freebsd-libc}
+\begin{apisyn}
+        \cinclude{oskit/c/fs.h}
+
+        \funcproto void oskit_load_libc(oskit_services_t *services);
+\end{apisyn}
+\begin{apidesc}
+	\texttt{oskit_load_libc} allows for internal initializatons to be
+	done. This routine \emph{must} be called when the operating system is
+	initialized, typically from the Client OS library. The
+	\texttt{services} database is used to lookup other interfaces
+	required by the C library, and is maintained as internal state to
+	the library. 
+\end{apidesc}
+\begin{apiparm}
+	\item[services] A reference to a services database preloaded with
+	interfaces required by the C library.
+\end{apiparm}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%	oskit_init_libc
+%
+\api{oskit_init_libc}{Secondary Initialization of the \freebsd{} C library}
+\begin{apisyn}
+        \funcproto void oskit_init_libc(void);
+\end{apisyn}
+\begin{apidesc}
+	\texttt{oskit_init_libc} allows for secondary initializations to be
+	performed by the C library, in cases where lazy initialization is
+	not appropriate. It must be called sometime after
+	\texttt{oskit_load_libc}.
+\end{apidesc}

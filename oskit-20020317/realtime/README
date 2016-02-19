@@ -1,0 +1,12 @@
+Directories: oskit/realtime, oskit/realtime/x86
+Target: liboskit_realtime.a
+Documentation: doc/realtime.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:
+	This library overrides certain files in oskit/dev, providing a
+	plug replaceable library for liboskit_dev.a, but extended with
+	certain realtime properties. This allows for mixing and matching
+	matching standard and realtime modes without having to
+	reconfigure and rebuild. 
+
+	See the documentation.

@@ -1,0 +1,70 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+#
+# Define the set of allowed types for each role.
+#
+# role rolename types type_set ;
+
+role system_r types { kernel_t security_t file_labels_t proc_t any_socket_t port_t netif_t netif_lo_t netif_eth0_t netif_eth1_t netmsg_t netmsg_lo_t netmsg_eth0_t netmsg_eth1_t node_t node_lo_t node_internal_t node_tycho_t tcp_socket_t icmp_socket_t ftp_t telnet_t smtp_t };
+role startup_r types { init_t login_t };
+role admin_r types { admin_t user_t };
+role user_r types { user_t unlabeled_t file_t ld_so_t fs_t http_t public_t private_t 
+	    test_t test_fdclose_t test_signal_t test_uselib_t test_nofork_t }; 
+role office_chief_r types user_t;
+role technical_director_r types user_t;
+role division_chief_r types user_t;
+role division_td_r types user_t;
+role branch_chief_r types user_t;
+role branch_td_r types user_t;
+role branch_employee_r types user_t;
+
+# The hospital database roles and their associated domains/types
+
+role hospital_doctor_r types { user_t hospital_admin_r_d hospital_vitals_r_d hospital_vitals_rw_d hospital_diagnosis_r_d hospital_diagnosis_rw_d };
+
+role hospital_nurse_r types { user_t hospital_admin_r_d hospital_vitals_r_d hospital_vitals_rw_d hospital_diagnosis_r_d };
+
+role hospital_admin_r types { user_t file_t hospital_admin_c_d hospital_admin_d_d hospital_admin_r_d hospital_admin_rw_d hospital_billings_c_d hospital_billings_d_d hospital_diagnosis_c_d hospital_diagnosis_d_d hospital_vitals_c_d hospital_vitals_d_d hospital_admin_t hospital_billings_t hospital_diagnosis_t hospital_vitals_t};
+
+role hospital_accounting_r types { user_t hospital_admin_r_d hospital_billings_r_d hospital_billings_rw_d };
+
+role hospital_insurance_r types { user_t hospital_admin_r_d hospital_billings_r_d };
+
+
+#
+# Define the role dominance.
+#
+
+dominance {
+ role office_chief_r {
+	role division_td_r ;
+	role division_chief_r {
+		role branch_chief_r {
+			role branch_employee_r ;
+		}
+		role branch_td_r ;
+	}
+ }
+ role technical_director_r;
+}
+
+
+
+
+

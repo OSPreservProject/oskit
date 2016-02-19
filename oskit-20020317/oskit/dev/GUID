@@ -1,0 +1,112 @@
+GUID assignments for oskit interfaces:
+
+4aa7df80-7c74-11cf-b500-08000953adc2	oskit_device
+4aa7df81-7c74-11cf-b500-08000953adc2	oskit_blkio
+4aa7df82-7c74-11cf-b500-08000953adc2	oskit_blkdev
+4aa7df83-7c74-11cf-b500-08000953adc2	oskit_bus
+4aa7df84-7c74-11cf-b500-08000953adc2	oskit_isabus
+4aa7df85-7c74-11cf-b500-08000953adc2	oskit_isa_driver
+4aa7df86-7c74-11cf-b500-08000953adc2	oskit_pcibus
+4aa7df87-7c74-11cf-b500-08000953adc2	oskit_pci_driver
+4aa7df88-7c74-11cf-b500-08000953adc2	oskit_driver
+4aa7df89-7c74-11cf-b500-08000953adc2	oskit_membus
+4aa7df8a-7c74-11cf-b500-08000953adc2	oskit_membus_driver
+4aa7df8b-7c74-11cf-b500-08000953adc2	oskit_netio
+4aa7df8c-7c74-11cf-b500-08000953adc2	oskit_netdev
+4aa7df8d-7c74-11cf-b500-08000953adc2	oskit_bufio
+4aa7df8e-7c74-11cf-b500-08000953adc2	px_tty
+4aa7df8f-7c74-11cf-b500-08000953adc2	oskit_posixio
+4aa7df90-7c74-11cf-b500-08000953adc2	aggregation
+4aa7df91-7c74-11cf-b500-08000953adc2	aggregate_part
+4aa7df92-7c74-11cf-b500-08000953adc2	oskit_idebus
+4aa7df93-7c74-11cf-b500-08000953adc2	oskit_filesystem
+4aa7df94-7c74-11cf-b500-08000953adc2	oskit_file
+4aa7df95-7c74-11cf-b500-08000953adc2	oskit_dir
+4aa7df96-7c74-11cf-b500-08000953adc2	px_filelock
+4aa7df97-7c74-11cf-b500-08000953adc2	oskit_scsibus
+4aa7df98-7c74-11cf-b500-08000953adc2	oskit_etherdev
+4aa7df99-7c74-11cf-b500-08000953adc2	oskit_open_dir
+4aa7df9a-7c74-11cf-b500-08000953adc2	oskit_open_file
+4aa7df9b-7c74-11cf-b500-08000953adc2	oskit_open_node
+4aa7df9c-7c74-11cf-b500-08000953adc2	oskit_ttystream
+4aa7df9d-7c74-11cf-b500-08000953adc2	oskit_absio
+4aa7df9e-7c74-11cf-b500-08000953adc2	oskit_cacheio
+4aa7df9f-7c74-11cf-b500-08000953adc2	oskit_cache_buf
+4aa7dfa0-7c74-11cf-b500-08000953adc2	oskit_chario
+4aa7dfa1-7c74-11cf-b500-08000953adc2	oskit_timer
+4aa7dfa2-7c74-11cf-b500-08000953adc2	oskit_netio_fanout
+4aa7dfa3-7c74-11cf-b500-08000953adc2	oskit_local_isabus
+4aa7dfa4-7c74-11cf-b500-08000953adc2	oskit_timer
+4aa7dfa5-7c74-11cf-b500-08000953adc2	oskit_services
+4aa7dfa6-7c74-11cf-b500-08000953adc2	oskit_ttydev
+4aa7dfa7-7c74-11cf-b500-08000953adc2	oskit_asyncio
+4aa7dfa8-7c74-11cf-b500-08000953adc2	oskit_listener
+4aa7dfa9-7c74-11cf-b500-08000953adc2	oskit_membus_io
+4aa7dfaa-7c74-11cf-b500-08000953adc2	oskit_isabus_io
+4aa7dfab-7c74-11cf-b500-08000953adc2	oskit_scsibus_io
+4aa7dfac-7c74-11cf-b500-08000953adc2	oskit_idebus_io
+4aa7dfad-7c74-11cf-b500-08000953adc2	oskit_socket
+4aa7dfae-7c74-11cf-b500-08000953adc2	oskit_listener_fanout
+4aa7dfaf-7c74-11cf-b500-08000953adc2	oskit_queue
+4aa7dfb0-7c74-11cf-b500-08000953adc2	oskit_bufio_stream
+4aa7dfb1-7c74-11cf-b500-08000953adc2	oskit_sync
+4aa7dfb2-7c74-11cf-b500-08000953adc2	oskit_bufiovec
+4aa7dfb3-7c74-11cf-b500-08000953adc2	oskit_safe_osenv
+4aa7dfb4-7c74-11cf-b500-08000953adc2	oskit_socket_factory
+4aa7dfb5-7c74-11cf-b500-08000953adc2    oskit_lock_mgr
+4aa7dfb6-7c74-11cf-b500-08000953adc2    oskit_lock
+4aa7dfb7-7c74-11cf-b500-08000953adc2    oskit_pipe
+4aa7dfb8-7c74-11cf-b500-08000953adc2    oskit_condvar
+4aa7dfb9-7c74-11cf-b500-08000953adc2    pfq_sched
+4aa7dfba-7c74-11cf-b500-08000953adc2    pfq_leaf
+4aa7dfbb-7c74-11cf-b500-08000953adc2    oskit_pqueue
+
+4aa7dfe0-7c74-11cf-b500-08000953adc2    oskit_comsid
+4aa7dfe1-7c74-11cf-b500-08000953adc2    oskit_avc
+4aa7dfe2-7c74-11cf-b500-08000953adc2    oskit_avc_callback
+4aa7dfe3-7c74-11cf-b500-08000953adc2    oskit_dir_secure
+4aa7dfe4-7c74-11cf-b500-08000953adc2    oskit_file_secure
+4aa7dfe5-7c74-11cf-b500-08000953adc2    oskit_filepsid
+4aa7dfe6-7c74-11cf-b500-08000953adc2    oskit_socket_secure
+4aa7dfe7-7c74-11cf-b500-08000953adc2    oskit_socket_factory_secure
+
+4aa7dfe8-7c74-11cf-b500-08000953adc2    oskit_mem
+4aa7dfe9-7c74-11cf-b500-08000953adc2    oskit_libcenv
+
+4aa7dfea-7c74-11cf-b500-08000953adc2    oskit_sleep
+4aa7dfeb-7c74-11cf-b500-08000953adc2    oskit_osenv_sleep
+4aa7dfec-7c74-11cf-b500-08000953adc2    oskit_osenv_intr
+4aa7dfed-7c74-11cf-b500-08000953adc2    oskit_osenv_irq
+4aa7dfee-7c74-11cf-b500-08000953adc2    oskit_osenv_timer
+4aa7dfef-7c74-11cf-b500-08000953adc2    oskit_osenv_device
+4aa7dff0-7c74-11cf-b500-08000953adc2    oskit_osenv_driver
+4aa7dff1-7c74-11cf-b500-08000953adc2    oskit_osenv_log
+4aa7dff2-7c74-11cf-b500-08000953adc2    oskit_osenv_pci_config
+4aa7dff3-7c74-11cf-b500-08000953adc2    oskit_osenv_isa
+4aa7dff4-7c74-11cf-b500-08000953adc2    oskit_osenv_ioport
+4aa7dff5-7c74-11cf-b500-08000953adc2    oskit_osenv_mem
+4aa7dff6-7c74-11cf-b500-08000953adc2    oskit_osenv_rtc
+4aa7dff7-7c74-11cf-b500-08000953adc2    oskit_osenv
+4aa7dff8-7c74-11cf-b500-08000953adc2    oskit_fsnamespace
+
+4aa7dff9-7c74-11cf-b500-08000953adc2    oskit_security
+4aa7dffa-7c74-11cf-b500-08000953adc2    oskit_avc_ss
+4aa7dffb-7c74-11cf-b500-08000953adc2    oskit_filesystem_secure
+
+4aa7dffc-7c74-11cf-b500-08000953adc2    oskit_clicker
+
+4aa7dffd-7c74-11cf-b500-08000953adc2    oskit_random
+4aa7dffe-7c74-11cf-b500-08000953adc2	oskit_skbufio
+
+4aa7dfff-7c74-11cf-b500-08000953adc2	(unused)
+
+4aa7e000-7c74-11cf-b500-08000953adc2	oskit_mib_system
+4aa7e001-7c74-11cf-b500-08000953adc2	oskit_mib_interfaces
+4aa7e002-7c74-11cf-b500-08000953adc2	oskit_mib_at
+4aa7e003-7c74-11cf-b500-08000953adc2	oskit_mib_ip
+4aa7e004-7c74-11cf-b500-08000953adc2	oskit_mib_icmp
+4aa7e005-7c74-11cf-b500-08000953adc2	oskit_mib_tcp
+4aa7e006-7c74-11cf-b500-08000953adc2	oskit_mib_udp
+4aa7e007-7c74-11cf-b500-08000953adc2	oskit_mib_egp
+4aa7e008-7c74-11cf-b500-08000953adc2	oskit_mib_dot3
+4aa7e009-7c74-11cf-b500-08000953adc2	oskit_mib_snmp

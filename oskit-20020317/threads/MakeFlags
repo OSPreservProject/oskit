@@ -1,0 +1,80 @@
+#
+# Copyright (c) 2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#
+# Flags:
+#
+#	STACKGUARD		Turn on SVM and write protect stack boundry.
+#	DEFAULT_SCHEDULER	The non-hierarchical scheduler.
+#	SIMPLE_PRI_INHERIT	Simple priority inheritance for mutexes.
+#	PTHREAD_SCHED_POSIX	Posix (RR/FIFO) scheduler for DEFAULT_SCHEDULER
+#	PTHREAD_SCHED_STRIDE	Stride scheduler for DEFAULT_SCHEDULER
+#	PTHREAD_SCHED_EDF	EDF scheduler for DEFAULT_SCHEDULER
+#	PTHREAD_SCHED_STRIDE	Stride scheduler for DEFAULT_SCHEDULER
+#
+OSKIT_CFLAGS += -DSIMPLE_PRI_INHERIT -DDEFAULT_SCHEDULER -DSTACKGUARD
+
+#
+# Turn on the standard POSIX scheduler.
+# 
+OSKIT_CFLAGS += -DPTHREAD_SCHED_POSIX
+
+#
+# Use just this for only the Stride scheduler, which is recommended
+# (that is, just use the Stride scheduler by itself, not with another
+# scheduler). Comment out the previous line. 
+#
+#OSKIT_CFLAGS += -DPTHREAD_SCHED_STRIDE -DDEFAULT_SCHEDULER -DSTACKGUARD
+
+#
+# For stride scheduler
+# Allows the stride scheduler to be enabled/disabled via special calls.
+# Useful for demonstrating the rate-limiting provided by stride scheduling.
+#
+#OSKIT_CFLAGS += -DSTRIDE_DISABLE
+
+#
+# Add the realtime scheduler. 
+#
+# Note: Weak symbols broken in ARM ELF linker. 
+# 
+ifneq ($(HOST_ARCH),arm32)
+#OSKIT_CFLAGS += -DPTHREAD_SCHED_EDF -DPTHREAD_REALTIME
+endif
+
+#OSKIT_CFLAGS += -DCPU_INHERIT -DDEBUG
+
+#
+# Stats flags.  Add these to OSKIT_CFLAGS as desired
+#
+#	RTSCHED_STATS		thread scheduling stats, RT related
+#	SCHED_STATS		global scheduling stats
+#	IPC_STATS		IPC stats
+#	THREAD_STATS		per-thread scheduling latency stats
+#	LATENCY_THREAD		enables a high-prio do-nothing thread,
+#				only meaningful with THREAD_STATS
+#	HIGHRES_THREADTIMES	accurately measure thread runtimes
+#				by using a cycle counter or other
+#				hires timer (*** x86-only right now ***)
+#
+#OSKIT_CFLAGS += -DRTSCHED_STATS
+#OSKIT_CFLAGS += -DSCHED_STATS
+#OSKIT_CFLAGS += -DIPC_STATS
+#OSKIT_CFLAGS += -DTHREAD_STATS -DLATENCY_THREAD
+#OSKIT_CFLAGS += -DTHREAD_STATS
+#OSKIT_CFLAGS += -DLATENCY_THREAD
+#OSKIT_CFLAGS += -DHIGHRES_THREADTIMES

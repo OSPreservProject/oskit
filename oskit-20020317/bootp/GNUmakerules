@@ -1,0 +1,1 @@
+INCDIRS += $(OSKIT_SRCDIR)/oskit/c

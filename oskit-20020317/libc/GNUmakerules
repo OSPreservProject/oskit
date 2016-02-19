@@ -1,0 +1,54 @@
+#
+# Copyright (c) 1995-1996, 1998, 1999 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_libc_makerules_
+_oskit_libc_makerules_ = yes
+
+TARGET	= liboskit_c.a
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/libc/stdio		\
+		$(OSKIT_SRCDIR)/libc/stdtime		\
+		$(OSKIT_SRCDIR)/libc/stdlib		\
+		$(OSKIT_SRCDIR)/libc/string		\
+		$(OSKIT_SRCDIR)/libc/wchar		\
+		$(OSKIT_SRCDIR)/libc/gen		\
+		$(OSKIT_SRCDIR)/libc/gmon		\
+		$(OSKIT_SRCDIR)/libc/malloc		\
+		$(OSKIT_SRCDIR)/libc/net
+
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/c
+
+DEFINES += -DOSKIT
+
+include $(OSKIT_SRCDIR)/com/GNUmakerules
+
+mcount.po: mcount.c
+	$(filter-out -pg, $(CC)) -c $(OSKIT_CFLAGS) $(CFLAGS) -DGPROF $(DEFINES)  \
+		$< -o mcount.po
+
+$(TARGET): $(OBJDIR)/lib/liboskit_posix.a $(OBJFILES)
+	cp $(OBJDIR)/lib/liboskit_posix.a $@
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating library $@"
+	$(AR) $(ARFLAGS) $@ $(OBJFILES)
+	$(RANLIB) $@
+
+$(PTARGET): $(OBJDIR)/lib/liboskit_posix_p.a $(POBJFILES)
+	cp $(OBJDIR)/lib/liboskit_posix_p.a $@
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating library $@"
+	$(AR) $(ARFLAGS) $@ $(POBJFILES)
+	$(RANLIB) $@
+endif

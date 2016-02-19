@@ -1,0 +1,1115 @@
+%
+% Copyright (c) 1997-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+\emph{Caveat: This document is really two different documents in
+one.  Much of the expository text (rationale, extended descriptions)
+belongs in an overview, background, or introductory document.  The
+more concise ``man pages'' belong in an API reference manual.  And, of
+course, a tutorial is needed.  Lacking a tutorial, we suspect the best
+thing for new users to do is to scan this introductory chapter and
+then look over and play with some of the small example programs,
+outlined below in section~\ref{example-kernels}.  Feedback
+appreciated, and bear with us.
+}
+
+
+\section{Goals and Scope}
+
+The \oskit{} is a framework and set of
+modularized components and library code,
+together with extensive documentation,
+for the construction of operating system kernels, servers,
+and other OS-level functionality.
+Its purpose is to provide, as a set of easily reusable modules,
+much of the infrastructure ``grunge''
+that usually takes up a large percentage of development time
+in any operating system or OS-related project,
+and allow developers to concentrate their efforts
+on the unique and interesting aspects of the new OS in question.
+The goal is for someone to be able to take the \oskit{} and immediately
+have a base on which they can start concentrating on ``real'' OS issues
+such as scheduling, VM, IPC, file systems, security, or whatever.
+Alternately they can concentrate on the real language issues raised by
+using advanced languages inside operating systems, such as
+Java, Lisp, Scheme, or ML---%
+instead of spending six months first writing boot loader code, startup code,
+device drivers, kernel printf and malloc code, a kernel debugger, etc.
+With the recent addition of extensive multithreading and sophisticated
+scheduling support, the \oskit{} also provides a modular platform
+for embedded applications.
+
+Although it can provide a complete OS environment for many domains,
+the primary intention of this toolkit is not to ``write the OS for you'';
+we certainly want to leave the OS writing to the OS writer.
+The dividing line between the ``OS'' and the ``OS toolkit,'' as we see it,
+is basically the line between what OS writers \emph{want} to write
+and what they would otherwise \emph{have} to write but don't really want to.
+Naturally this will vary between different OS groups and developers.
+If you really want to write your own x86 protected-mode startup code,
+or have found a clever way to do it ``better,''
+you're perfectly free to do so
+and simply not use the corresponding code in our toolkit.
+However, our goal is that the toolkit be modular enough
+that you can still easily use \emph{other} parts of it
+to fill in other functional areas you don't want to have to deal with yourself
+(or areas that you just don't have time to do ``yet'').
+
+As such, the toolkit is designed to be usable either as a whole
+or in arbitrary subsets, as requirements dictate.
+It can be used either as a set of support libraries
+to be linked into an operating system kernel and/or its support programs,
+or it can be used merely as a collection of ``spare parts'':
+example source code to be ripped apart and cannibalized for whatever purpose.
+(Naturally, we prefer that the toolkit be used in library fashion,
+since this keeps a cleaner interface between the toolkit and the OS
+and makes them both easier to maintain;
+however, we recognize that in some situations this will not be practical
+for technical or political reasons.)
+
+The toolkit is also intended to be useful for things that aren't kernels
+but are OS-related, such as boot loaders
+or OS-level servers running on top of a microkernel.
+
+\section{Road Map}
+
+The facilities provided by the \oskit{}
+are currently organized into three main categories,
+corresponding to the three main sections of this manual:
+\emph{interfaces}, \emph{function libraries}, and \emph{component libraries}.
+Note that the distinction between the two types of libraries has
+lessened since the majority of this document was written, and in some
+cases is rather arbitrary.
+There is also a small \emph{Utilities} section (\ref{utils}) describing
+useful \oskit{} programs; this currently describes only
+the ``NetBoot'' utility.
+
+\subsection{Interfaces}
+
+The \oskit's interfaces are a set of
+clean, object-oriented interfaces
+specified in the framework of the Component Object Model (COM),
+described in Chapter~\ref{com}.
+These interfaces are made available
+through thoroughly commented public C header files,
+with corresponding documentation in Part~\ref{intf} of this manual.
+For example, the \oskit\ provides a ``block I/O'' interface
+for communication between file systems and disk device drivers,
+a ``network I/O'' interface
+for communication between network device drivers and protocol stacks,
+and a file system interface similar to the ``VFS'' interface in BSD\@.
+These interfaces are used and shared by the various \oskit\ components
+in order to provide consistency
+and allow them to be used together easily.
+The OS developer may additionally use or build on these interfaces
+in defining the fundamental structure of the client OS,
+but is not required to do so;
+alternatively, the developer may simply use them
+when writing the ``glue'' code necessary
+to incorporate a particular \oskit\ component
+into a new or existing OS environment.
+
+\subsection{Function Libraries}
+
+The \oskit's function libraries
+provide basic low-level services
+in a traditional C-language function-oriented style.
+For example,
+the \oskit\ provides libraries
+exporting kernel bootstrap support,
+standard C library functions,
+%physical and virtual memory management,
+and executable program loading.
+These libraries are designed
+to be usable and controllable in a very fine-grained manner,
+generally on a function-by-function basis,
+allowing the client OS to easily use particular library functions
+while leaving out or individually overriding other functions.
+The dependencies between library functions are minimized,
+as are dependencies of library functions on other libraries;
+where these dependencies inevitably exist,
+they are well-defined and explicitly exposed to the OS developer.
+In general, the implementation details of these libraries
+are intentionally exposed rather than hidden.
+The function libraries make only minimal use
+of the \oskit's object-oriented COM interfaces,
+instead generally defining their own function-oriented interfaces
+in ordinary C header files.
+This design strategy provides
+maximum power and flexibility to the OS developer
+at the cost of increasing the dependence of the client OS
+on the implementation details of the libraries;
+we have found this to be a good design tradeoff
+for the low-level \oskit\ facilities
+which usually must be customized extensively
+in order to fit into any particular OS environment.
+
+Following is a summary of
+the function libraries currently provided by the \oskit{}
+along with the chapter numbers in which each is described:
+\begin{itemize}
+\item[\ref{libc}]	{\tt liboskit_c}:
+	A simple, minimal C library
+	which minimizes dependencies with the environment and between modules,
+	to provide common C library services in a restricted OS environment.
+	For example, this library provides
+	many standard string, memory, and other utility functions,
+	as well as a formatted I/O facility (e.g., {\tt printf})
+	designed for easy use in restricted environments such as
+	kernels. In situations where a more complete, \posix{}-like, C
+        library is desired, the \freebsd{} C library (in
+	Chapter~\ref{freebsd-libc}) may be used instead of the minimal
+	C library.
+
+\item[\ref{kern}]	{\tt liboskit_kern}:
+	Kernel support code for setting up a basic OS kernel environment,
+	including providing default handlers for traps and interrupts and such.
+	This library includes many general utilities useful in kernel code,
+	such as functions to access special processor registers,
+	set up and manipulate page tables, and switch between processor modes
+	(e.g., between real and protected mode on the x86).
+	Also includes facilities for convenient source-level remote debugging
+	of OS kernels under development.
+
+\item[\ref{smp}]	{\tt liboskit_smp}:
+	More kernel support code, this library deals with setting up
+	a multiprocessor system to the point where it can be used by
+	the operating system.
+	Also (to be) included are message-passing routines and
+	synchronization primitives, which are necessary to flush
+	remote TLBs.
+
+% XXX - not sure this is in the right place.  I think the realy problem
+% is that it's a mostly bogus ``library'' whose pieces should be parcelled
+% out to the domain libraries each addresses.  -fjl
+%
+% (The reason it precedes oskit_dev is because that's the order in the document,
+% despite doing so reverses the convention in this section of going from more
+% sophisticated to less.  Ugh.)
+% \item {\bf Component adapters and utility functions}
+\item[\ref{com}]	{\tt liboskit_com}:
+	Utility functions for handling COM interfaces, and a suite
+	of generic wrapper components.  These wrappers map one \oskit{} COM
+	interface to another, or implement simple functionality such as
+	synchronization by creating proxy COM objects that wrap the
+	COM objects provided by more primitive components.
+
+\item[\ref{dev}]	{\tt liboskit_dev}:
+	This library provides default implementations
+	of the ``glue'' functions required by device drivers
+	and other ``large'' encapsulated components (networking, filesystems)
+	imported from other operating systems,
+	running in the \oskit{} Device Driver (n\'{e}e ``fdev'') framework.
+%		such as the Linux and FreeBSD device driver components below.
+	(The framework's current name reveals its heritage; today,
+	a more accurate name would be the ``OS Environment'' framework.)
+	The default implementations of these functions
+	are designed for simple kernels using {\tt liboskit_kern};
+	for more elaborate kernel (or user-mode) environments,
+	the client OS will have to override
+	some or all of the functions in this library.
+
+\end{itemize}
+
+The following four libraries are provided mainly for convenience;
+they are not as general or as well documented as the other libraries but
+are still useful.  See the source directories and READMEs for details.
+
+\begin{itemize}
+\item[]	{\tt liboskit_startup}:
+	Contains functions to start up and initialize
+	various \oskit{} components,
+	making it easier to write \oskit{} programs.
+
+\item[] {\tt liboskit_unsupp}:
+	Contains various unsupported hacks and utilities.
+
+\item[] {\tt liboskit_unix}:
+	Provides the necessary support to debug and run certain
+	\oskit{} components on FreeBSD and Linux in user-mode.
+
+\item[]	{\tt liboskit_fudp}:
+	Provides a ``Fake UDP'' implementation:
+	a restricted send-only no-fragmenting version of UDP\@.  This can
+	be useful with the hpfq library (in Chapter~\ref{hpfq}).
+\end{itemize}
+
+\subsection{Component Libraries}
+
+Finally, the \oskit's component libraries
+provide generally higher-level functionality
+in a more standard, coarse-grained, object-oriented
+``black box'' design philosophy.
+Although the \oskit's ``components''
+are also packaged into ordinary link libraries by default,
+their structure represents more of a component-oriented design
+than a traditional C function-oriented design.
+In contrast with the \oskit's function libraries,
+the component libraries
+typically export relatively few public entrypoints
+in comparison to the amount of functionality provided.
+For example, in the Linux and BSD device driver component libraries
+(see Chapters~\ref{linux-dev} and~\ref{freebsd-dev}),
+each entire device driver is represented by
+a single function entrypoint
+which is used to initialize and register the driver as a whole.
+The client OS generally interacts with these components
+through the \oskit's object-oriented COM interfaces,
+allowing many components and instances of components
+to coexist and interact as defined by the OS developer.
+This design strategy has proven to be most appropriate
+when incorporating large chunks of existing code
+from existing systems such as BSD and Linux,
+where it is more important
+to hide the details of the original environment
+than to provide the most flexibility.
+
+Following is a summary of
+the component libraries currently provided by the \oskit{}
+along with the chapter numbers in which each is described:
+\begin{itemize}
+
+\item {\bf POSIX emulation and libraries}
+\begin{itemize}
+\item[\ref{posix-lib}]		{\tt liboskit_posix}:
+	Adds support for what a \posix{} conformant system would typically
+	implement as system calls. For example, {\tt open}, {\tt read}, and
+	{\tt write}. These \posix{} operations are mapped to the
+	corresponding \oskit{} COM interfaces. Both the minimal C library
+	and the \freebsd{} C library rely on the \posix{} library to
+	provide the necessary system level operations.
+
+\item[\ref{freebsd-libc}]	{\tt liboskit_freebsd_c}:
+	Complete \posix{}-like C library derived from \freebsd{},
+	providing both single- and multithreaded configurations.
+	This library is an alternative to the minimal C library
+	{\tt liboskit_c} (above), intended for programs that use
+	substantial \posix{}-like functionality or need thread-safety.
+	The \freebsd{} ``system call'' layer is supplied by the \posix{}
+	library {\tt liboskit_posix}, while the higher-level code
+	is mostly unchanged from that found in \freebsd{}.
+
+\item[\ref{freebsd-math}]	{\tt liboskit_freebsd_m}:
+	Complete standard math library (taken from FreeBSD's {\tt libm}).
+	The functions in this library will commonly be needed by programs
+	that use floating point.
+
+\item[\ref{fsnamespace}]	{\tt liboskit_fsnamespace}:
+	The \emph{Filesystem Namespace} library provides ``namei'' style
+	translation for the application, as well as high level mount and
+	unmount capabilities. Multi component absolute and relative
+	pathnames (names with ``slashes'') are converted to
+	\texttt{oskit_file} and \texttt{oskit_dir} COM objects.
+
+\item[\ref{rtld}]		{\tt liboskit_rtld}:
+	The \emph{Runtime Linker/Loader} library allows ELF compiled
+	\oskit{} kernels to load shared libraries (.so files).
+\end{itemize}
+
+
+\item {\bf Memory management}
+\begin{itemize}
+\item[\ref{lmm}]	{\tt liboskit_lmm}:
+	A flexible memory management library
+	that can be used to manage either physical or virtual memory.
+	This library supports many special features needed by OS-level code,
+	such as multiple memory types, allocation priorities,
+	and arbitrary alignment and placement constraints for allocated blocks.
+
+\item[\ref{amm}]	{\tt liboskit_amm}:
+	The \emph{Address Map Manager} library manages collections of resources
+	where each element of a collection has a name (address) and some set of
+	attributes.
+	Examples of resources that might be managed by address maps include
+	swap space and process virtual address space.
+
+\item[\ref{svm}]	{\tt liboskit_svm}:
+	The \emph{Simple Virtual Memory} library uses the AMM library
+	to define a simple virtual-memory interface for a single
+	address space that can provide memory protection and paging
+	to a block device such as a disk partition.
+	(\texttt{unsupported/redzone.c} provides a stack redzone
+	for single-threaded kernels, without all of SVM.)
+
+\item[\ref{netbsd-uvm}] {\tt liboskit_netbsd_uvm}: 
+        The \emph{NetBSD UVM} library is ported from NetBSD's virtual
+        memory system and provides real virtual memory including
+        eparating kernel and user spaces, paging, memory mapped file, memory
+        protection, and so on.
+\end{itemize}
+
+
+\item {\bf Threads, synchronization, and scheduling}
+\begin{itemize}
+\item[\ref{pthread}]	{\tt liboskit_threads}:
+	This library provides support for multithreaded kernels,
+	including \posix{} threads, synchronization, scheduling,
+	and stack guards.
+	Scheduling policies are the standard \posix{} Round-Robin
+	and FIFO\@.
+	Experimental support for CPU inheritance scheduling, a hierarchical
+	framework for arbitrary scheduling policies, is also provided,
+	although not integrated or robust.  Provided policies include
+	rate-monotonic, stride (WFQ), and lottery scheduling.
+\end{itemize}
+
+\item {\bf Process}
+\begin{itemize}
+\item[\ref{sproc}]    {\tt liboskit_sproc}:
+
+        The \emph{Simple Process} library uses the NetBSD UVM library
+        to provide support for implementing simple \emph{process},
+        including running a thread in user mode, system calls and
+        loading an ELF executable file.
+\end{itemize}
+
+\item {\bf Development aids}
+\begin{itemize}
+\item[\ref{memdebug}]	{\tt liboskit_memdebug}:
+	This library provides debugging versions of {\tt malloc} et al that
+	check for a variety of bugs related to memory-allocation (overruns,
+	use of freed blocks, etc).
+
+\item[\ref{gprof}]	{\tt liboskit_gprof}:
+	Run-time support code for an \oskit{} kernel to collect profiling
+	data about itself and report it at the end of a run.  Profiling
+	data can be collected for kernel code compiled with the ``-pg''
+	option (as for use with Unix {\tt gprof}),
+	and profiled ``_p'' versions of all \oskit{} libraries are provided
+	to profile \oskit{} code used by the application kernel.
+\end{itemize}
+
+
+\item {\bf Simple disk/file reading and loading}
+\begin{itemize}
+\item[\ref{diskpart}]	{\tt liboskit_diskpart}:
+	A generic library
+% which/that
+	that recognizes various common disk partitioning schemes
+	and produces a complete ``map'' of the organization of any disk.
+	This library provides a simple way for the OS
+	to find relevant or ``interesting'' disk partitions,
+	as well as to easily provide high-level access
+	to arbitrary disk partitions through various naming schemes;
+	BSD- and Linux-compatible naming mechanisms are provided as defaults.
+
+\item[\ref{fsread}]	{\tt liboskit_fsread}:
+	A simple read-only file system interpretation library
+	supporting various common types of file systems
+	including BSD FFS, Linux ext2fs, and MINIX file systems.
+	This library is typically used
+	in conjunction with the partition library
+	to provide a convenient way for the OS
+	to read programs and data off of hard disks or floppies.
+	Again, this functionality is often needed at boot time
+	even in operating systems that otherwise would not require it.
+	This code is also extremely useful in constructing boot loaders.
+
+\item[\ref{exec}]	{\tt liboskit_exec}:
+	A generic executable interpreter and loader
+	that supports popular executable formats such as {\tt a.out} and ELF,
+	either during bootstrap or during general operation.
+	(Even microkernel systems,
+	which normally don't load executables,
+	generally
+	must have a way to load the first user-level program;
+	the \oskit{}'s small, simple executable interpreter
+	is ideally suited to this purpose.)
+\end{itemize}
+
+
+\item {\bf Filesystem implementations}
+\begin{itemize}
+\item[\ref{linux-fs}]	{\tt liboskit_linux_fs}:
+	Encapsulated Linux 2.2.12 filesystem code.
+	Includes the Linux VFS layer supporting
+	ext2fs, the primary Linux filesystem,
+	as well as numerous other PC filesystems supported under Linux.
+
+\item[\ref{netbsd-fs}]	{\tt liboskit_netbsd_fs}:
+	Encapsulated NetBSD 1.2 filesystem code.
+	Includes the BSD VFS layer supporting the local FFS
+	filesystem.
+
+\item[\ref{memfs}]	{\tt liboskit_memfs}:
+	An implementation of a trivial memory-based filesystem, exporting
+	the standard \oskit{} filesystem interfaces.
+\end{itemize}
+
+
+\item {\bf Networking implementations}
+\begin{itemize}
+\item[\ref{freebsd-net}]	{\tt liboskit_freebsd_net}:
+	Encapsulated FreeBSD 2.1.7.1 networking code.
+	Includes socket layer and protocol support
+	wrapped to use the \oskit's framework.
+
+\item[\ref{bootp}]	{\tt liboskit_bootp}:
+	This library provides a simple interface for performing the BOOTP
+	protocol (RFC 1048/1533) on Ethernet devices to retrieve a
+	canonical set of parameters from a server, based on the client's
+	Ethernet hardware address.
+
+\item[\ref{hpfq}]	{\tt liboskit_hpfq}:
+	This library provides hierarchical proportional-share control
+	of outgoing network link bandwidth, described in the Bennet/Zhang
+	SIGCOMM'96 paper.
+
+% XXX this lib name may be wrong.  Is it really liboskit_dpf_dpf? (ugh)
+\item[\ref{pd}]		{\tt liboskit_dpf}:
+	This library provides a packet dispatching mechanism using
+	packet filter technology.  Currently the only supported filter
+	is DPF, but the framework is designed to be extensible.
+\end{itemize}
+
+
+\item {\bf Device driver implementations}
+\begin{itemize}
+\item[\ref{linux-dev}]	{\tt liboskit_linux_dev}:
+	Encapsulated Linux 2.2.12 device driver set.
+	Currently includes over 50 block (SCSI, IDE) and network drivers
+	wrapped to use the \oskit's device driver framework.
+	See the source file \texttt{linux/dev/README} for a list of devices and
+	their status.
+
+\item[\ref{freebsd-dev}]	{\tt liboskit_freebsd_dev}:
+	Encapsulated FreeBSD 2.1.7.1 device driver set.
+	Currently includes eight TTY
+	(virtual console and serial line, including mouse) drivers
+	wrapped to use the \oskit's device driver framework.
+\end{itemize}
+
+
+\item {\bf Video implementation}
+\begin{itemize}
+\item[\ref{video}]	{\tt liboskit_*video*}:
+	Basic video support, with two implementations: one encapsulating
+	all of SVGALIB 1.3.0, and one based on XFree86 3.3.1, but with only the
+	S3 driver currently supported.
+	We also provide support for X11 clients.
+\end{itemize}
+
+\end{itemize}
+
+
+% Add utilities when there are more of them.
+
+\section{Overall Design Principles}
+
+This section describes some of the general principles and policies
+we followed in designing the components of the \oskit{}.
+This section is most relevant for
+people developing or modifying the toolkit itself;
+however, this information may also help users of the toolkit
+to understand it better and to be able to use it more effectively.
+
+\begin{itemize}
+\item	Cleanly separate and clearly flag
+	architecture- and platform-specific facilities.
+	Although the \oskit{} currently only runs on the x86 architecture,
+	we plan to port it to other architectures
+	such as the StrongARM in the future.
+	(We will also help with ports by others, e.g., to the DEC Alpha.)
+	Architecture-specific and platform-specific features and interfaces
+	are tagged in this document with boxed icons,
+	e.g., \intel\ indicating the Intel x86 processor architecture,
+	and \intelpc\ representing x86-based PC platforms.
+
+\item	Attempt to make the \oskit's \emph{interfaces} portable
+	even in situations where their \emph{implementation} can't be.
+	Although by its nature a large percentage
+	of the implementation of the \oskit{}
+	is inherently machine-dependent,
+	the interfaces to many of its facilities are very generic
+	and should be usable on most any architecture or platform.
+	For example, the \oskit's device driver interfaces
+	are almost completely portable,
+	even though the device drivers themselves generally aren't.
+
+\item	Document inter-module dependencies within each library.
+	For function libraries,
+	this means documenting the dependencies between individual functions;
+	for component libraries,
+	this means documenting the dependencies
+	between the different components collected in each library.
+	This policy contrasts to most other third-party libraries,
+	which are usually documented ``black box'' fashion:
+	you are given descriptions of the ``public'' interfaces, and that's it.
+	Although with such libraries
+	you could in principle
+	use part of the library independently from the rest
+	or override individual library components
+	with your own implementations,
+	there is no documentation describing \emph{how} to do so.
+	Even if such documentation existed,
+	these libraries often aren't well enough modularized internally,
+	so replacing one library component would require
+	understanding and dealing with a complicated web
+	of relationships with other components.
+
+	The downside of this policy is that
+	exposing the internal composition of the libraries this way
+	leaves less room for the implementation to change later
+	without affecting the client-visible interfaces.
+	However, we felt that for the purposes of the \oskit{},
+	allowing the client more flexibility in using the library
+	is more important than hiding implementation details.
+
+\item	Where there is already a standard meaning associated with a symbol,
+	use it.
+	For example, our toolkit assumes that
+	{\tt putchar()} means the same thing as it does under normal \posix{},
+	and is used the same way,
+	even if it works very differently in a kernel environment.
+	Similarly, the toolkit's startup code
+	starts the kernel by calling the standard {\tt main()} function
+	with the standard {\tt argc} and {\tt argv} parameters,
+	even if the kernel was booted straight off the hardware.
+
+\item	It is generally safe to call initialization routines more than once
+	with no harmful side-effects,
+	except when the documentation says otherwise.
+	Although this is often unnecessary in particular situations,
+	it increases the overall robustness of the components
+	and decreases hair-pulling
+	since clients can always follow the simple rule,
+	``if in doubt, initialize it.''
+\end{itemize}
+
+\section{Configuring the \oskit{}}
+
+The \oskit{} follows the GNU conventions for configuration,
+building, and installation;
+see the {\tt INSTALL} file in the top-level source directory
+for general instructions on using GNU \texttt{configure} scripts.
+In short, you need to run the {\tt configure} script
+that is in the top-level source directory of the \oskit;
+this script will attempt to guess your system type
+and locate various required tools such as the C compiler.
+You can configure the \oskit{} to build itself in its own source directory,
+simply by moving to that directory and typing \texttt{./configure},
+or you can build the \oskit{} into a separate object directory
+by changing to that directory
+and running the \texttt{configure} script from there.
+For example, using a separate object directory
+allows you to put the object files on a local disk
+if the sources come across NFS,
+or on a partition that isn't backed up.
+Additionally, you can have multiple configurations of the \oskit\ at once
+(with different options or whatever),
+each in its own object tree but sharing the same sources.
+
+To cross-compile the \oskit{} for another architecture,
+you will need to specify the host machine type
+(the machine that the \oskit{} will run on)
+and the build machine type
+(the machine on which you are building the toolkit),
+using the {\tt --build=\emph{machine}} and {\tt --host=\emph{machine}} options.
+Since the \oskit{} is a standalone package
+and does not use any include files or libraries other than its own,
+the operating system component of the host machine type
+is not directly relevant to the configuration of the \oskit{}.
+However, the host machine designator as a whole
+is used by the {\tt configure} script as a name prefix
+to find appropriate cross-compilation tools.
+For example, if you specify `{\tt --host=i486-linux}',
+the {\tt configure} script will search for build tools called
+{\tt i486-linux-gcc}, {\tt i486-linux-ar}, {\tt i486-linux-ld}, etc.
+Among other things, which tools are selected determines the object format
+of the created images (e.g., ix86-linux-* tools create ELF format,
+while ix86-mach-* tools create {\tt a.out} format).
+
+The \oskit{}'s \texttt{configure} script
+accepts various standard options;
+for a full listing of the supported options,
+run {\tt configure --help}.
+In addition, the \texttt{configure} script
+also supports the following options specific to the \oskit:
+\begin{icsymlist}
+\item[--enable-debug]
+	Turn on debugging support in the compiler, and
+	include debugging and sanity checking code within the \oskit{}.
+	This option increases code size and reduces performance slightly,
+	but also increases the likelihood of errors being detected quickly.
+\item[--enable-profiling]
+	Generates profiling versions of all of the \oskit{} libraries;
+	in keeping with the standard convention,
+	the profiling versions of the libraries are suffixed with \texttt{_p}.
+\item[--disable-asserts]
+	Compiles out assert() calls, for those who live on the edge.
+\item[--enable-doc]
+	The build process will attempt to format the \oskit{} documentation.
+	In addition to taking a long time (the complete documentation is
+	approximately 575 pages), it requires \LaTeX{} and \texttt{dvips}.
+	Pre-formatted `.ps' and `.html' files are provided in the source tree.
+\item[--enable-linux-bogomips=VALUE]
+	This option is only relevant to the Linux device driver and
+	filesystem libraries.
+	Prevents the Linux ``BogoMips'' calibration and instead hardcodes
+	it to the value given.
+	If the \texttt{=VALUE} is omitted, the default value of 300 is taken.
+	\emph{Warning: specifying this option may cause the Linux device
+	drivers and filesystems to behave incorrectly.
+	Use at your own risk.}
+\item[--enable-modulefile=FILE]
+	Use the specified FILE as a list of modules to compile and build.
+        By default the `modules' file in the top-level directory is used.
+\end{icsymlist}
+
+Before you do the actual \oskit{} build, there are some steps you
+can choose to take to make the build go faster, by not compiling parts you do not need.
+
+\begin{itemize}
+	\item Edit \texttt{<oskit/dev/linux_ethernet.h>} to contain only
+	lines for drivers you will need.
+	In addition to making your builds go faster,
+	with some hardware this may even be neccessary since some of the probing by
+	incompatible drivers can hang your machine.
+
+	\item Edit \texttt{<oskit/dev/linux_scsi.h>} to contain only
+	lines for drivers you will need.
+
+	\item Edit \texttt{<oskit/fs/linux_filesystems.h>} to contain only
+	lines for filesystems you will need.
+
+        \item Edit the \texttt{modules} file to contain only those
+        components that you are going to use.  Or, copy this file
+        and use the \texttt{--enable-modulefile=FILE} option to \texttt{configure}.
+	This step should only be done after you are somewhat experienced
+	with the \oskit{} and know what directories you need.
+
+	\item Set your \texttt{CFLAGS} environment variable to
+	\texttt{-O1 -pipe}.
+	This will speed up compiles by doing less optimization than the
+	default \texttt{-O2},
+	and may also make the compiler go faster if your compiler
+	doesn't write its temporary files into a memory-based
+	filesystem.
+\end{itemize}
+
+\section{Building the \oskit{}}
+
+Building the \oskit{} currently \emph{requires} these tools and versions:
+\begin{itemize}
+\item GNU \texttt{make}
+
+\item GNU CC (\texttt{gcc}) version 2.7.x or version 2.95.2.
+	More recent \texttt{gcc} versions and \texttt{egcs} may work
+	but have not been well tested.
+
+\item GNU \texttt{binutils} version 2.8.x, or 2.9.1 with BFD 2.9.1.
+\end{itemize}
+
+To build the \oskit{},
+go to the top-level source directory
+(or the top-level object directory,
+if you configured the toolkit to build in a separate object directory),
+and run GNU {\tt make}
+(e.g., just `{\tt make}' on Linux systems,
+or `{\tt gmake}' on BSD systems).
+Note that the \oskit{} \emph{requires} GNU {\tt make}.
+Don't even think about trying to get it to work
+with another version of \texttt{make}.
+You'll be better off porting GNU \texttt{make} to your system.  Really.
+To avoid confusion, the \oskit{}'s makefiles are named {\tt GNUmakefile}
+rather than just {\tt Makefile};
+this way, if you accidentally run the wrong {\tt make} utility,
+it will simply complain that it can't find any makefile,
+instead of producing an obscure error.
+
+To build or rebuild only one specific part of the \oskit,
+such as one of the libraries,
+you can simply go into the appropriate subdirectory of the object tree
+and run GNU \texttt{make} from there.
+The top-level {\tt GNUmakefile} essentially does nothing
+except recursively run \texttt{make} in each subdirectory,
+so it is always safe to run any \oskit{} makefile manually.
+A few \oskit{} directories depend on others being built first---%
+for example, the example kernels cannot be built
+until the \oskit{} libraries they use have been generated---%
+but most of the \oskit{} libraries can be built
+completely independently of each other.
+
+Once the toolkit is built, you can install it with `{\tt make install}'.
+By default, the libraries will go into {\tt /usr/local/lib}
+and the header files into {\tt /usr/local/include},
+unless you specified a {\tt --prefix} on the {\tt configure} command line.
+All of the \oskit{} header files are installed in an {\tt oskit/} subdirectory
+(e.g. {\tt /usr/local/include/oskit}),
+so they should not conflict with any header files already present.
+Although the libraries are installed in the main library directory
+(e.g., {\tt /usr/local/lib}) and not a subdirectory,
+all the library names are prefixed with \texttt{oskit_}
+to avoid conflicts with other unrelated libraries you may want to place there.
+For example, the \oskit's minimal C library
+is named \texttt{liboskit_c.a} rather than just \texttt{libc.a},
+allowing you to install a ``real'' C library in the same directory if desired.
+
+The standard \texttt{make} variables
+such as \texttt{CFLAGS} and \texttt{LDFLAGS}
+are used by the \oskit's build rules
+but are not actually defined by any of the \oskit\ makefiles;
+thus they are available for use on the \texttt{make} command line.
+For example, you can type `{\tt make CFLAGS="-save-temps"}'
+to cause GCC to leave its intermediate files in the object directory,
+such as the preprocessed C source and the assembly language compiler output.
+(Internally, the \oskit\ makefiles use OSKIT_ prefixes on most
+standard makefile variables.)
+
+The OSKIT makefiles also support a variable {\tt OSKIT_QUIET_MAKE}.
+If this is set to ``yes'', as in `{\tt make OSKIT_QUIET_MAKE=yes}',
+then the makefile will spit out less verbiage than by default---it
+will tell you what is going on without telling you how. 
+
+\section{Using the \oskit{}}
+\label{using-oskit}
+
+To use the \oskit{},
+simply link your kernel (or servers, or whatever)
+with the appropriate libraries.
+Detailed information on how to use each library
+is provided in the appropriate chapters in this document.
+For initial experimentation with the \oskit,
+you can simply hack on the example kernels
+or create new kernels in the same directory
+(see Section~\ref{example-kernels} for a tour through our examples);
+however, once your own system grows beyond the stage of a simple demo kernel
+you will probably want to set up a separate source tree
+and link in the \oskit\ components from the installation directory.
+
+Linking libraries into a kernel may seem strange at first,
+since all of the existing OS kernels that we have encountered
+seem to have a strong ``anti-library'' do-everything-yourself attitude.
+However, the linker can link libraries into a kernel
+just as easily as it can link them into application programs;
+we believe that the primary reason existing kernels avoid libraries
+is because the available libraries aren't \emph{designed} to be used in kernels;
+they make too many assumptions about the environment they run in.
+Filling that gap is the purpose of the \oskit{}.
+
+All of the \oskit{} libraries are designed
+so that individual components of each library can be replaced easily;
+we have taken pains to document the dependencies clearly
+so that clients can override whatever components they need to,
+without causing unexpected results.
+In fact, in many cases,
+particularly in the function libraries,
+it is \emph{necessary} to override certain functions or symbols
+in order to make effective use of the toolkit.
+% I thought this was completely obvious, common knowledge,
+% but some people have expressed confusion or uncertainty, so...  -baf
+To override a library function or any other symbol defined by a library,
+just define your own version of it in your kernel or other client program;
+the linker will ensure that your definition is used instead of the library's.
+We strongly suggest that you use the linker
+to replace components of the \oskit,
+instead of making changes directly in the \oskit\ source
+(except, of course, to fix bugs in the \oskit).
+Maintaining a clean separation between the \oskit{} and your kernel
+will make things much easier
+when upgrading to a new version of the \oskit.
+
+
+\subsection{Example Kernels}
+\label{example-kernels}
+
+If you are starting a new OS kernel,
+or just want to experiment with the \oskit{} in a ``standalone'' fashion,
+an easy way to begin is with one of
+the example ``kernels'' in the {\tt examples} directory.
+These examples build up from the kernel equivalent of a ``Hello World'' application,
+demonstrating how to use various facilities separately or together,
+such as the base environment initialization code in {\tt kern},
+the minimal console driver code,
+the minimal C library,
+the remote debugging stub, and
+device, filesystem and network COM interfaces.
+The code implementing these examples is almost as small and simple
+as equivalent ordinary user-level applications would be
+because they fully rely on the \oskit{}
+to provide the underlying infrastructure necessary to get started.
+The compilation and linking rules in the {\tt GNUmakerules} files
+for these example programs
+demonstrate how to link kernels for various startup environments.
+
+The following example ``kernels,'' and many more, are provided.
+See the \texttt{examples/README} file for a list of most of them, and
+their source for more detail.
+
+\begin{itemize}
+%%
+%% Random libkern stuff.
+%%
+\item	\texttt{hello}:
+	What else?  Absolutely useless, but you must have one!
+\item	\intelpc\ \texttt{multiboot}:
+	Prints out info passed by the boot loader and info about the CPU.
+\item	\intelpc\ \texttt{anno_test}:
+	Simple example of the use of trap and interrupt annotations.
+	See section~\ref{kern-anno} for details on annotations.
+\item	\texttt{timer_com}:
+	Shows a way to use timer interrupts.
+%%
+%% Disk and fs stuff
+%%
+\item	\texttt{blkio}:
+	Demonstrates use of basic low-level disk access.
+\item	\texttt{linux_fs_com}:
+	Shows how to use the low-level filesystem interfaces to the Linux
+	filesystems.
+\item	\texttt{bmodfs}:
+	Shows use of the BMOD filesystem and the \posix{} layer over
+	the \oskit{} FS interfaces.
+	See section~\ref{bmod-fs} for details on the BMOD filesystem.
+%%
+%% Network stuff.
+%%
+\item	\texttt{pingreply}:
+	Shows how to use the low-level network access.
+\item	\texttt{socket_bsd}:
+	Demonstrates use of the BSD socket layer over the low-level
+	network interfaces.
+%%
+%% Misc
+%%
+\item	\intelpc\ \texttt{smp}:
+	A simple MultiBoot kernel that demonstrates how to use the
+	SMP support.
+\end{itemize}
+
+\subsection{Booting Kernels}
+\label{booting}
+
+The example kernels,
+as well as custom kernels you build using the \oskit,
+can be booted from either the \textsc{grub},
+Linux, Mach, or BSD boot loaders,
+from MS-DOS directly,
+or from the NetBoot ``meta-kernel.''
+(NetBoot is described in Section~\ref{netboot}.)
+\textsc{grub} and NetBoot can boot the kernels as-is,
+since they directly support the MultiBoot standard,
+whereas the other boot loaders need the kernel to be in a different format.
+This conversion can be done
+with the \texttt{mkbsdimage}, \texttt{mklinuximage},
+and \texttt{mkdosimage} ``boot adapter'' scripts,
+which are automatically built and installed with the \oskit{}
+when configured for the appropriate host.  See comments in each
+script for the argument syntax.
+\begin{itemize}
+\item	The \texttt{mklinuximage} script is installed with the \oskit{}
+	when configured for a Linux or other ELF-based host;
+	given a MultiBoot boot image,
+	it creates a standard Linux boot image
+	that can be loaded from LILO or other Linux boot loaders.
+\item	The \texttt{mkbsdimage} script is installed
+	when the \oskit{} is configured for a Mach or BSD host;
+	its script creates an NMAGIC \texttt{a.out} image from a MultiBoot image
+	that can be loaded from any of the BSD or Mach boot loaders.
+	Note that \texttt{mkbsdimage} requires GNU \texttt{ld} to work properly:
+	on BSD systems, which don't normally use GNU \texttt{ld},
+	you will have to build and install GNU \texttt{ld} manually.
+\item	The \texttt{mkdosimage} script is installed
+	when the \oskit{} is configured for DOS-based targets
+	such as \texttt{i386-msdos} and \texttt{i386-moss}.
+	Like the \texttt{mkbsdimage} script,
+	\texttt{mkdosimage} requires GNU \texttt{ld};
+	you may have to build and install GNU \texttt{ld} first,
+	configured as a cross-inker for an MS-DOS target,
+	before \texttt{mkdosimage} will build properly.
+\item   The \texttt{mkmbimage} is installed with all \oskit{} configurations
+        And, unlike the other scripts, doesn't do any conversion.
+        It simply allows for the combining of a kernel and additional
+        files into one MultiBoot image.
+        The resulting image can be used with MultiBoot boot loaders
+        such as \textsc{grub} and NetBoot.  If you have perl installed
+	on your system, an alternate to this program is supplied,
+	\texttt{mkmb2} which runs more quickly.  Its semantics are
+	identical to mkmbimage.
+\end{itemize}
+For example, the following command
+creates a bootable BSD-style image named `\texttt{Image}':
+\begin{quote}
+        \% \texttt{mkbsdimage} \textsl{hello}
+\end{quote}
+the \texttt{mk}\textsl{type}\texttt{image} scripts
+can also do more complex things, such as combining an arbitrary
+number of additional files or ``boot modules'' into the image.
+See~\ref{kern-x86pc-multiboot} and the scripts for more info.
+
+For details on the MultiBoot standard
+see Section~\ref{multiboot-spec}.
+
+\subsection{Command line arguments}
+
+The various boot adapters convert their respective command-line
+formats,
+such as the \texttt{boothowto} word in the BSD boot loader,
+into the string format used by MultiBoot-compliant operating systems.
+The \oskit\ expects this string to be in a certain format,
+which looks like:
+\begin{quote}
+	progname \texttt{[<}boot-opts and env-vars\texttt{> --}\texttt{] <}args to main\texttt{>}
+\end{quote}
+Note that if no \texttt{--} is present then all of the args
+will be passed to \texttt{main}.
+
+The default \oskit{} MultiBoot startup code then converts this string
+into a C-style \texttt{argv}/\texttt{argc} pair,
+an \texttt{environ} global array,
+and a set of booting-options in the
+\texttt{oskit_bootargv}/\texttt{oskit_bootargc} global variables.
+
+The \texttt{argv}/\texttt{argc} pair and the \texttt{environ} array
+are passed to main, the latter as the third parameter commonly called
+\texttt{envp}.
+The booting-options in \texttt{oskit_bootargv}/\texttt{oskit_bootargc}
+are interpreted by the default \oskit\ console startup code and
+the following flags have special meaning:
+\begin{description}
+        \item[\texttt{-h}]
+                Use the serial line for the console.
+                See also the \texttt{-f} flag.
+                The serial port to use is determined by the
+                \texttt{cons_com_port} variable in \texttt{libkern}'s
+                \texttt{base_console.c};
+
+        \item[\texttt{-d}]
+                Enable debugging via GDB over a serial line;
+                The serial port to use is determined by the
+                \texttt{gdb_com_port} variable in \texttt{libkern}'s
+                \texttt{base_console.c}.
+                This port may differ from the serial console port,
+                in fact it is advantageous to do so.
+
+        \item[\texttt{-p}]
+                Enable profiling.
+                The OS must have been compiled accordingly.
+                See Section~\ref{gprof} for more details on profiling;
+
+        \item[\texttt{-k}]
+                Enable ``killswitch'' support.
+                This allows one to kill the running kernel by
+                sending characters to the second serial line;
+
+        \item[\texttt{-f}]
+                When using a serial console, run it at 115200 baud
+                instead of the default 9600.
+                This is a Utah extension and is not in BSD\@.
+\end{description}
+These flags are decidedly BSD-centric, but that is because at Utah
+we most commonly boot \oskit{} kernels from the FreeBSD boot-loader.
+
+In addition, if the NetBoot booting program is being used, then
+an additional parameter will be present in \texttt{oskit_bootargv}:
+\begin{description}
+        \item[\texttt{-retaddr} \textsl{address}]
+                This specifies a location in physical memory where
+                the OS can jump to and return control to NetBoot.
+                The default \texttt{_exit} routine in \texttt{libkern}'s
+                \texttt{base_console.c} uses this value when exiting.
+\end{description}
+
+\com{% XXX
+\section{Linking Order}
+
+Since the \oskit{} is comprised of a number of different libraries,
+and some of these libraries may call functions in others,
+depending on which functions you use out of each one,
+the order in which the libraries are linked can be important.
+Figure~\ref{link-order} shows these interlibrary dependencies
+as a partial order over the libraries;
+if you follow this order, things should work right.
+
+oskit_linux oskit_dev oskit_kern oskit_c oskit_lmm
+
+XXX draw figure
+
+%XXX exception: if DEBUG, then LMM depends on libc for panic()... Ugh.
+}
+
+
+%\subsection{Overall Source Code Structure}
+
+\com{%
+The makefiles are structured as follows.  Various ``definitions'' (the
+C compiler, awk, install directories, etc.\@ are all defined in the
+top-level {\tt Makeconf}.  Rules are defined in the top-level {\tt
+GNUmakerules}, with specializations for libraries, and x86 specific
+rules.  In each subdirectory, a {\tt GNUmakefile} sets up the standard
+definitions (mostly where to find the top-level standard definitions)
+and includes the {\tt GNUmakerules}.  The {\tt GNUmakerules} in each
+directory define some make variables describing the specific names,
+and then includes the standard definitions from the top-level to do
+all of the actual work.
+
+One caveat with using the \oskit\ makefiles is that the generic
+makefiles are setup to compile
+\emph{all} `{\tt.c}' files in a directory.  This is helpful for when
+you add new files---they ``just work''---but, it can cause problems
+when a `{\tt.c}' file shows up in a directory unintentionally.
+}%com
+
+\com{%
+\chapter{Appendix A: Directory Structure}
+
+Dimensions of the directory structure,
+in order of precedence:
+\begin{itemize}
+\item	Targets (e.g., entire libraries)
+\item	Architecture-specific
+\item	Platform-specific (e.g., PC)
+\item	Environment-specific (e.g., raw versus DOS)
+\item	Modules
+\end{itemize}
+
+The {\tt oskit} directory,
+containing the exported public header files,
+is considered to be one ``target.''
+Each library produced is another target.
+
+The architecture dimension needs to have higher precedence
+so that as few architecture symlinks are needed as possible.
+For example, this way, only one `{\tt machine}' symlink is needed
+in the main public include directory.
+
+As a general rule,
+a particular installation of the \oskit{}
+is specific to one architecture
+but not specific to other variables such as platform or environment;
+the libraries and headers installed
+include the appropriate code
+for \emph{all} the supported platforms and environments.
+
+
+In the public includes,
+the policy for determining what goes into {\tt machine}
+from what goes into {\tt machine/kern} is this:
+All header files whose contents are purely generic
+and make no assumptions about the system environment
+are placed in {\tt machine};
+these are the files that define symbolic processor constants, for example,
+that should always be valid in any context.
+Header files for library modules that provide ``default'' implementations
+of something or other (such as trap handling or CPU initialization)
+are placed in {\tt machine/kern} instead.
+These modules are intended to be widely applicable,
+but by nature they must make some assumptions about their environment,
+and thus may not be usable in some circumstances.
+
+One litmus test that pretty accurately makes this distinction
+is whether the routines defined in a given header file are ``pure''
+and only operate on data passed as parameters,
+or whether they depend on global variables of any kind.
+Pure functions are generally defined in header files in {\tt machine},
+whereas impure functions are generally found in {\tt machine/kern}.
+
+}%com

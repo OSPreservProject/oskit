@@ -1,0 +1,236 @@
+##
+## OSKit Module configuration file.
+##
+## Comments are ignored, non-commented words should be
+## OSKit directories to include in the build.
+##
+## Libraries are built in the order defined in this
+## file.
+##
+## Specify this file with the --with-modulesfile=<x>
+## option to configure.  By default the file 'modules'
+## in the OSKit source directory is used.
+##
+
+### Always include this module (the header files)
+oskit
+
+### The flask module must be compiled before
+### most of the other modules.
+### It is currently a required module.
+flask
+
+### Builds the documentation (Utah only)
+#doc
+
+
+### --- Required components
+
+### The C Runtime (the magic that calls 'main') (required)
+crt
+
+knit/c
+
+### Various bits of kernel magic (required)
+kern
+
+### List Memory Manager (required)
+lmm
+
+### The Client OS library (required)
+clientos
+
+
+### --- Boot Adaptors
+
+### Build the multiboot compliant boot adaptor
+### Requires that ld support '-format binary' (checked)
+boot/multiboot
+
+### Build the Linux boot adaptor
+### Requires ld support '-oformat binary' (checked)
+boot/linux
+
+### Build the MSDOS boot adaptor (??)
+## Requires ld support '-oformat msdos' (checked)
+#boot/dos
+
+### Build the BSD boot adaptor
+### Requires some sort of a.out linker (checked)
+#boot/bsd
+
+### The NetBoot Meta-kernel
+boot/net
+
+### Build the PXE compliant boot loader
+#boot/pxe
+
+### ---  OSKit-on-UNIX support libraries.
+unix
+
+### --- C Libraries
+
+### A minimal standard C library
+libc
+
+### A much more complete standard C library
+posix/sys
+
+### Thread-safe version of the previous
+posix/sys_r
+
+
+### --- Miscellaneous utility libraries
+
+### Address Map Manager
+amm
+
+### Library for contacting a bootp server
+bootp
+
+### Com IIDs library  (required for most kernels)
+com
+
+### For groking disk partitions
+diskpart
+
+### Include the Dynamic Packet Filter library
+#dpf/dpf
+
+### Exec library for loading linked executables
+exec
+
+### Read-only access to a number of filesystems
+fsread
+
+### Filesystem name parsing library
+fsnamespace/fsn
+
+### Same as above, but multithread safe
+fsnamespace/fsn_r
+
+### Fake UDP library (Only supports UDP send)
+fudp
+
+### Include the Hierarchical Packet Fair Queueing module
+#hpfq
+
+### The Memdebug library
+memdebug
+
+### The memory file system
+memfs
+
+### SMP support (believed to be broken)
+#smp
+## the SMP example
+#examples/x86/smp		### requires smp
+
+### POSIX threads
+threads
+
+### Simple Virtual Memory
+svm
+
+### UVM
+uvm/uvm
+
+### Simple Process Library
+uvm/sproc
+### the sproc example
+examples/x86/sproc		### requires sproc
+
+### --- Startup Library
+
+### Simpler functions for initializing OSKit subsystems
+### NOTE: this drags in almost every other library.
+startup
+
+
+### --- Devices, Networks and Filesystems
+
+### The device layer glue.  Depends on lmm and kern
+### Required for any kernel that uses OSKit devices.
+dev
+
+### Realtime support. Needed for realtime threads and for GPROF.
+realtime
+
+### Devices and code stolen from FreeBSD
+freebsd/dev
+#freebsd/net_flask
+freebsd/net
+freebsd/libm
+freebsd/libc
+freebsd/libc_r
+
+### Include Run-time linker support. This must come after freebsd build
+#rtld
+## The rltd example
+#examples/dyntest              ### requires rtld
+
+### Stuff stolen from Linux
+linux/dev
+linux/fs
+
+### Stuff stolen from NetBSD
+netbsd/fs
+
+### SVGA video library
+#video/svgalib
+### SVGA-related examples
+#examples/x86/video_svga		### requires video/svgalib
+
+### X11 video library
+#x11/client
+#x11/video
+### X11-related examples
+#examples/x86/video_x11		### requires x11/video
+
+### The zlib compression library
+#zlib
+
+### The UDP library. More complete than fudp, but not totally complete.
+udp
+
+### The Utah testbed TMCP communication library and examples
+#tmcp
+#examples/tmcp
+
+### The NetDisk kernel.
+## Requires the zlib compression library.
+## Requires the udp library.
+#netdisk
+
+### --- Scripts and build/debug utilities
+
+### Includes the CPU-oskit-gcc wrapper.
+unsupported
+
+
+### --- Additional stuff that must be at or near the end of the build
+
+
+### Sets of example kernels
+examples/x86
+examples/x86/extended
+examples/x86/threads
+
+### Building the example kernels as host-build binaries with unix-mode
+### emulation.  NOTE: These will only be built if you are compiling
+### the OSKit with unixmode support (and on Linux or FreeBSD).
+examples/unix
+examples/unix/extended
+examples/unix/threads
+
+### The OSKit test infrastructure
+testsuite
+
+### The security server
+security
+## security server example kernel
+examples/x86/security		### requires security
+
+### The Mad MPEG audio decoder library and example
+#libmad
+#libmad/minimad

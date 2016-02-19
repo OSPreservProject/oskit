@@ -1,0 +1,256 @@
+%
+% Copyright (c) 1997-1999 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{synch}
+
+\apiintf{oskit_lock}{Thread-safe lock interface}
+
+The {\tt oskit_lock} COM interface allows components to protect data
+structures from concurrent access by multiple threads. The interface is
+intended to be generic so that components do not need to know the specifics
+of any particular thread system. The user of a lock should be prepared for
+the possibility that the thread will be put to sleep if the lock cannot be
+granted. There are two variants supported; a regular lock and a critical
+lock. A critical lock differs only in that interrupts are blocked while the
+lock is held. The {\tt oskit_lock} COM interface inherits from {\tt
+oskit_iunknown}, and has the following additional methods:
+
+\begin{icsymlist}
+\item[lock]
+	Lock a lock.
+\item[unlock]
+	Unlock a lock.
+\end{icsymlist}
+
+\api{lock}{Lock a lock}
+\begin{apisyn}
+	\cinclude{oskit/com/lock.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_lock_lock(oskit_lock_t *lock);
+\end{apisyn}
+\begin{apidesc}
+	This method attempts to lock {\tt lock}. If the lock cannot be
+	immediately granted, the current thread is put to sleep until the
+	lock can be granted.
+\end{apidesc}
+\begin{apiparm}
+	\item[lock]
+		The {\tt oskit_lock} COM interface for the lock.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{lock}{Unlock a lock}
+\begin{apisyn}
+	\cinclude{oskit/com/lock.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_lock_unlock(oskit_lock_t *lock);
+\end{apisyn}
+\begin{apidesc}
+	This method unlocks {\tt lock}. If there are any threads waiting for
+	the lock, one will be woken up and granted the lock.
+\end{apidesc}
+\begin{apiparm}
+	\item[lock]
+		The {\tt oskit_lock} COM interface for the lock.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_condvar}{Condition variable interface}
+
+The {\tt oskit_condvar} COM interface allows components to wait for
+conditions. The interface is intended to be generic so that components do
+not need to know the specifics of any particular thread system. A condition
+is typically combined with an {\tt oskit_lock} object to facilitate building
+monitor type objects. Attempting to wait on a condition without supplying a
+locked {\tt oskit_lock} object results in undefined behavior. The {\tt
+oskit_lock} COM interface inherits from {\tt oskit_iunknown}, and has the
+following additional methods:
+
+\begin{icsymlist}
+\item[wait]
+	Wait on a condition variable.
+\item[signal]
+	Signal a condition variable.
+\item[broadcast]
+	Broadcast a condition variable.
+\end{icsymlist}
+
+\api{wait}{Wait on a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/com/condvar.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_condvar_wait(oskit_condvar_t *condvar, oskit_lock_t *lock);
+\end{apisyn}
+\begin{apidesc}
+	This method causes the current thread is to wait until the
+	condition variable is signaled or broadcast. The {\tt oskit_lock}
+	object must be locked when called. The lock is released prior to
+	waiting, and reacquired before returning.
+\end{apidesc}
+\begin{apiparm}
+	\item[condvar]
+		The {\tt oskit_condvar} COM interface for the condition
+		variable.
+	\item[lock]
+		The {\tt oskit_lock} COM interface for the lock.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{signal}{Signal a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/com/condvar.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_condvar_signal(oskit_condvar_t *condvar);
+\end{apisyn}
+\begin{apidesc}
+	Wake up exactly one thread waiting on the condition variable object
+	{\tt condvar}.
+\end{apidesc}
+\begin{apiparm}
+	\item[condvar]
+		The {\tt oskit_condvar} COM interface for the condition
+		variable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{broadcast}{Broadcast a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/com/condvar.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_condvar_broadcast(oskit_condvar_t *condvar);
+\end{apisyn}
+\begin{apidesc}
+	Wake up all threads waiting on the condition variable object
+	{\tt condvar}.
+\end{apidesc}
+\begin{apiparm}
+	\item[condvar]
+		The {\tt oskit_condvar} COM interface for the condition
+		variable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_lock_mgr}{Lock manager: Interface for creating locks and
+                         condition variables}
+\label{lock-mgr}
+
+The lock manager is registered in the services registry (See
+Section~\ref{oskit-services}) when the threading system (if it is included)
+is initialized. Components that need to protect data structures can query
+the services registry for the lock manager. Since the lock manager will
+only be registered by the threading system, the client can assume that the
+absence of a lock manager implies a single threaded system (locks are
+unnecessary). The {\tt oskit_lock_mgr} COM interface inherits from {\tt
+oskit_iunknown}, and has the following additional methods:
+
+\begin{csymlist}
+\item[allocate_lock]
+	Allocate a lock object.
+\item[allocate_critical_lock]
+	Allocate a critical lock object.
+\end{csymlist}
+
+\api{allocate_lock}{Allocate a thread-safe lock}
+\begin{apisyn}
+	\cinclude{oskit/com/lock_mgr.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_lock_mgr_allocate_lock(oskit_lock_mgr_t *lmgr,
+				    \outparam oskit_lock_t *out_lock);
+\end{apisyn}
+\begin{apidesc}
+	This method returns an {\tt oskit_lock_t} COM interface in {\tt
+	out_lock}.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmgr]
+		The lock manager COM interface.
+	\item[out_lock]
+		The {\tt oskit_lock} COM interface for the new lock.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{allocate_critical_lock}{Allocate a critical thread-safe lock}
+\begin{apisyn}
+	\cinclude{oskit/com/lock_mgr.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_lock_mgr_allocate_critical_lock(oskit_lock_mgr_t *lmgr,
+				    \outparam oskit_lock_t *out_lock);
+\end{apisyn}
+\begin{apidesc}
+	This method returns an {\tt oskit_lock_t} COM interface in {\tt
+	out_lock}. The lock is flagged as critical so that interrupts are
+	blocked while the lock is held.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmgr]
+		The lock manager COM interface.
+	\item[out_lock]
+		The {\tt oskit_lock} COM interface for the new lock.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{allocate_condvar}{Allocate a condition variable}
+\begin{apisyn}
+	\cinclude{oskit/com/lock_mgr.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_lock_mgr_allocate_condvar(oskit_lock_mgr_t *lmgr,
+				       \outparam oskit_condvar_t *out_condvar);
+\end{apisyn}
+\begin{apidesc}
+	This method returns an {\tt oskit_condvar_t} COM interface in {\tt
+	out_condvar}. Condition variables may be used in conjunction with locks
+	to form monitors.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmgr]
+		The lock manager COM interface.
+	\item[out_condvar]
+		The {\tt oskit_condvar} COM interface for the new condition
+		variable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+

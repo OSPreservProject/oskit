@@ -1,0 +1,358 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Memory
+//
+// There's a bewildering variety of memory interfaces available
+// ranging from very low level through to standard malloc-type
+// interfaces.
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+// not used: clientos/appmem.o
+
+/*# 
+A pure interface for manipulating memory pools.
+#*/
+bundletype LMM_T =
+{ include "${OSKITDIR}/oskit/lmm.h",
+  lmm_add_free,
+  lmm_add_region,
+  lmm_alloc,
+  lmm_alloc_aligned,
+  lmm_alloc_gen,
+  lmm_alloc_page,
+  lmm_avail,
+  lmm_dump,
+  lmm_find_free,
+  lmm_free,
+  lmm_free_page,
+  lmm_init,         // not an initializer - this is a pure component
+  lmm_remove_free,
+  lmm_stats,
+} with flags libc
+
+/*#
+A pool of physical memory (i.e., virtual address == physical address).
+Usually used by device drivers that do DMA (since DMA uses physical
+addresses).
+phys_mem_{min,max} keep track of the minimum and maximum addresses
+added to malloc_lmm.
+#*/
+bundletype PhysLMM_T =
+{ include "${BUILDDIR}/oskit/machine/pc/phys_lmm.h",
+  malloc_lmm,
+
+  include "${BUILDDIR}/oskit/machine/physmem.h",
+  phys_mem_min,
+  phys_mem_max,
+} with flags libc
+
+/*#
+This interface is often used by device drivers (which tend
+to care about physical and virtual addresses).
+#*/
+bundletype OSEnvMem_T =
+{ include "${OSKITDIR}/oskit/dev/dev.h",
+  osenv_mem_alloc,
+  osenv_mem_free,
+  osenv_mem_get_phys,
+  osenv_mem_get_virt,
+  osenv_mem_map_phys,
+  osenv_mem_phys_max,
+} with flags osenv
+
+/*#
+A COM wrapper for things in OSEnvMem_T.
+#*/
+bundletype OSEnvMemObj_T =
+{ osenv_mem_object
+}
+
+bundletype MemObj_T =
+{ oskit_mem_object
+}
+
+/*#
+I think this needs split up
+#*/
+bundletype Malloc_T =
+{ include "${OSKITDIR}/oskit/c/malloc.h",
+  free,
+  malloc,
+  memalign,
+  realloc,
+  sfree,
+  smalloc,
+  smemalign,
+  calloc,      // do these belong here?
+  mustcalloc,  // do these belong here?
+  mustmalloc,  // do these belong here?
+// , extends MemLock_T
+} with flags libc
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+// pure component - so no initialiser
+// mk_unit -o -n LMM lmm/lmm_add_free.o lmm/lmm_alloc_page.o lmm/lmm_free.o lmm/lmm_add_region.o lmm/lmm_avail.o lmm/lmm_free_page.o lmm/lmm_alloc.o lmm/lmm_avail_in.o lmm/lmm_init.o lmm/lmm_alloc_aligned.o lmm/lmm_dump.o lmm/lmm_remove_free.o lmm/lmm_alloc_gen.o lmm/lmm_find_free.o lmm/lmm_stats.o
+unit LMM = {
+  imports[ panic  : Panic_T,
+           stdout : Stdout_T,
+         ];
+  exports[ lmm : LMM_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "lmm/lmm_add_free.c"
+       , "lmm/lmm_alloc_page.c"
+       , "lmm/lmm_free.c"
+       , "lmm/lmm_add_region.c"
+       , "lmm/lmm_avail.c"
+       , "lmm/lmm_free_page.c"
+       , "lmm/lmm_alloc.c"
+       // , "lmm/lmm_avail_in.c" // empty
+       , "lmm/lmm_init.c"
+       , "lmm/lmm_alloc_aligned.c"
+       , "lmm/lmm_dump.c"
+       , "lmm/lmm_remove_free.c"
+       , "lmm/lmm_alloc_gen.c"
+       , "lmm/lmm_find_free.c"
+       , "lmm/lmm_stats.c"
+       }
+  with flags lmm;
+}
+
+/*#
+Use a multiboot-info block to initialise a default LMM.
+#*/
+// mk_unit -o -n multiboot_physlmm kern/base_multiboot_init_mem.o kern/phys_lmm_init.o kern/phys_lmm_add.o kern/phys_mem_min.o kern/phys_mem_max.o
+
+unit multiboot_physlmm = {
+  imports[ multiboot  : { boot_info },   // for cmdline start/end
+           ld_symbols : { _start_of_kernel, end }, // for text/data start/end
+           lmm        : LMM_T,          // lmm_add_free, lmm_add_region
+           vm         : VM_T,
+         ];
+  exports[ out : PhysLMM_T ];
+  constraints{ context exports <= NoContext };
+  initializer init for out;
+  depends{ inits + finis needs imports };
+  depends{ exports needs {} };
+  files{ "kern/x86/pc/base_multiboot_init_mem.c",
+         "kern/x86/pc/phys_lmm_init.c",
+         "kern/x86/pc/phys_lmm_add.c",
+         "kern/x86/pc/phys_mem_min.c",
+         "kern/x86/pc/phys_mem_max.c",
+         "knit/c/malloc_lmm_init.c",
+  } with flags kern;
+}
+
+/*#
+A COM wrapper for the malloc_lmm.
+morecore ought to be separate.
+#*/
+// mk_unit -o -n mem_obj clientos/mem.o clientos/morecore.o 
+unit mem_obj = {
+  imports[ lmm      : LMM_T,
+           phys_lmm : PhysLMM_T, // malloc_lmm
+           mem_lock : MemLock_T,
+           string   : String_T,
+           iids : {
+               oskit_iunknown_iid,
+               oskit_mem_iid,
+               },
+         ];
+  exports[ memobj : MemObj_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "clientos/mem.c", 
+         "clientos/morecore.c",
+  } with flags clientos;
+}
+
+/*#
+What the device drivers want to know about memory.
+Note that the OSEnvMem signature consists of two completely
+independent parts with independent implementations - should split
+into two parts.
+#*/
+// mk_unit -o -nosenv_mem dev/mem.o
+unit osenv_mem = {
+  imports[ memobj   : MemObj_T,
+           vm       : VM_T,
+           phys_lmm : PhysLMM_T,
+         ];
+  exports[ osenv_mem : OSEnvMem_T ];
+  constraints{ context {osenv_mem.osenv_mem_alloc, osenv_mem.osenv_mem_free} <= context memobj };
+  constraints{ context (exports - {osenv_mem.osenv_mem_alloc, osenv_mem.osenv_mem_free}) <= context (vm + phys_lmm) };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/mem.c" } with flags osenv;
+}
+
+/*#
+WARNING, WARNING: Ignores alignment on allocation.
+A wrapper for osenv_mem which puts guard bytes around the block.
+#*/
+unit osenv_memdebug = {
+  imports[ size : { size }, // size of guard blocks in words
+           mem : OSEnvMem_T,
+           panic : Panic_T
+         ];
+  exports[ osenv_mem : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/osenv_mem.c" } with flags osenv;
+  rename{ mem with prefix in_};
+}
+
+/*#
+WARNING, WARNING: Ignores alignment on allocation.
+A wrapper for osenv_mem which caches 30 values of specified size.
+#*/
+unit osenv_memcache = {
+  imports[ size : { size }, // size to cache
+           mem : OSEnvMem_T,
+         ];
+  exports[ osenv_mem : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/mem_cache.c" } with flags osenv;
+  rename{ mem with prefix in_};
+}
+
+/*#
+WARNING, WARNING: Ignores alignment on allocation.
+A wrapper for osenv_mem which implements AUTO_SIZE (because memcache
+punts if it gets AUTO_SIZE on a free).
+#*/
+unit osenv_memwrap = {
+  imports[ mem : OSEnvMem_T ];
+  exports[ osenv_mem : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/mem_auto.c" } with flags osenv;
+  rename{ mem with prefix in_};
+}
+
+/*#
+A wrapper for osenv_mem which prints something whenever you alloc/free.
+#*/
+unit osenv_memprint = {
+  imports[ mem : OSEnvMem_T,
+           stdout : Stdout_T,
+         ];
+  exports[ osenv_mem : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/osenv_mem_print.c" } with flags osenv;
+  rename{ mem with prefix in_};
+}
+
+/*#
+A COM wrapper for osenv_mem.
+#*/
+// mk_unit -o -nosenv_memobj dev/osenv_mem.o 
+unit osenv_memobj = {
+  imports[ osenv_mem : OSEnvMem_T,
+           iids      : {
+                oskit_iunknown_iid,
+                oskit_osenv_mem_iid,
+              },
+         ];
+  exports[ osenv_memobj : OSEnvMemObj_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/osenv_mem.c" } with flags osenv;
+}
+
+/*#
+Wraps the phys_lmm in another layer of COM.
+#*/
+// mk_unit -o -nosenv_memobj    dev/mem.o dev/osenv_mem.o 
+unit osenv_memobj = {
+  imports[ iids : { oskit_iunknown_iid
+                  , oskit_mem_iid
+                  , oskit_osenv_mem_iid
+                  },
+           services : Services_T, // oskit_get_mem
+           phys_lmm : PhysLMM_T,  // phys_mem_max
+           vm       : VM_T,
+         ];
+  exports[ out : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/mem.c"
+       , "dev/osenv_mem.c"
+       } with flags osenv;
+}
+
+/*#
+Implements the standard malloc interface on top of memobj.
+#*/
+// mk_unit -o -n libc_malloc libc/malloc.o libc/free.o libc/memalign.o libc/realloc.o libc/sfree.o libc/smalloc.o libc/smemalign.o libc/calloc.o libc/mustcalloc.o libc/mustmalloc.o
+unit libc_malloc = {
+  imports[ memobj : MemObj_T,
+           panic  : Panic_T,  // for must{c,m}alloc 
+           string : String_T, // memset for calloc
+         ];
+  exports[ malloc : Malloc_T ];  // mem_lock stuff reexported!
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/malloc/malloc.c"
+       , "libc/malloc/free.c"
+       , "libc/malloc/memalign.c"
+       , "libc/malloc/realloc.c"
+       , "libc/malloc/sfree.c"
+       , "libc/malloc/smalloc.c"
+       , "libc/malloc/smemalign.c"
+       , "libc/malloc/calloc.c"     // should these be here?
+       , "libc/malloc/mustcalloc.c" // should these be here?
+       , "libc/malloc/mustmalloc.c" // should these be here?
+       }
+   with flags libc;
+   rename{ memobj.oskit_mem_object to libc_memory_object};
+}
+
+/*#
+Implements the standard malloc interface on top of memobj.
+#*/
+
+// mk_unit -o -nfreebsd_malloc freebsd/libc/alloca.o freebsd/libc/calloc.o freebsd/libc/free.o freebsd/libc/malloc.o freebsd/libc/malloc_memobj.o freebsd/libc/mem_lock.o freebsd/libc/memalign.o freebsd/libc/morecore.o freebsd/libc/mustcalloc.o freebsd/libc/mustmalloc.o freebsd/libc/sfree.o freebsd/libc/smalloc.o freebsd/libc/smemalign.o freebsd/libc/realloc.o freebsd/libc/reallocf.o freebsd/libc/valloc.o
+
+unit freebsd_malloc = {
+  imports[ memobj : MemObj_T,
+           panic  : Panic_T,  // for must{c,m}alloc 
+           string : String_T, // memset for calloc
+          ];
+  exports[ malloc : { extends Malloc_T, reallocf } ];  // mem_lock stuff reexported!
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/libc/malloc/malloc.c"
+       , "freebsd/libc/malloc/free.c"
+       , "freebsd/libc/malloc/memalign.c"
+       , "freebsd/libc/malloc/realloc.c"
+       , "freebsd/libc/malloc/sfree.c"
+       , "freebsd/libc/malloc/smalloc.c"
+       , "freebsd/libc/malloc/smemalign.c"
+       , "freebsd/libc/malloc/calloc.c"     // should these be here?
+       , "freebsd/libc/malloc/mustcalloc.c" // should these be here?
+       , "freebsd/libc/malloc/mustmalloc.c" // should these be here?
+
+       // Note that this is not in Malloc_T - maybe should be in a 
+       // separate unit???
+       , "freebsd/3.x/src/lib/libc/stdlib/reallocf.c"
+       }
+   with flags libc;
+   rename{ memobj.oskit_mem_object to libc_memory_object};
+}
+
+/************************************************************/
+// End
+/************************************************************/

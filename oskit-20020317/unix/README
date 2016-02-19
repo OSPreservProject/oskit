@@ -1,0 +1,59 @@
+Directories: oskit/unix
+Target: liboskit_unix.a
+	unix_support_pthreads.o unix_support.o
+Documentation: unix-support.tex
+Original Code Source: Flux Research Group, University of Utah
+	Some of the ELF code is derived from FreeBSD (?)
+Description:
+
+This directory contains files providing the necessary support to debug
+and run certain OS Kit components in user-mode on unix.  In
+particular, you can run the networking stack on a separate interface,
+and run file system code on a regular Unix file.  Timers are also
+supported.
+
+By default, kernels should be compiled and linked against the oskit
+headers, and linked against the oskit C library (rather than the
+system headers in /usr/include and system libraries in /usr/lib).
+This allows more complete oskit kernels to be run in user mode.  This
+requires an additional library that contains the syscall stubs,
+renamed to avoid name collision.
+
+Support is provided for Linux with glibc and ELF, along with FreeBSD
+2.x a.out and 3.x a.out or ELF.  A number of example programs that use
+this code can be built in the examples/unix directory.  Support is
+controlled by the UNIX_HOST makefile variable.
+
+---
+
+This code has had several authors and has migrated (with some pains)
+from a one-off hack, to an extended example, and finally a full OSKit
+library.  The code's organization reflects this rough history.
+Addditional complications come from the fact that this code must
+stradle the OSKit/Unix line, seeing bits from each side of the fence
+simultaneously.
+
+---
+
+To run on Linux it's recommended that you use a 2.2.x kernel.  The
+2.0.x kernels don't support sigaltstack or the SO_SNDLOWAT,
+SO_RECVLOWAT, SO_SNDTIMEO or SO_RCVTIMEO socket options which are
+needed for general oskit support.  If you do run on a 2.0.x kernel,
+make sure you disable the STACKGUARD code in the pthreads library
+(currently the only thing that uses sigaltstack) and make sure that
+your oskit program can tolerate those socket options being undefined.
+
+All Linux systems are limited by the fact that all of the above socket
+options are read-only.  This may be a problem since the oskit supports
+setting these options on sockets.  None of the example programs, at
+least, rely on this behavior.
+
+Re debugging, you may see errors like
+	Cannot insert breakpoint 0:
+	Error accessing memory address 0xe: Invalid argument.
+when single stepping in code after an itimer has been setup.  (Note
+that 0xe == 14 == SIGALRM, on FreeBSD at least.)  To work around this
+you can set a breakpoint before the itimers are setup which does
+"handle SIGALRM pass" and then set one after the itimer stuff which
+does "handle SIGALRM ignore".  (I.e., set the breakpoint and then use
+the gdb "commands" command.)

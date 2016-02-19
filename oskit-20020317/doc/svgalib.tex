@@ -1,0 +1,38 @@
+%
+% Copyright (c) 1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+\section{Svgalib Video Library}
+\label{svgalib}
+
+The video_svgalib library contains the VGA portion of the well known ``svgalib''
+library.  It does not support the keyboard, joystick, mouse or gl
+functionality of svgalib.
+
+This library and its interface may change or disappear in the future,
+but it's useful for now.
+
+\subsection{So how do I use this?}
+
+The interface is the same as the VGA interface for Svgalib.  The extensive man
+pages for those functions are in {\tt oskit/video/svgalib/doc}, handily
+formatted for you.  Svgalib
+programs that use only the VGA interface should work with little
+change: you should only have to add code to do \oskit{} initialization.
+
+For an example of how to convert an svgalib program, you can look at
+{\tt examples/x86/svgalib.c}, which is one of the standard svgalib example
+programs converted to run on the oskit.
+
+\subsection{Dependencies}
+
+video_svgalib depends on {\tt oskit_startup, oskit_dev, oskit_kern,
+oskit_freebsd_m, oskit_c}, and {\tt oskit_lmm}.

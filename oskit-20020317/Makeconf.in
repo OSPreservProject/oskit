@@ -1,0 +1,52 @@
+#
+# Copyright (c) 1994,1998,1999,2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# All the programs and other cruddy little definitions
+# are made in just one place, here.
+# The directory names still need to be defined
+# in their own Makefiles, since they have to vary
+# depending on what directory level they're at.  <sigh>
+
+HOST_CPU	= @host_cpu@
+HOST_ARCH	= @host_arch@
+unix_host	= @unix_host@
+
+export CC	= @CC@
+export LD	= @LD@
+export STRIP	= @STRIP@
+export AR	= @AR@
+export RANLIB	= @RANLIB@
+export OBJCOPY	= @OBJCOPY@
+export NM	= @NM@
+
+AWK		= @AWK@
+YACC		= @YACC@
+M4		= @M4@
+INSTALL		= @INSTALL@
+INSTALL_PROGRAM	= @INSTALL_PROGRAM@
+INSTALL_DATA	= @INSTALL_DATA@
+
+DEFINES		= @DEFS@ @OSKIT_DEFS@
+CFLAGS		= @CFLAGS@
+M4FLAGS		= @M4FLAGS@
+
+INSTALL_INCDIR	= $(prefix)/include
+INSTALL_BINDIR	= $(exec_prefix)/bin
+INSTALL_LIBDIR	= $(exec_prefix)/lib
+
+OSKIT_OPTIONS	= @oskit_options@
+OSKIT_FFLAGS    = @OSKIT_FFLAGS@

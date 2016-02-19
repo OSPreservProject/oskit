@@ -1,0 +1,941 @@
+Go to http://www.cs.utah.edu/flux/oskit/ to check for more recent
+announcements.  It contains good information on what the OSKit is
+and what it's good for.
+
+Here are the recent announcements:
+
+----------------------------------------
+From: Mike Hibler <mike@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit 20020317 snapshot; St. Patrick's Day Snapshot
+Date: Sun Mar 17 2002
+
+
+Luck o' the Irish to ya!  After more than a year, we have finally made a
+new OSKit snapshot!
+
+The major new feature in this snapshot is Kota Abe's simple process library
+and encapsulated NetBSD UVM library.  The process library allows you to
+create multiple, demand-pageable, address spaces in which to run code in
+user-mode.  A mechanism exists for defining system calls to give access to
+privileged services from these user-mode processes.  It should be noted that
+this is only the first step in defining a process model in the OSKit.
+Kota did this work while a visiting researcher here in 2000-2001.
+
+We have also added some initial infrastructure for SNMP-like queries, but
+this work is *FAR* from complete, and the OSKit does *NOT* yet have any
+components for actually sending or receiving SNMP messages.  What it does
+have is COM interfaces that correspond to the major groups of SNMP's MIB-II,
+and the FreeBSD network stack now implements the relevant interfaces.
+
+Here is a brief rundown of other changes from the 20010214
+(``Valentine's Day'') release:
+
+BOOTLOADERS:
+* Netboot has been enhanced to support loading via TFTP as well as NFS.
+
+* Added ofwboot for Sharks.  It is the equivalent of pxeboot, interacting
+  with the Emulab bootinfo server to determine what kernel to boot.
+
+* Much reorg, bug fixing, and performance enhancement in netdisk.
+
+IMPROVEMENTS:
+* Make sure some examples (SVGA, X11) don't get built unless the libraries
+  are configured in.
+
+* Audio support on ARM.  Mostly entailed adding more device support for
+  the ARM and "commonizing" existing x86 code.  This was a lark project
+  to turn a Shark into an MP3 player.  See the libmad directory.
+
+* Added Testbed Master Control Protocol (TMCP) support for use in running
+  OSKit kernels in the Emulab (www.emulab.net) environment.
+
+* Changes to the startup library to allow more fine-grained initialization
+  of network interfaces, added startup for sound devices.
+
+* Added prototype support for transmit "polling" (i.e., transmit complete
+  interrupts disabled) to go along with receive polling in the network
+  infrastructure.  Only the eepro100 driver supports this mode of operation.
+
+IMPORTANT FIXES:
+
+* Various fixes to the mini UDP library: recvfrom returned wrong value,
+  alignment problems, problems with IP broadcast addresses.
+
+DOCUMENTATION:
+* Added chapters for simple process library and UVM library.
+
+* Began chapter documenting libstartup.
+
+* Changes to improve WWW version.
+
+NITS:
+* In mklinuximage, ensure that resulting binary is not too large for LILO
+
+* pthread_mutex_trylock can now be called at interrupt time
+
+* Propagate "no more space" errors on send from ethernet drivers through
+  the BSD network stack and back to applications.
+
+----------------------------------------
+From: Mike Hibler <mike@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit 20010214 snapshot; Valentine's Day Snapshot
+Date: Wed Feb 14 2001
+
+
+A little Valentine's Day gift from the Flux group to you, a new OSKit snapshot!
+
+The major new feature in this release is partial, optional support for
+our experimental new "Knit" component definition and linking language
+(to be released separately later today).  About half of the OSKit has
+been specified as several hundred well-defined units, composable with
+the Knit language.  More information is available in our forthcoming
+Knit announcement and at http://www.cs.utah.edu/flux/knit/ where you
+can also find documentation on the extant OSKit "units."
+
+This OSKit snapshot also contains infrastructure that is needed for an
+imminent release of our Active Network NodeOS, Moab.
+
+Here is a brief rundown of changes from the 20000901 (``Labor Day'') release:
+
+BOOTLOADERS:
+* Various netboot enhancements: it remembers the last command as well as
+  its network configuration across kernel invocations, it prompts for the
+  network configuration if bootp fails, and in general has been made less
+  chatty in its non-debug configuration.
+
+* The PXE bootloader can be used interactively.
+
+* Netdisk has been completely rewritten and separated from netboot.
+  It is now faster as well as more functional, see netboot/README for more.
+
+* All multiboot adaptors should now correctly detect physical memories
+  larger than 64Mb.
+
+IMPROVEMENTS:
+* The threaded netio and listener interfaces no longer implicitly create
+  a service thread.  The caller provides a thread via a "run" method.
+  (This allows the user program more control over the thread).
+
+* Threaded netio adaptors now uses a FIFO instead of a one-element buffer.
+
+* SVM distinguishes seg faults from protection faults
+
+* The OSKit/Unix code now supports the oskit_skbufio_t interface 
+  added in the Labor day release.
+
+* Added optional oskit_pthread_cpucycles function to return per-thread
+  high resolution (machine cycles) run time information.
+
+* Allow specification of multiple ethernet interfaces to use in unix mode
+  networking.
+
+IMPORTANT FIXES:
+* The Lance ethernet driver now works properly for PCI-based Lance cards
+  (previously would loop "discovering" the same card over and over).
+
+* Attempt to disable flow control in the EEPro100 driver to avoid generation
+  of (potentially disruptive) multicast flow control transmissions.  See
+  http://www.beowulf.org/listarchives/linux-eepro100/1999/09/0000.html
+  for details.
+
+* Fixes to OSKit-specific polling interface in the EEPro100 device driver.
+
+* Eliminated crash (in linux network drivers) if a packet arrives
+  between the time that a device is opened and the time the receive netio
+  is finally setup.
+
+* Allow individual schedulers to determine the validity of scheduler state
+  set via pthread_attr_setschedparam and pthread_setschedparam.
+
+* Properly define some _POSIX_THREAD_* symbols in the pthread implementation
+  to identify which features are supported.
+
+* Corrections to pass computation in CPU stride scheduler.
+
+* Properly load kernel DS segment before looking up IRQ handler in memory
+  (would fail if kernel ran in non-supervisor mode).
+
+DOCUMENTATION:
+* Syntax changes to get it to run through TeX4ht for producing a WWW version.
+
+NITS:
+* Cleanup minimal libc header files (removing references to things we lack)
+
+* CPUNITS -> KNIT in ifdefs
+
+* Support raw mode in clientos default console code.
+
+* Remove some performance monitoring code from IRQ handler (used rdtsc
+  instruction not present on older x86 boxes).
+
+* skbufio implementation uses a test-and-set rather than dis/en-abling
+  interrupts to preserve atomicity of its reference count.
+
+* Fix some namespace collision problems in header files.
+
+* oskit_linux_skbmem_* -> oskit_skbufio_mem_*
+
+* Unix mode networking code no longer fails catastrophically if it cannot
+  open a device.
+
+* Cleaned up lots of compiler warnings.
+
+----------------------------------------
+From: Leigh Stoller <stoller@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit 20000901 snapshot; Labor Day Snapshot
+Date: Fri Sept 1 2000
+
+
+Since it's "Labor Day" weekend, and we've been busy, we are making another
+OSKit snapshot.  Besides the usual round of and minor improvements and bug
+fixes-- including fixed 16-bit support-- we have made a number of important
+performance improvements, and have added several new features such as PXE boot
+support, POSIX realtime message queues and semaphores, a proportional share
+"stride" scheduler, and a new software interrupt mechanism.  We first discuss
+the performance improvements, and then features, applications, and fixes.
+
+PERFORMANCE:
+* Polled packet reception: Addition of receive side polling capability to
+  the oskit_netdev_t and oskit_etherdev_t interfaces. For network device
+  drivers that support receive side polling, you can now place the card in
+  polling mode (via the open call) instead of interrupt mode, and poll for
+  packets via the new "rxpoll" method in the aforementioned interfaces.  We
+  have modified the Tulip and EEPRO100 linux ethernet drivers to support
+  receive polling. We have also modified the OSKit version of the Click
+  Modular Router (version 1.0.6) to use the new polling interface. With
+  Click, we have seen an improvement of about 4 times in the number of
+  packets that can be forwarded before receive livelock is encountered With
+  all of the following optimizations in place, a Click router running on a
+  200 MHZ PPro can forward up to about 110,000 packets per second without
+  livelock.
+
+* New oskit_skbufio_t interface: Realizing that the oskit_bufio_t interface
+  is a little too generic, we added the oskit_skbufio_t interface, whose
+  single implementor is the linux network device driver. This new interface
+  allows a program to operate directly on the internals of the data
+  structure that underlies the oskit_skbufio_t, which of course is a linux
+  struct sk_buff. The result is less copying, fewer COM method calls, and
+  an overall improvement in packet forwarding and packet sending rates of
+  about 10 times.  We have seen similar results in the OSKit version of the
+  Click Modular Router (version 1.0.6), which was modified to use the
+  skbufio interface instead of the generic bufio interface.
+
+* Improved linux network device driver memory allocation: Two functions,
+  oskit_skbmem_{alloc,free}, were added (in linux/dev/skbuff_mem.c) to
+  allow a kernel to have direct control over memory used for skbuffs.  By
+  overriding these functions, a kernel can provide all memory used by
+  skbufios and other skbuff-based bufios that originate from the linuxdev
+  (device driver) library.  The default implementation of
+  oskit_skbmem_{alloc,free} manages a cache of skbuff memory to reduce the
+  frequency of memory allocation calls.  Skbuff memory is also allocated in
+  fixed-size chunks (corresponding to 0, 200 and 1600 byte skbuff lengths)
+  to reduce memory fragmentation.
+
+* Improved network bufio allocation: An added method in oskit_netio_t
+  allows the implementor of a netio interface to provide a specialized
+  oskit_bufio_t allocator. This specialized allocator can be used to
+  provide an oskit_bufio_t implementation that is specific to the
+  corresponding oskit_netio_t implementation. For example, the linux netio
+  implementation now allows you to allocate a bufio that is already in the
+  correct format (that is, looks like an SKB), so that packets can be more
+  directly sent out on the wire.
+
+FEATURES:
+* Improved software interrupt support: We have unified the software
+  interrupt mechanism so that any component that needs a software interrupt
+  to run at the end of a hardware interrupt has a consistent way to do
+  that. Previously, individual components rolled their own software
+  interrupt mechanism, with the result that they often ran before the
+  hardware interrupt was really over, and potentially saw an inconsistent
+  hardware state. We have fixed this by providing a single implementation
+  that any component can use. Each of the Linux, FreeBSD, and pthreads
+  modules have been modified. See oskit/dev/softirq.h for a description of
+  the new interface.
+
+* POSIX Realtime message queues and semaphores: New implementations of the
+  POSIX Realtime message queue (mq) and semaphore interfaces. These
+  interfaces are available to multithreaded oskit kernels, and are briefly
+  described in the pthreads chapter of the oskit documentation. Complete
+  documentation can found in the POSIX 1003.1b specification. Two small
+  demonstration programs: examples/x86/threads/{semtest.c,mqtest.c} are
+  provided.
+	
+* Stride Scheduler: A new Stride (proportional share) scheduler has been
+  added to the pthreads scheduler suite. This scheduler implements the
+  classic Stride algorithm as described in the paper referenced at the top
+  of threads/sched_stride/sched_stride.c. There is a simple demonstration
+  program: examples/x86/threads/stride_test.c.  Note that you must edit
+  threads/MakeFlags to ensure that the stride scheduler module is built
+  into the pthreads library.
+
+* Data compression library (ZLIB): The zlib subdirectory contains an
+  environment for building an OSKit version of zlib 1.1.3
+  (ftp://ftp.freesoftware.com/pub/infozip/zlib/). See the README file in
+  that directory for further instruction.  This zlib library is used in the
+  netdisk kernel below.
+
+APPLICATIONS:
+* PXE boot support: A new boot program that is PXE Version 2.0 compliant.
+  Built on the renovated 16bit code, the PXE boot program fits in the
+  required 32K, and functions as a first level boot program downloaded via
+  TFTP by the PXE boot ROM. Once loaded, it can load either a multiboot
+  compliant image via TFTP, or boot the active disk partition. There is a
+  lengthy description in boot/pxe/README. We also provide a little bootinfo
+  server that you can use to tell the pxeboot kernel what to do next.
+
+* A prototype network disk loader: The boot/disk directory contains
+  makefiles to build a variant of netboot capable of copying a compressed
+  disk image across NFS to a raw disk (or disk partition).  This primitive
+  ``netdisk'' kernel can be used to load a bare machine with a pre-prepared
+  disk image. Think of it as a remote "dd" program.  It is included for
+  reference only; we expect to have a better version soon.
+
+IMPORTANT FIXES:
+* Fixes to 16 bit code: Numerous fixes and improvements to the 16 bit code
+  for new versions of GCC and binutils. It is once again possible to build
+  a working linux boot image that is less than 64K is size.
+
+
+As before, go to http://www.cs.utah.edu/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+Thanks to all those who have sent in bug reports and/or fixes for past
+snapshots.  We appreciate your continued involvement in making the OSKit
+more useful for everyone.
+
+Happy "Labor Day Weekend" from the Flux Group and the
+University of Utah School of Computing!
+
+----------------------------------------
+From: Leigh Stoller <stoller@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit 20000505 snapshot, realtime & sched support: Cinco de Mayo
+Date: Thu May 5 2000
+
+To celebrate "Cinco de Mayo" we are making another OSKit snapshot.
+Besides the usual round of bug fixes and minor improvements, the major
+addition is improved support for realtime.  The OSKit's structure
+enabled significant support with only a modest amount of code.
+We added two currently orthogonal features:
+
+* A slightly modified version of the oskit device support library
+  (-loskit_dev) provides an extended API for registering realtime
+  device handlers that ensure that IRQs are delivered with minimum
+  possible latency.  Measurements indicate that average latency for
+  a realtime IRQ handler is just under 5 microseconds on a 200Mhz machine.
+  This allows, for example, reliable support for high speed data acquisition.
+
+* A moderate restructuring of the pthreads scheduling support allows
+  different types of schedulers to be easily plugged in.
+  Specifically, you can plug in the standard POSIX scheduler, and/or a
+  realtime scheduler.  For the POSIX scheduler, the original pthreads
+  scheduler is available.  For a realtime scheduler, you can use the
+  simple Earliest Deadline First (EDF) scheduler we threw together.
+  Or, you can easily write your own scheduler to replace either one.
+
+The realtime support is discussed in detail in oskit/threads/README.SCHED,
+also available at http://www.cs.utah.edu/flux/oskit/README.SCHED .
+
+As before, go to http://www.cs.utah.edu/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+Thanks to all those who have sent in bug reports and/or fixes for past
+snapshots.  We appreciate your continued involvement in making the OSKit
+more useful for everyone.
+
+Happy "Cinco de Mayo" from the Flux Group and the
+University of Utah Department of Computer Science!
+
+----------------------------------------
+From: Roland McGrath <roland@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: New OSKit snapshot oskit-20000202
+
+Date: Thu Feb 3 2000
+
+In honor of the first date in the OSKit's lifetime containing only even digits,
+we are happy to announce a new OSKit snapshot containing only odds and ends.
+(Our fearless leader Jay Lepreau has asked to be held personally
+responsible for the one-day time warp you are now experiencing.)
+
+If you've been burning to know what the OSKit would look like on a date
+with all even digits, now is your big chance.  (You'll just have to trust
+us that nothing changed since yesterday.  If you are burning to know what
+it will look like on the second date with all even digits, odds are that
+nothing will have changed by tomorrow.)
+
+This is an informal snapshot to make available the improvements we've made
+to the OSKit lately.  Along with the usual bug fixes and miscellaneous
+small improvements, this snapshot primarily features various configuration
+and build tweaks to make compiling and using the OSKit a little more
+seamless in common environments.  In particular, the hosted oskit support
+(aka "oskit-on-unix") is somewhat revamped and cleaned up, and should work
+more easily out of the box (on FreeBSD and Linux).  The "unsupported" gcc
+front-end script has been rewritten and should now work better; the same
+script (called "x86-oskit-gcc" or "arm32-oskit-gcc") works for linking
+OSKit kernels or with the `-hosted-oskit' switch to build oskit-on-unix
+executable files.  (Note that if you are cross-compiling, we now recommend
+using GCC 2.95.2, and the front-end script won't be built if your compiler
+is a very old one.  Native compilers based on GCC 2.7.x can still work, but
+not cross-compilers.)
+
+We have ongoing active OSKit-based projects involving the Kaffe Java VM,
+MIT's Click Router package, and our own Active Networks NodeOS system.
+(For more information about these projects, see our web pages.)  We are
+using these systems with the current OSKit internally, but it has been a
+busy time and we have not had a chance to make the latest code for these
+available yet.  We will be collecting these changes and making them
+publically available as we get the time.  Anyone with urgent research needs
+to use these systems with the latest OSKit can contact us, otherwise just
+stay tuned for separate announcements on this mailing list.
+
+
+As before, go to http://www.cs.utah.edu/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+
+Thanks to all those who have sent in bug reports and/or fixes for past
+snapshots.  We appreciate your continued involvement in making the OSKit
+more useful for everyone.  All the best from the Flux Group!
+
+
+----------------------------------------
+From: Roland McGrath <roland@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: New OSKit snapshot oskit-19991124
+
+Date: Wed Nov 24 1999
+
+This is an informal snapshot to make available the improvements we've made
+to the OSKit lately, and give all you energetic OS hackers something to
+chew on along with your leftover turkey this weekend.  An incomplete list
+of changes appears below.
+
+As before, go to http://www.cs.utah.edu/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+Enjoy, and Happy Thanksgiving from the Flux Group!
+
+
+New versions of Linux device drivers.
+	The entire suite of Linux device drivers has been updated to
+	2.2.12, replacing the code from Linux 2.0.29 used in previous
+	OSKit versions.  This adds a number of new devices as well as
+	better versions of existing drivers, bringing the last 2.5 years
+	of Linux device driver development into the OSKit.
+
+Floppy support.
+	The PC floppy disk driver (from Linux 2.2.12) is now available
+	(on x86 only).  This driver has had only very minimal testing.
+
+New versions of FreeBSD components.
+	The FreeBSD C library, math library, and network stack components
+	have been updated to release 3.2-STABLE of FreeBSD from the prior
+	collection of code from various 2.x releases.  The ISA device
+	drivers taken from FreeBSD have not been updated.
+
+OSKit StrongARM support improved.
+	The port of the OSKit to the StrongARM continues to progress
+	quickly.  FreeBSD networking, NetBSD filesystem, and Linux
+	device driver support have been added.  The builtin 10Mbit
+	ethernet and IDE Zip drive have been modestly tested.  So far we
+	still only support the DNARD ("Shark") platform.
+
+Flask security components.
+	Our colleagues at the NSA have integrated several more
+	components of the Flask security architecture (see
+	http://www.cs.utah.edu/flux/flask) into the OSKit, drawing upon
+	the work done in the Fluke operating system and from their
+	current work in Linux.	This snapshot includes COM interfaces
+	and default implementations for the "access vector cache" and
+	"security server" components, as well as updates to the file
+	access control wrappers.  The Flask COM interfaces are
+	documented in a new chapter of the OSKit documentation
+	(doc/flask.tex).  A simple example program,
+	examples/x86/netbsd_sfs_com.c, demonstrates the use of the
+	security server and filesystem access check framework.
+
+GCC 2.95 support for the x86.
+	Previous versions of the OSKit would not work (or even build)
+	with the EGCS line of GCC.  This snapshot supports building with
+	GCC 2.95.2, which is now the recommended version to use.
+	Note that the StrongARM port has always required GCC 2.95.
+	(See the previous snapshot announcement in the ANNOUNCE file
+	for full details about the tools needed for the StrongARM build.)
+
+Dropped a.out build support.
+	We no longer support an aout build of the OSKit.  You can still
+	produce aout format kernels, but it is done by converting an ELF
+	kernel with mkbsdimage and a special version of GNU ld.  Please
+	contact us if you have concerns about object file formats for
+	your uses of the OSKit.
+
+Support for buffering/blocking console input instead of busy-wait.
+	A new component layered on top of the minimal console support
+	provides a console device with interrupt-driven, buffered input
+	and proper blocking support with no busy-waiting (for both the
+	serial-port console and the PC console).  (This is still not a
+	production-quality device driver, and the default console
+	support remains unchanged, using a simple busy-wait.)  The new
+	function start_cq_console in -loskit_startup is the easy way to
+	use the new console code.
+
+"Enhanced" console support on X86.
+	The minimal output support for the X86 PC console has been
+	extended from emulating a teletype on steroids to emulating the
+	venerable ADM3A terminal, including support for a ^G bell using
+	the PC speaker.  The minimal keyboard input support for the X86
+	console now recognizes the Control and Meta (Alt) modifier keys.
+	(You can enjoy the world's only ADM3A with 25 lines and a Meta key!)
+
+Prototype packet dispatcher.
+	Framework for generic packet filtering support.  Currently uses DPF.
+
+Numerous bug fixes.
+	Fixed problem with interrupts being enabled too soon in the
+	base_* code.  The most annoying manifestation of this was netboot
+	hanging/crashing on some machines.
+
+	Many bootp fixes from Michael Hohmuth <hohmuth@innocent.com>.
+	Thanks Michael!
+
+	Lots of fixes to the pthreads library.  Most notably, a memory
+	leak when threads exited, indefinitely delayed thread cleanups,
+	and a random memory trashing bug on context switching.
+
+	Tweaks to X86 interrupt handling.  Mostly related to GPROF support.
+	The interrupt flag should now consistantly be disabled in hardware
+	interrupt handlers and enabled in software interrupt handlers.
+	With GPROF, the profiling timer should almost always be enabled
+	except for small sections of code on interrupt entry and exit.
+
+
+----------------------------------------
+From: Leigh Stoller <stoller@fast.cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit StrongARM support
+
+Date: Tue Sept 14 1999
+
+This informal snapshot is to make available a very preliminary version
+of StrongARM support. The only platform supported at this time is the
+Digital DNARD (Shark), which contains an SA-110 StrongARM CPU, and an
+I/O architecture that is very similar to a PC. There is still quite a
+bit of work to do, and the device support is extremely limited since
+the OSKit's device driver framework has not yet been ported to the
+Digital DNARD. The only documentation at this time is this message,
+although the kernel library is very similar to its x86 counterpart.
+If you are familiar with the x86 kernel library, you should be able to
+apply that knowledge to the ARM kernel library.
+
+***********************************************************************
+WARNING: If you are not interested in StrongARM support, then do not
+update to this snapshot, as validation has been very minimal.
+***********************************************************************
+
+As before, go to http://www.cs.utah.edu/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+These components and libaries build and appear to work okay:
+
+	oskit		crt		kern
+	boot/ofw	libc		posix/sys
+	posix/sys_r	threads		svm
+	amm		com		exec
+	lmm		dev		startup
+	clientos	memdebug	memfs
+	fsnamespace/fsn	fsnamespace/fsn_r
+	freebsd/libc	freebsd/libc_r
+	examples/arm32	examples/arm32/extended	examples/arm32/threads
+
+There is a new boot adaptor in boot/ofw that provides OFW->Multiboot
+boot adaptor support. The operation is very similar to the BSD boot
+adaptor, in that you can give it a multiboot compliant executable plus
+optional boot modules, and it will generate an OFW compliant (netbsd
+a.out) image which you can boot via tftp (dhcp). See the mkofwimage
+script in boot/ofw.  Note that mkofwimage relies on linker emulation;
+binutils needs to be built with both arm-elf and arm-netbsd targets
+enabled so that an a.out file can be generated from ELF input files.
+More on that below.
+
+At the moment, the only console that is fully supported is the serial
+console. VGA display output works, but keyboard input has not been
+finished, so you will need to interact with your DNARD via a serial
+line.  The baud rate defaults to 9600, since that is the speed at
+which the OFW boot loader drives the port. Of course, if you do not
+need to input anything, you can use the display for output by changing
+the "serial_console" variable in kern/arm32/shark/base_console_init.c.
+
+These components are not yet available:
+
+	* FreeBSD networking and math library
+	* Netbsd filesystem
+	* Linux filesystems and device drivers
+	* Netboot and multiboot adaptor
+	* Runtime Linker (RTLD)
+	* bootp
+	* fsread
+	* video/X11/wimp
+	* Keyboard support
+	* GPROF profiling support
+
+A note about compiler tools: Finding a consistent and working set of
+tools that would allow us to build on our FreeBSD 3.0 machines was a
+bit of a pain. We ended up using:
+
+	GCC 2.95
+	Binutils 990818 daily snapshot with a small patch
+	GDB 19990816 daily snapshot (for remote debugging)
+
+Using this toolset, you can build ELF multiboot compliant libraries
+and executables, but still create a proper OFW compliant a.out image
+using linker emulation. You can pick up these tools at the OSKit ftp
+site: ftp://flux.cs.utah.edu/flux/oskit/tools. There is a README file
+in that directory with instructions on how to configure and build the
+tools.
+
+Once you have a working tool chain on your path, the OSKit can be
+configured as follows (for cross compilation on a FreeBSD 3.0 box):
+
+	cd oskit-obj-dir
+	oskit-src-dir/configure --prefix=/your/prefix/dir \
+			--build=i586-freebsd arm-elf
+	gmake
+	gmake install
+
+Once you have an example kernel, you can create an OFW-bootable image
+using the mkofwimage script:
+
+	/your/prefix/dir/bin/mkofwimage -o foo.image your_kernel
+	cp foo.image /your/tftp/dir/proper_kernel_name
+
+Then log into your DNARD, and reboot it.
+
+---------------------------------------
+From: Leigh Stoller <stoller@fast.cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: New OSKit Snapshot oskit-990722
+
+Date: Thu July 22 1999
+
+We are making this snapshot to get out a large amount of new code for
+testing before making an official release of it. Much has changed,
+including some changes to how OSKit kernels should initialize themselves.
+Please take a look at the example programs in examples/x86 to see what
+needs to be done. As a companion to this release, there are two new
+substantial demonstration kernels available from the OSKit web page; an
+"fsck" kernel FreeBSD disk partitions, and a kernelized version of the
+popular "rsync" program.
+
+As before, go to http://www.cs.utah.edu/projects/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+A number of changes and fixes are contained in this snapshot:
+	Rework of the C and POSIX libraries to remove all linktime external
+	dependencies. All external interfaces are now accessed via a
+	services database that is provided to the C/POSIX library when the
+	kernel is initialized. The clientos library (described below) is
+	responsible for setting up the services database, as well as the C
+	library environment object that contains an assorted collection of
+	interfaces that only the C/POSIX library are interested in (such as
+	the console stream, the filesystem namespace, the memory allocator
+	for malloc, the sleep interface to give up the CPU in select,
+	etc.).
+
+	Addition of a new "ClientOS" library to encapsulate and initialize
+	many of the interfaces that an application program is dependent on,
+	typically through the C/POSIX library. The clientos is a mandatory
+	library that is responsible for initializing certain core
+	interfaces, such as the memory object (lowest level allocator), the
+	global registry, the C library environment object, and the default
+	console stream object. See the Client Operating System
+	(doc/clientos.tex) chapter in the documentation, as well as the
+	example programs for the new initialization sequence (notably, the
+	requirement of a call to oskit_clientos_init() in all OSKit
+	kernels).
+
+	Addition of a new Dynamic Linker/Loader (RTLD) library to allow ELF
+	format OSKit kernels to dynamically load ELF format shared
+	libraries (.so) files. This code is imported from the FreeBSD 3.0
+	rtld-elf library, and is contained in the rtld directory. See the
+	RTLD chapter in the documentation, (doc/rtld.tex) and the
+	demonstration kernel in examples/dyntest.
+
+	Lots of improvements and additions to the "startup" library.
+	Although still undocumented, the startup library is intended to
+	insulate the application program from the details of initializing
+	many devices and subsystems, and to aid in setting up the client
+	operating system. All of the example programs (sans one or two
+	maybe) now use the startup library for most of their device and
+	subsystem initialization. See the example programs in examples/x86.
+
+	Completion of the "services database" COM interface and
+	implementation.  The services database is a registry that maps GUID
+	to COM object instantiation. Its original implementation allowed
+	for a single global registry accessed by global functions. The
+	implementation is now complete, and allows per-object
+	instantiation. The global registry is now an instantiation of such
+	an object, but for backwards compatibility, is still accessible
+	through the original global function calls. See the Interface
+	Registration (doc/register.tex) chapter in the documentation.
+
+	Addition of a new filesystem namespace component. All pathname
+	translation has been moved out of the POSIX library and into the
+	oskit_fsnamespace component, which also encapsulates mount/unmount
+	and mountpoint traversal. Also does symlink traversal. See
+	oskit/fs/fsnamespace.h. In addition, a pathname cache (much like
+	the "namei" cache in the unix FS) was added to prevent repeated
+	entry into the driver framework to do directory lookups. This
+	resulted in huge performance improvements (up to 6x) in programs
+	that make heavy use of pathname translation (eg: rsync). The
+	improvement was especially pronounced in multithreaded programs,
+	where each entry into the driver framework results in the process
+	lock being taken and released.  See the fsnamespace chapter in the
+	documentation (doc/fsnamespace.tex), and the startup library
+	(startup/start_fs.c) for example usage.
+
+	Pthread library: Rework the mutex/condition code. Some general
+	clean up, and now allows statically allocated and initialized
+	mutexes and condition variables.  A statically allocated mutex or
+	condition will be properly initialized the first time it is used if
+	the program does not arrange for that to happen explicitly. Also
+	added sigwait, sigwaitinfo, sigtimedwait and sigqueue to the
+	multithreaded version of the signal code. Add documentation for the
+	CPU Inheritance framework to the pthread chapter.
+
+	Add small amounts of support for rsync and fsck kernels. More
+	additions to the C (added stuff that was previously excluded) and
+	POSIX library (some tty ioctls, getpass, lots of trivial stubs to
+	allow linking).  Added asyncio I/O support to the COM pipe
+	implementation since rsync uses pipes with select. Some fixes to
+	the network code to make sure that connections to a server get torn
+	before the oskit reboots, and to make sure a new initial segment
+	value gets chosen so that the server side is not confused by a new
+	connection with an old segment value.  This was causing failed
+	connections from the rsync client to the rsync server when doing
+	quick reboots. Much improved versions of memset, bzero, bcopy,
+	memcpy, etc (from NetBSD). Make sure all open files are closed
+	before the oskit reboots, so that all files are flushed to disk and
+	the disk can be cleanly unmounted.
+
+	A number of GPROF fixes and improvements when using the FreeBSD C
+	library. Certain errors (such as no a.out file) no longer result in
+	a partly written gmon.out file. This allows postmortem dump of the
+	gprof data, rather than having it dumped out on the console. Also
+	added a start_gprof() entrypoint to get the gprof code running in
+	main, since it is often the case that you do not want to count the
+	initialization code, or even have to worry about it. See
+	examples/x86/hello.c for an example program that uses
+	start_gprof().
+
+	The memfs now understands internal vs. external links (akin to
+	internal and external inode link counts in UNIX), which allows more
+	precise cleanup semantics and fixes memory leaks in some usage
+	patterns.  Several global variables were eliminated in favor of
+	per-instantiation variables.  Stat now returns more accurate
+	information about the file.
+
+	The simple console now uses COM Stream wrappers for the console
+	drivers (direct, gdb, serial).  Simplified base_console to use the
+	COM wrappers and separated out initialization into
+	base_console_init.c making it easier to override just the
+	initialization.
+
+	A fair amount of documentation reorganization, as well as some
+	additional chapters. The OSKit web page also reflects these
+	documentation changes (unlike the previous snapshot).
+
+	Osenv stuff. All of the "osenv" interfaces in the device library
+	have been COMified, and are exported to the device driver
+	libraries (Linux, Freebsd, Netbsd), which have been reworked to use
+	the dynamic interfaces, rather than static linktime dependencies on
+	the device library itself. These changes are not well documented
+	yet, but if you stick to using the "startup" library to initialize
+	your kernels, you should not have to worry about it much. Feel free
+	to ask us questions though.
+
+
+---------------------------------------
+From: Leigh Stoller <stoller@fast.cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: New OSKit Snapshot oskit-990402
+
+Date: Fri April 2 1999
+
+The main reason we're making this snapshot is to get out the new
+support for running OSKit kernels in emulation mode on top of Linux
+(previously it only ran on FreeBSD).  Linux users with their own
+OSKit kernels please give it a whirl and report back.
+See doc/unix-support.tex for details; search for "Linux".
+
+As before, go to http://www.cs.utah.edu/projects/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+A number of modest changes and fixes are contained in this snapshot:
+	Unix Mode emulation:
+	-Added support for building and running the Unix emulation
+	 package on Linux (ELF) and Freebsd 3.0 (a.out and ELF).
+	-Simplified the libraries and link lines in the makefiles so
+	 that building an oskit kernel under Unix mode is easier to do.
+	-Added code to several of the example kernels (socket_bsd,
+	 http_proxy) to demonstrate the use of Unix mode options.
+
+	Netboot kernel:
+	-Speed improvements: Overlap requests of several blocks of data at
+	 a time from the network, instead of serially in 1K chunks.
+	-Added support for building a GRUB-style DOS boot floppy image
+	 containing the GRUB boot loader and a netboot kernel.
+
+        Moved the bmod filesystem code out of the kernel library and into
+        its own library (liboskit_memfs). See memfs/memfs_com.c. The memory
+        file system is now completely independent of the multiboot and bmod
+        parsing code, allowing easier creation of multiple memory file
+        systems. The support code to populate a memfs from a multiboot bmod
+        is now part of the startup library. See startup/start_fs_bmod.c for
+        example usage.
+
+	Creating kernels:  added a new perl script for creating
+	MultiBoot images, "mkmb2".  Works the same as mkmbimage, but
+	runs much faster on large kernels.
+
+	Cleaned up the NetBSD glue code. Removed the fs library support
+	code, and replaced it with different glue code that uses the osenv_
+	routines in the device library (just as the Linux and Freebsd
+	drivers already did).
+
+	Pthread library changes: Implementation of pthread_kill() and
+	pthread_sigmask(). Conformant pthread_cleanup_push/pop; now
+	lexically scoped. A number of name changes to make the distinction
+	between API functions and local additons clear.
+
+	Assorted minor bug fixes.
+
+----------------------------------------
+From: Jay Lepreau <lepreau@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: New OSKit release, 0.97
+
+Date: Fri Jan 15 1999
+
+As before, go to http://www.cs.utah.edu/projects/flux/oskit/
+and everything hangs off there; currently mostly in ftp.
+
+The significant changes in 0.97 are:
+	Many thread library fixes and improvements. CPU inheritance
+	scheduling is much more stable, as is the generic threads code.
+
+	Restructuring of the minimal C library and FreeBSD C libraries. The
+	syscall to COM layer was split out into a separate library (see the
+	posix directory). Both C libraries now use the posix library for the
+	COM layer calls.
+
+	Patch1 to 0.96:
+	Fixes to the FreeBSD ISA device drivers. Now operational, and can be
+	used to provide a proper console TTY device that does cooked input.
+	See the example program console_tty.c in examples/x86/extended,
+	which demonstrates how to initialize a console TTY device and have
+	the FreeBSD C library make use of it.
+
+	Changes to how boot options are handled; OSKit programs no longer
+	see booting-options, such as "-h" or "-d", in argv.  These are now
+	stored in the oskit_bootargv array.  This is to make porting Unix
+	programs to the OSKit easier since they do not need to have special
+	OSKit code to tweak argv.  Syntax is documented at the end of the
+	Intro chapter.
+
+        We provide a mini-Java-shell for the Kaffe/OSKit environment.  All
+	the OSKit changes have been merged into Transvirtual's tree (but
+	shortly after they did a major change in build tools so we provide a
+	separate Kaffe tar file for the nonce).
+
+The above improvements were mainly due to the good work of Leigh Stoller;
+Bart Robinson did the booting/cmdline work and Godmar Back does a lot in all
+Kaffe-related work.
+
+   Fixes for all the bugs/fixes you sent in (thanks!) and others, including:
+	-Fixed remote GDB code so function calls from GDB work correctly.
+	-Linux ext2fs fixes
+	-lmm assert fix
+	-fix sleep record leak in linux/dev
+	-mklinuximage upgraded to match other mk* scripts
+	-Bad linuxboot.bin.good replaced with good uuencoded linuxboot.bin.uue.
+
+   Small stuff, including:
+	-Changes to support Kaffe.
+ 	-Add a #define for _OSKIT_VERSION in oskit/version.h.
+	-Some new files in preparation for importing secure filesystem and
+	 networking components.
+	-Document arg syntax for mk*image scripts, in their comments.
+
+
+----------------------------------------
+From: Jay Lepreau <lepreau@cs.utah.edu>
+To: oskit-announce@flux.cs.utah.edu
+Subject: OSKit 0.96 was released today
+Date: Fri, 18 Dec 98 21:58:09 MST
+
+Go to http://www.cs.utah.edu/projects/flux/oskit/
+and follow your nose for all the goodies.
+
+Briefly: it's up to 30 component libraries now, comes with 45 example
+mini-kernels, a 500 page (help!) document with few blank pages anymore
+(although still lots of gaps in it), can be configured with full
+multithreading and Posix threads, has prototype CPU inheritance scheduling
+in it (5 policies including 2 real time), has a hierarchical network
+link-sharing component, has a "simple virtual memory" component including
+pageout.  Has most Linux [and BSD] filesystems, several networking libs, the full
+FreeBSD library (which means most of Posix), lots of device drivers (perhaps
+60), profiling support, and some minimal video and window manager support.
+A currently inelegant but useful component lets you run many kernels on Unix
+in user-mode, which is great for debugging.  Most components now use the COM
+object model, which is a first in internal OS design.
+
+Just about every component is optional, and unlike any other OS, is designed
+to fit into *other* operating systems and environments if desired.  Of
+course the OSKit's got problems, too, don't we all.  There are a ton of
+things that it needs.  One nice thing in that regard is that it's easy to
+incrementally add to the OSKit.  Let's do it!
+
+Re licensing, the OSKit comes with full source, and is GPL'ed; "open
+source" is now the "in" term apparently.  If a business or someone has
+trouble with the GPL, the University is willing to talk about other options.
+
+As a special holiday bonus-- for such patience on your part-- this release
+supports a version, which we provide, of the Kaffe OpenVM (Java to you) from
+Transvirtual.  Thus you can link them together and you've got Kaffe on the
+bare HW [but without local display support], or with a configuration change,
+you can run the same "Java OS" on
+top of Unix.  Our Kaffe changes will go into the next beta release.
+Thanks to Tim Wilkinson and his company for giving Kaffe to the world.
+
+We are grateful to the long line of free software project from whom we drew
+code, including Mach, Linux, FreeBSD, NetBSD, and XFree86.  The GNU build
+tools were, as always, invaluable.  DARPA's support has been great.
+
+Finally, I want to thank and acknowledge the fine team at Utah that has
+accomplished so much, and with whom I have the honor to work with.  Check
+out the CREDITS file for their names.
+
+Jay Lepreau
+University of Utah
+lepreau@cs.utah.edu
+
+----------------------------------------
+OSKIT 0.96  December 18, 1998
+	Modest changes from 0.95, publically distributed.
+
+----------------------------------------
+OSKIT 0.95  June 29, 1998
+	Huge changes and additions.
+	Distributed to a few sites, but not widely.
+
+----------------------------------------
+OSKIT 0.60  September 1, 1996
+	Significant changes from 0.50, publically distributed.
+
+----------------------------------------
+OSKIT 0.50  July 12, 1996
+	First version released to the public.

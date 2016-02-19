@@ -1,0 +1,125 @@
+#
+# Copyright (c) 1995-1996, 1998, 1999, 2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_examples_unix_makerules_
+_oskit_examples_unix_makerules__ = yes
+
+#
+# The target source is all in the examples/x86 source directory.
+# This is a subset of the tests in that directory that actually
+# compile.  Many of them do not yet have sufficient support
+# to actually run correctly.
+#
+TARGETS = fsread hello linux_fs_com mouse netbsd_fs_com        \
+	netbsd_fs_posix netbsd_sfs_com pingreply socket_com    \
+	socket_com2 spf stream_netio timer_com timer_com2 uspf \
+	memfstest1
+
+# won't link: memtest memfs_com socket_bsd
+
+# memfs_com1: uses bmod_populate() which is inherently bare-hardware
+
+
+all: $(TARGETS)
+
+ifeq ($(HOST_ARCH),arm32)
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/arm32
+endif
+SRCDIRS      += $(OSKIT_SRCDIR)/examples/x86 \
+		$(OSKIT_SRCDIR)/examples/x86/more \
+		$(OSKIT_SRCDIR)/examples/x86/shared \
+		$(OSKIT_SRCDIR)/examples/x86/security
+INCDIRS      += $(OSKIT_SRCDIR)/oskit/c	\
+		$(OSKIT_SRCDIR)/examples/x86/shared
+
+CLEAN_FILES  +=	$(TARGETS) *.gdb
+
+# Get OSKIT_CFLAGS, CRT0, CRTEND, LDFLAGS and standard OSKit GNUmakerules
+include $(OSKIT_SRCDIR)/examples/unix/unixmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+##
+## Customize test cases by adding additional .o files (foo_XOBJS) and
+## libraries (foo_XLIBS) beyond the basic ones.
+##
+
+fsread_XLIBS	= -loskit_linux_dev -loskit_fsread
+
+linux_fs_com_XLIBS	= -loskit_linux_dev -loskit_linux_fs
+
+memfstest1_XOBJS	= osenv_memdebug.o
+memfstest1_XLIBS	= -loskit_memfs
+memfstest1: $(memfstest1_XOBJS)
+
+#memfs_com_XOBJS	= osenv_memdebug.o
+#memfs_com_XLIBS	= -loskit_memfs -loskit_lmm -Wl,-Map,foo
+#memfs_com: $(memfstest1_XOBJS)
+
+#memtest_XOBJS	= tiny_stack.o direct_console.o
+#memtest_XLIBS	= `$(CC) --print-libgcc-file-name`
+#memtest: $(memtest_XOBJS)
+
+mouse_XLIBS	= -loskit_unsupp -loskit_freebsd_dev
+
+netbsd_fs_com_XLIBS	= -loskit_netbsd_fs -loskit_linux_dev
+
+netbsd_fs_posix_XLIBS	= -loskit_fsnamespace -loskit_netbsd_fs \
+		-loskit_linux_dev -loskit_diskpart
+
+netbsd_sfs_com_XLIBS	= -loskit_fsnamespace -loskit_netbsd_fs \
+		-loskit_linux_dev -loskit_diskpart -loskit_security
+
+pingreply_XOBJS	= bootp.o
+pingreply_XLIBS	= -loskit_bootp -loskit_linux_dev
+pingreply: $(pingreply_XOBJS)
+
+spf_XLIBS	= -loskit_bootp -loskit_linux_dev
+
+socket_com_XOBJS	= bootp.o
+socket_com_XLIBS	= -loskit_bootp	-loskit_freebsd_net -loskit_linux_dev
+socket_com: $(socket_com_XOBJS)
+
+socket_com2_XOBJS	= bootp.o
+socket_com2_XLIBS	= -loskit_bootp	-loskit_freebsd_net -loskit_linux_dev
+socket_com2: $(socket_com_XOBJS)
+
+stream_netio_XLIBS	= -loskit_bootp -loskit_linux_dev
+
+uspf_XLIBS	= -loskit_linux_dev
+
+
+### Generic rule to build all of the targets
+$(TARGETS): % : %.o $(OBJDIR)/lib/unix_support.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking unix-mode example $@"
+	$(CC) -o $@ \
+		$(CRT0) \
+		$(OBJDIR)/lib/unix_support.o \
+		$@.o $($(*)_XOBJS) \
+		$(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-Wl,--start-group -loskit_startup -loskit_clientos \
+		-loskit_unix \
+		-loskit_lmm \
+		$($(*)_XLIBS) \
+		-loskit_unix \
+		-loskit_c \
+		-loskit_dev \
+		-loskit_c -loskit_com -loskit_c \
+		-lgcc -Wl,--end-group \
+		$(CRTEND)
+
+endif

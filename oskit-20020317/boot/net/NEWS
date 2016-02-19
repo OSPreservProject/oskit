@@ -1,0 +1,83 @@
+1.0 -> 1.1
+	- uses fdev stuff now and thus supports many more NICs (built with
+	  (vortex, tulip, hp-plus, and ne2000)
+	- stores netmask in hostorder consistantly now  Used to always send
+	  to the gateway, duh!
+	- called netbooty now
+
+1.1 -> 1.2
+	- called netboot again
+	- uses the OSKit bootp library
+	- cleanup, flux->oskit, other renaming
+
+1.2 -> 2.01
+	- Got it to be a multiboot kernel, instead of a BSD one.
+	  This simplifies the code and will enable us to work on Linux
+	  in the future.
+
+2.01 -> 2.02
+	- Made it boot multiboot kernels now, not BSD ones.
+	  This is mainly so we can pass them arbitrary command lines, which
+	  will eventually include a "return address" so we can regain control
+	  after the booted kernel exits.
+	  A disadvantage is that thre isn't a multiboot-boot-adaptor yet, so
+	  we can't glob a bunch of bmods together into a multiboot image like
+	  we can for BSD images.
+	- Various cleanup, bugfixes, and reorganization
+
+2.02 -> 2.1
+	- Implemented the regain-control feature.
+	- Implemented simple hostname lookup.
+
+2.1 -> 2.2
+	- Fixed the bug with using kernels bigger than approx 16M.
+	- Fixed the random memdebug "bad head magic" and LMM trashing,
+	  I think (by getting mem_lock from libkern instead of libc).
+	- Minor appearance tweaks.
+
+2.2 -> 2.3
+	- Fixed command-line parsing to not thing everything after
+	  the last slash is the kernel name.  Therefore it now works to
+	  have slashes in your command line like PATH=/bin:/usr/bin
+
+2.3 -> 2.4
+	- Fixed driver.c to use the new com_queue implementation of
+	  oskit_queue_t instead of the `struct packet_queue' thing,
+	  which was actually a stack(!).  This apparently fixes the
+	  hangs after the "Root server: 155.99.123.45, dir:..." line
+	  that were happening to Roland and me.  It also prevents
+	  `net_receive' from doing any mallocing.
+	- Removed bogus check that was preventing LILO from booting
+	  netboot.  LILO wasn't passing any args.
+	- Print oskit_error_t's as hex.
+	- Various cleanup.
+
+2.4 -> 2.5
+	- Various updates to deal with new commandline format, which
+	  is like:
+		progname [<booting-options and foo=bar> --] <args to main>
+	- As a result, we are now responsible for providing argv[0],
+	  and use the `file' part of the ip:/dir/file pseudo-URL.
+
+2.5 -> 2.5.1
+	- Fixed to not call strlen(0).  This is bad.  More specifically,
+	  if the program before us stored a bunch of poo at addr 0, then
+	  we can blow our stack in build_cmdline, which allocates
+	  a dynmaic stack array.
+
+2.5.1 -> 2.6
+	- Added NFS readahead code
+
+2.6 -> 2.6.1
+	- Added query for nfs readahead from environment
+
+2.6.1 -> 2.6.2
+	- Fixed ever-incrementing 'input' variable with leading spaces
+	- Changed main to return int (eliminate compiler warning)
+	Added fixes from Klaus Espenlaub <espenlaub@informatik.uni-ulm.de>:
+	- Pass the multiboot magic number in register %eax.
+	- Add code to properly number the IP packets sent out.
+	- Pass in the buffer size to parse_cmdline (for future robustness)
+	- When checking the multiboot image, replace panic()s with
+	  a failure return so we can recover.
+

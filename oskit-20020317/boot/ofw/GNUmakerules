@@ -1,0 +1,66 @@
+#
+# Copyright (c) 1996, 1998, 1999, 2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _boot_bsd_makerules_
+_boot_bsd_makerules_ = yes
+
+TARGETS = ofwboot.o mkofwimage ldscript.elf2bsd
+CLEAN_FILES += ofwboot.o
+
+# This must come before any includes since make runs the first rule
+# found if not explicitly told not to.
+all: $(TARGETS)
+
+# Where to look for src files.
+SRCDIRS += $(OSKIT_SRCDIR)/boot/ofw
+
+# Include the makefile containing the generic rules.  This must come
+# here since it depends on SRCDIRS and sets OBJFILES.  Yuck, I hate
+# order dependence.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+# Make sure crt0 comes first.
+OBJFILES := crt0.o $(filter-out crt0.o,$(OBJFILES))
+
+# DEPENDLIBS is kind of bogus.  It makes it so we get rebuilt if *any*
+# of the LIBS are newer than us.  It doesn't cause any libraries we
+# need to be built though.
+LIBS = -loskit_clientos -loskit_exec -loskit_kern -loskit_c -loskit_kern \
+       -loskit_lmm
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+ofwboot.o: $(OBJFILES) $(DEPENDLIBS)
+	$(LD) -o $@ -r $(LDFLAGS) $(OSKIT_LDFLAGS) $(OBJFILES) $(LIBS)
+
+.PHONY: mkofwimage
+mkofwimage:
+	chmod +x $@
+
+ldscript.elf2bsd:	ldscript.in
+	rm -f $@
+	cp $< $@
+
+# How to install it.  The rule to make $(INSTALL_BINDIR/mkofwimage
+# comes from the generic rule file
+install: $(INSTALL_LIBDIR)/boot/ofwboot.o $(INSTALL_BINDIR)/mkofwimage \
+	 $(INSTALL_LIBDIR)/boot/ldscript.elf2bsd
+
+$(INSTALL_LIBDIR)/boot/%: %
+	-mkdir -p $(@D)
+	$(INSTALL_DATA) $< $@
+
+endif

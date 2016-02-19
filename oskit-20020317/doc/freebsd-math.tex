@@ -1,0 +1,165 @@
+%
+% Copyright (c) 1997-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{freebsd-math}
+
+\section{Introduction}
+
+The \oskit's math library provides the traditional UNIX ``math
+library'' functions as required by the POSIX.1 and X/Open CAE specifications.
+These functions are required by a number of non-trivial applications,
+such as a Java or SR runtime system.
+The library itself is taken directly from the FreeBSD source tree
+({\tt /usr/src/lib/msun}),
+though it was developed by Sun Microsystems.
+
+\com{Godmar's original comment:
+Well, why not? When porting the Java or the SR runtime to the oskit,
+it is simply handy to have all the math functions available which are
+usually found in libm.a.
+}
+
+\subsection{Architecture Dependencies}
+The library supports both big or little endian architectures
+as well as multiple standards
+(with respect to how exceptions are handled and reported).
+The \oskit{} library also includes the
+i387-optimized versions of routines that were added by FreeBSD\@.
+The \oskit{} version is also built for ``multi-standard'' support with
+IEEE as the default.
+
+\com{Godmar's original comment:
+To be honest, I'm not completely sure whether it is architecture dependent
+or not. If FreeBSD's directory structure is an indicator, the only
+machine-dependent part lies in {\tt infinity.c}, which was located
+in the {\tt x86} subdir for that very reason.
+}
+
+\subsection{External Dependencies}
+The file \texttt{k_standard.c} requires either
+{\tt write} to file descriptor 2 or
+an {\tt fputs} and {\tt fflush} using {\tt stderr}.
+
+\subsection{Caveats}
+The \oskit{} math library is largely untested.
+
+There is currently no other floating point support in the \oskit{}.
+Most importantly, there is no floating point emulation code to allow
+math functions to run on systems without hardware FPUs.
+There is also no support for ``context switching'' floating point state.
+The default {\tt setjmp} and {\tt longjmp} calls do not save and restore
+floating point registers, nor does the default exception handler.
+Thus, any multi-threaded floating point application using a thread package
+built on top of these mechanisms would not work correctly.
+Finally, the minimal C library contains no functions for conversion
+or printing of floating point numbers.
+
+\newpage
+\section{Functions}
+
+Following is a list of the functions supported by the library.
+Since these functions and their implementations are fully standard,
+they are not described in detail here;
+refer to the ISO C and Unix standards for more information.
+
+%
+% csymlist instead of icsymlist to avoid generating wierd index entries
+% like ``acos,asin,atan,atan2''
+%
+\begin{csymlist}
+\item[acos,asin,atan,atan2]
+	\ttindex{acos} \ttindex{asin} \ttindex{atan} \ttindex{atan2}
+	arc cosine, sine, tangent function
+\item[acosh,asinh,atanh]
+	\ttindex{acosh} \ttindex{asinh} \ttindex{atanh}
+	inverse hyperbolic cosine, sine, tangent functions
+\item[cbrt]
+	\ttindex{cbrt}
+	cube root function
+\item[ceil]
+	\ttindex{ceil}
+	ceiling value function
+\item[cos,sin,tan]
+	\ttindex{cos} \ttindex{sin} \ttindex{tan}
+	cosine, sine, tangent functions
+\item[cosh,sinh,tanh]
+	\ttindex{cosh} \ttindex{sinh} \ttindex{tanh}
+	hyperbolic cosine, sine, tangent functions
+\item[erf,erfc]
+	\ttindex{erf} \ttindex{erfc}
+	error and complementary error functions
+\item[exp,expm1]
+	\ttindex{exp} \ttindex{expm1}
+	exponential function
+\item[fabs]
+	\ttindex{fabs}
+	absolute value function
+\item[floor]
+	\ttindex{floor}
+	floor value function
+\item[fmod]
+	\ttindex{fmod}
+	floating point remainder function
+\item[frexp]
+	\ttindex{frexp}
+	extract mantissa and exponent from double precision number
+\item[gamma,lgamma]
+	\ttindex{gamma} \ttindex{lgamma}
+	log gamma functions
+\item[hypot]
+	\ttindex{hypot}
+	Euclidean distance function
+\item[ilogb]
+	\ttindex{ilogb}
+	returns exponent part of a floating point number
+\item[isnan]
+	\ttindex{isnan}
+	test for NaN
+\item[j0,j1,jn]
+	\ttindex{j0} \ttindex{j1} \ttindex{j2}
+	Bessel functions of the first kind
+\item[ldexp]
+	\ttindex{ldexp}
+	load exponent of a floating point number
+\item[log,log1p]
+	\ttindex{log} \ttindex{log1p}
+	natural logarithm functions
+\item[log10]
+	\ttindex{log10}
+	base 10 logarithm function
+\item[logb]
+	\ttindex{logb}
+	radix-independent exponent function
+\item[modf]
+	\ttindex{modf}
+	decompose floating point number
+\item[nextafter]
+	\ttindex{nextafter}
+	return next representable double-precision floating point number
+\item[pow]
+	\ttindex{pow}
+	power function
+\item[remainder]
+	\ttindex{remainder}
+	floating point remainder function
+\item[rint]
+	\ttindex{rint}
+	round to nearest integral value
+\item[scalb]
+	\ttindex{scalb}
+	load exponent of a radix-independent floating point number
+\item[sqrt]
+	\ttindex{sqrt}
+	square root function
+\item[y0,y1,yn]
+	\ttindex{y0} \ttindex{y1} \ttindex{y2}
+	Bessel functions of the second kind
+\end{csymlist}

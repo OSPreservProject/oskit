@@ -1,0 +1,136 @@
+#
+# Copyright (c) 1998-2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_unix_makerules_
+_oskit_unix_makerules_ = yes
+
+#
+# There are three targets:
+#
+# 1) unix_support.o: for non-pthread programs. Override equiv implementations
+#    in the device and clientos library, plus a couple of others.
+# 2) unix_support_pthread.o: Almost the same set of files as (1), but with
+#    the addition of some files that override stuff in the threads library.
+# 3) liboskit_unix.a: The optional stuff, that is only used by unix mode
+#    programs. Mostly overrides stuff in other libraries.
+#
+TARGETS       = liboskit_unix.a unix_support_pthreads.o unix_support.o
+
+#
+# This stuff overrides the equivalent osenv code in dev library.
+# Both pthread and nonpthread programs need all this stuff.
+#
+OSENV         = osenv.o osenv_rtc.o osenv_intr.o pit.o rtclock.o irq.o \
+		unix_mem.o base_stack.o base_irq_softint_handler.o 
+
+#
+# These are the list of objects that get summarily shoved into the program.
+# pthread and non-pthread programs need a slightly different set of files.
+#
+NOPTHREAD_OBJ = $(OSENV) mem_lock.o stdio.o fd.o 
+PTHREAD_OBJ   = $(OSENV) pthread_guard.o threaded_stdio.o threaded_fd.o
+
+#
+# This is the optional stuff. Note that the $UNIX_HOST/GNUmakerules will add
+# to this list.
+#
+UNIXLIB_OBJ   = oskit_linux_block.o bmodfs.o filesystem.o libkern.o \
+		version.o errno.o mmap.o skbufio.o skbufio_mem.o
+
+SRCDIRS	     += $(OSKIT_SRCDIR)/unix
+
+#
+# -DOSKIT is used in assimilated code to mark our changes to it.
+#
+OSKIT_CFLAGS += -DOSKIT $(NATIVE_DEFS)
+
+
+CLEAN_FILES  += $(TARGETS)
+
+all:	startup $(TARGETS) $(addprefix $(OBJDIR)/lib/, $(TARGETS))
+
+# Include the host-specific UNIXLIB objects
+include $(OSKIT_SRCDIR)/unix/$(UNIX_HOST)/GNUmakerules
+
+unix_support.o: $(NOPTHREAD_OBJ) $(ERROBJ)
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(LD) -r -o $@ $(NOPTHREAD_OBJ) $(ERROBJ)
+
+unix_support_pthreads.o: $(PTHREAD_OBJ) $(ERROBJ)
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(LD) -r -o $@ $(PTHREAD_OBJ) $(ERROBJ)
+
+liboskit_unix.a: $(UNIXLIB_OBJ) unix_native.o
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating library $@"
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
+
+$(OBJDIR)/lib/%: %
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	test -d $(OBJDIR)/lib || mkdir $(OBJDIR)/lib
+	cp $< $@
+
+INSTALL_OSKITDIR = $(INSTALL_LIBDIR)/oskit
+
+install: $(addprefix $(INSTALL_OSKITDIR)/,$(filter-out lib%.a,$(TARGETS))) \
+	 $(addprefix $(INSTALL_LIBDIR)/,$(filter lib%.a,$(TARGETS))) \
+	 $(addprefix $(INSTALL_OSKITDIR)/unix/,$(STARTFILES))
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+OSKIT_CPPFLAGS := $(filter-out -nostdinc,$(OSKIT_CPPFLAGS))
+
+
+$(INSTALL_OSKITDIR)/unix/%: %
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	test -d $(@D) || mkdir -p $(@D)
+	$(INSTALL) $< $@
+
+native_syms: $(UNIXLIB_OBJ) unix_support_pthreads.o unix_support.o \
+	     $(STARTFILES)
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating native symbols list"
+	$(NM) -u $^ | sed -n 's/^[U ]*native_//p' | sort -u > $@
+nativecalls.o: native_syms $(NATIVECALLS_OBJ)
+# We need -dc to force errno to become a defined (and thus renamable
+# and localizable) .bss symbol rather than staying a common.
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(LD) -dc -static -r -L/lib -L/usr/lib -o $@ `sed 's/^/-u /' $<` \
+	       $(NATIVECALLS_OBJ) -lc
+nativecalls.stripped.o: nativecalls.o native_syms
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(OBJCOPY) --strip-unneeded `sed 's/^/-K /' native_syms` $< $@
+
+nativecalls.renamed.o: nativecalls.stripped.o native_syms
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(LD) -r -o $@ `sed 's/^.*$$/-defsym native_&=&/' native_syms` $<
+
+###
+### 'objcopy -L name': make name local to the file
+### 'objcopy -K name': copy only name from the source file
+unix_native.o: nativecalls.renamed.o
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(OBJCOPY) --strip-unneeded \
+		   `$(NM) $< | $(AWK) '/native_| __/ { print "-K", $$NF; next } \
+				       / w / { next } \
+				       { print "-L", $$NF }'` $< $@
+
+CLEAN_FILES+=native_syms 
+
+# Probably not needed by Knit but we'll build it anyway
+prepare:: native_syms
+
+endif

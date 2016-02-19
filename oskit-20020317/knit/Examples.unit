@@ -1,0 +1,344 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// The OSKit examples directories.
+//
+// These are applications (i.e., they export Main_T) not kernels.
+// Look in Kernels.unit and Delta.unit for kernels that use these
+// units.
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+// mk_unit -o -n example_hello examples/x86/hello.o
+unit example_hello = {
+  imports[ stdout  : Stdout_T,
+           version : VersionPrint_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/hello.c" } with flags examples;
+}
+
+// mk_unit -o -n example_timer examples/x86/timer.o
+unit example_timer = {
+  imports[ stdout  : Stdout_T,
+           exit    : Exit_T,
+           timer   : OSEnvTimer_T,
+	   jmp     : LongJmp_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/timer.c",
+  } with flags examples;
+}
+
+// mk_unit -o -n example_timer_com examples/x86/timer_com.o
+unit example_timer_com = {
+  imports[ stdout  : Stdout_T,
+           exit    : Exit_T,
+           clock   : OSEnvClock_T,
+	   jmp     : LongJmp_T,
+	   listener: CreateListener_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/timer_com.c",
+  } with flags examples;
+}
+
+// mk_unit -o -n example_timer_com2 examples/x86/timer_com2.o
+unit example_timer_com2 = {
+  imports[ stdout  : Stdout_T,
+           exit    : Exit_T,
+           clock   : OSEnvClock_T,
+	   jmp     : LongJmp_T,
+	   listener: CreateListener_T,
+	   panic   : Panic_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/more/timer_com2.c",
+  } with flags examples;
+}
+
+// mk_unit -o -n example_memfs_com examples/x86/memfs_com.o
+unit example_memfs_com = {
+  imports[ exit    : Exit_T,
+	   stdout  : Stdout_T,
+           string  : String_T, //  bzero
+           clock   : OSEnvClock_T,
+	   principal : CreatePrincipal_T,
+	   memfs   : MemFS_T,
+	   bmod    : { bmod_populate },
+	   iids    : { oskit_absio_iid,
+                       oskit_iunknown_iid,
+	               oskit_principal_iid,
+	   	      }
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/memfs_com.c" } with flags examples;
+}
+
+// mk_unit -o -n example_blkio examples/x86/blkio.o
+unit example_blkio = {
+  imports[ _exit    : _Exit_T,
+           stdin    : Stdin_T,
+           stdout   : Stdout_T,
+           string   : String_T,    //  memset
+           osenv    : OSEnvDump_T, // oskit_dump_devices 
+           linux    : { oskit_linux_block_open },
+           sleep    : OSEnvSleep_T,
+           malloc   : Malloc_T,    // sfree, smemalign
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/blkio.c" } with flags examples;
+}
+
+// mk_unit -o -n example_diskpart examples/x86/diskpart.o
+unit example_diskpart = {
+  imports[ diskpart : DiskPartition_T, 
+           ide      : { oskit_linux_block_open },
+           stdin    : Stdin_T,
+           stdout   : Stdout_T,
+           sleep    : OSEnvSleep_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/diskpart.c",
+  } with flags examples;
+}
+
+// mk_unit -o -n example_memfs_posix examples/x86/memfs_fs_posix.o
+unit example_memfs_posix = {
+  imports[ exit     : Exit_T,
+           stdin    : Stdin_T,
+           stdout   : Stdout_T,
+	   posixfiles : PosixFiles_T,
+	   posixfds : PosixFD_T,
+	   error    : Error_T,
+	   string   : String_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/more/memfs_fs_posix.c"
+       } with flags examples;
+}
+
+// mk_unit -o -n example_netbsdfs_posix examples/x86/netbsd_fs_posix.o
+unit example_netbsdfs_posix = {
+  imports[ exit     : Exit_T,
+           stdin    : Stdin_T,
+           stdout   : Stdout_T,
+	   posixfiles : PosixFiles_T,
+	   posixfds : PosixFD_T,
+	   error    : Error_T,
+	   string   : String_T,
+           getenv   : GetEnv_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/more/netbsd_fs_posix.c"
+       } with flags examples;
+}
+
+// mk_unit -o -n examples_ipinfo examples/x86/bootp.o 
+unit examples_ipinfo = {
+  imports[ bootp  : BootP_T,
+           stdin  : Stdin_T,
+           stdout : Stdout_T,
+           net    : Net_T,
+           string : String_T,
+         ];
+  exports[ out : { get_ipinfo, get_net_addr } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/shared/bootp.c"
+       } with flags examples;
+}
+
+// mk_unit -o -n example_pingreply examples/x86/pingreply.o
+unit example_pingreply = {
+  imports[ string   : String_T,
+           exit     : Exit_T,
+           stdout   : Stdout_T,
+           panic    : Panic_T,
+           sprintf  : Sprintf_T,
+           longjmp  : LongJmp_T,
+           osenv_dev: OSEnvDevice_T, // osenv_device_lookup
+           osenv_intr: OSEnvIntr_T,   // enable/disable
+           iids     : { oskit_etherdev_iid },
+           net      : Net_T,
+           bootp    : { get_ipinfo },
+           bufio    : BufIO_T,
+           netio    : NetIO_T,
+         ];
+  exports[ out : Main_T ];
+  // the lookup_etherdev dependency is a fake designed to force probing 
+  // (for ethernet devices)
+  depends{ exports needs (imports-osenv_dev) };
+  depends{ exports needs { osenv_dev.osenv_device_lookup_etherdev
+                      , osenv_dev.osenv_device_lookup } };
+  files{ "examples/x86/pingreply.c"
+       } with flags examples;
+}
+
+// mk_unit -n example_dining_phil examples/x86/threads/dphils.o
+unit example_dining_phil = {
+  imports[ stdout  : Stdout_T,
+           exit    : Exit_T,
+           abort   : AtExit_T,  // only { abort }
+           pthread : PThread_T,
+           locks   : PThreadLocks_T,
+           rnd     : { rand, srand },
+         ];
+  exports[ out : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/threads/dphils.c"
+  } with flags examples;
+}
+
+// mk_unit -n example_disktest examples/x86/threads/disktest.o
+unit example_disktest = {
+  imports[ stdout     : Stdout_T,
+           exit       : Exit_T,
+           abort      : AtExit_T,  // only { abort }
+           rnd        : { rand, srand },
+           pthread    : PThread_T,
+           panic      : Panic_T,
+	   posixfds   : PosixFD_T,
+	   posixfiles : PosixFiles_T,
+           time       : PosixTime_T,
+           bsd_files  : FreeBSDFiles_T,
+	   error      : Error_T,
+           strings    : String_T,
+           sprintf    : Sprintf_T,
+           malloc     : Malloc_T,
+           getenv     : GetEnv_T, 
+           mathstr    : MathString_T,
+        ];
+  exports[ out : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/threads/disktest.c"
+  } with flags examples_threaded;
+}
+
+// mk_unit -n example_disknet examples/x86/threads/disknet.o 
+unit example_disknet = {
+  imports[ stdout     : Stdout_T,
+           exit       : Exit_T,
+           rnd        : { rand, srand },
+           pthread    : PThread_T,
+           locks      : PThreadLocks_T,
+           panic      : Panic_T,
+	   posixfds   : PosixFD_T,
+	   posixfiles : PosixFiles_T,
+           socket     : PosixSocket_T,
+           bsd_files  : FreeBSDFiles_T,
+           netlib     : FreeBSDNetlib_T,
+	   error      : Error_T,
+           strings    : String_T,
+           sprintf    : Sprintf_T,
+           malloc     : Malloc_T,
+           getenv     : GetEnv_T, 
+           mathstr    : MathString_T,
+           log        : OSEnvLog_T
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/threads/disknet.c"
+  } with flags examples_threaded;
+}
+
+unit hello_min = {
+  imports[ stdout : Stdout_T ];
+  exports[ out : SimpleMain_T ];
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/hello_min.c" } with flags libc;
+  rename{ out.simplemain to hello };
+}
+
+unit echo = {
+  imports[ stdout : Stdout_T ];
+  exports[ out : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/echo.c" } with flags libc;
+}
+
+unit cat = {
+  imports[ cfiles : CFiles_T,
+           errno  : Errno_T,
+           stdout : Stdout_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/cat.c" } with flags examples;
+}
+
+unit time_test = {
+  imports[ time : PosixTime_T,
+            stdout : Stdout_T,
+         ];
+  exports[ simplemain : SimpleMain_T ];
+  depends{ exports + inits + finis needs imports };
+  %{
+#include <oskit/c/sys/time.h>
+#include <stdio.h>
+
+int simplemain(void)
+{
+        while (1) {
+                struct timeval tv1, tv2;
+                int i = 0;
+
+                gettimeofday(&tv1, 0);
+                printf("Time: %d\.%6d\n", tv1.tv_sec, tv1.tv_usec);
+
+                do {
+                        ++i;
+                        gettimeofday(&tv2, 0);
+                } while (tv1.tv_sec == tv2.tv_sec);
+                printf("Reads per second: %d\n",i);
+        }
+}
+  %} with flags examples;
+}
+
+// mk_unit -o -n example_ls examples/x86/bmodfs.o examples/x86/dols.o
+
+unit example_ls = {
+  imports[ files   : PosixFiles_T,
+           fds     : PosixFD_T,
+//           cfiles  : FreeBSDFiles_T,
+           cfiles  : CFiles_T,
+           stdout  : Stdout_T,
+           sprintf : Sprintf_T,
+           string  : String_T,
+           exit    : Exit_T,
+           error   : Error_T,
+//         time    : { ctime },
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/bmodfs.c",
+         "examples/x86/shared/dols.c",
+  } with flags examples;
+}
+
+/************************************************************/
+// End
+/************************************************************/

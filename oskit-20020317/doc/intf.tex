@@ -1,0 +1,440 @@
+%
+% Copyright (c) 1997-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+The \oskit's interfaces
+provide clean, well-defined intra-process or intra-kernel protocols
+that can be used to define the interaction
+between different modules of an operating system.
+For example, the \oskit\ provides a ``block I/O'' interface
+for communication between file systems and disk device drivers,
+a ``network I/O'' interface
+for communication between network device drivers and protocol stacks,
+and a file system interface similar to the ``VFS'' interface in BSD\@.
+However, the \oskit's interfaces were designed with a number of properties
+that make them much more useful as parts of a toolkit
+than are comparable traditional OS-level interfaces.
+These properties partly stem from the use of
+the Component Object Model (COM), described in Chapter~\ref{com}
+as the underlying framework in which the interfaces are defined,
+and partly just from careful interface design with these properties in mind.
+The primary important properties of the \oskit{} interfaces include:
+
+\begin{itemize}
+\item	{\bf Extensibility}.
+	Anyone can define new interfaces or extend existing ones
+	with no need to interact with a centralized authority.
+	Components can simultaneously use and export interfaces
+	defined by many different sources.
+\item	{\bf Simplicity}.
+	All of the \oskit's interfaces
+	take a minimalist design strategy:
+	only the most obvious and fundamental features
+	are included in the base interfaces.
+	Get it right first;
+	frills and optimizations can be added later
+	through additional or extended interfaces.
+\item	{\bf Full extensibility while retaining interoperability}.
+	Adding support in a component for a new or extended interface
+	does not cause existing clients to break.
+	Similarly, adding support in a client for a new interface
+	does not make the client cease to work with existing components.
+\item	{\bf Clean separation between components}.
+	The clean object model used by the \oskit{} interfaces
+	ensures that components do not develop implicit dependencies
+	on each other's internal state or implementation.
+	Such dependencies can still be introduced explicitly
+	when desirable for performance reasons,
+	by defining additional specialized interfaces,
+	but the object model helps prevent them from developing accidentally.
+\item	{\bf Orthogonality of interfaces}.
+	Like the \oskit{} components that use them,
+	the interfaces themselves are designed to be
+	as independent of and orthogonal to each other as possible,
+	so that exactly the set of interfaces needed in a particular situation
+	can be used without requiring a lot of other loosely related interfaces
+	to be implemented or used as well.
+\item	{\bf No required standardized infrastructure code}.
+	The \oskit{} interfaces can be used
+	irrespective of which actual \oskit{} components are used, if any;
+	they do not require any fixed ``support libraries'' of any kind
+	which all clients must link with in order to use the interfaces.
+	This is one important difference
+	between the application of COM in the \oskit{}
+	versus its original Win32 environment,
+	which requires all components to link with a standard ``COM Library.''
+\item	{\bf Efficiency}.
+	The basic cost of invocation of an \oskit{} COM interface
+	is no more than the cost of a virtual function call in C++.
+	Through the use of additional specialized interfaces
+	even this cost can be eliminated in performance-critical situations.
+\item	{\bf Automation}.
+	The simplicity and consistent design conventions
+	used by the \oskit's interfaces
+	make them amenable to use with automated tools,
+	such as \htmladdnormallinkfoot{Flick, the Flux IDL Compiler}%
+		{http://www.cs.utah.edu/flux/flick/},
+	in the future.
+\item	{\bf Binary compatibility}.
+	The Component Object Model and the \oskit's interfaces
+	are designed to support not only source-level
+	but binary-level compatibility
+	across future generations of components and clients.
+\end{itemize}
+
+As with all other parts of the \oskit,
+the client is not required to use the \oskit's interfaces
+as the primary inter-module interfaces
+within the system being designed.
+Similarly,
+the client may use only some of the interfaces and not others,
+or may use the \oskit's interfaces as a base
+from which to build more powerful, efficient interfaces
+specialized to the needs of the system being developed.
+Naturally, since the specific components provided in the \oskit{}
+must have \emph{some} interface,
+they have been designed to use the standardized \oskit\ interfaces
+so that they can easily be used together when desired;
+however, the OS developer can choose
+whether to adopt these interfaces
+as primary inter-module interfaces in the system,
+or simply to use them to connect to particular \oskit{} components
+that the developer would like to use.
+
+%XXX the COM interfaces are independent of execution environment.
+
+\section{Header File Conventions}
+
+This section describes some specific important properties
+of the design and organization of the \oskit{} header files.
+
+\subsection{Basic Structure}
+
+All of the \oskit's public header files
+are installed in an \texttt{oskit} subdirectory
+of the main installation directory for header files
+(e.g., \texttt{/usr/local/include} by default).
+Assuming client code is compiled
+with the main include directory in its path,
+this means that \oskit-specific header files are generally included
+with lines of the form `{\tt \#include <oskit/foo.h>}'.
+This is also the convention used
+by all of the internal \oskit{} components.
+Confining all the \oskit{} headers into a subdirectory in this way
+allows the client OS to place its own header files
+in the same header file namespace with complete freedom,
+without worrying about conflicting with \oskit{} header files.
+
+The \oskit{} follows this rule
+even for header files with well-known, standardized names:
+for example, the ANSI/POSIX header files provided by the minimal C library
+(e.g., \texttt{string.h}, \texttt{stdlib.h}, etc.)
+are all located in a header file subdirectory called \texttt{oskit/c}.
+On the surface this may seem to make it more cumbersome
+for the client OS to use these headers and hence the minimal C library,
+since for example it would have to `{\tt \#include <oskit/c/string.h>}'
+instead of just the standard `{\tt \#include <string.h>}'.
+However, this problem can easily be solved
+simply by adding the \texttt{oskit/c} subdirectory
+to the C compiler's include path
+(e.g., add \texttt{-I/usr/local/include/oskit/c} to the GCC command line);
+in fact this is exactly what most of the \oskit{} components themselves do.
+Furthermore,
+strictly confining the \oskit{} headers to the \texttt{oskit} subdirectory,
+it makes it possible for the client OS and the \oskit{} itself
+to have \emph{several} different sets of ``standard'' header files
+coexisting in the same directory structure:
+for example, the \oskit{} components derived from Linux or BSD
+typically leave \texttt{oskit/c} out of the compiler's include path
+and instead use the native OS's header files;
+this makes it much easier to incorporate legacy code with minimal changes.
+
+\subsection{Namespace Cleanliness}
+
+A similar namespace cleanliness issue
+applies to the actual symbols defined by many the \oskit{} header files.
+In particular, all \oskit{} header files defining COM interfaces,
+as well as any related header files that they cross-include
+such as \texttt{oskit/types.h} and \texttt{oskit/error.h},
+\emph{only} define symbols having a prefix of
+\texttt{oskit_}, \texttt{OSKIT_}, \texttt{osenv_}, or \texttt{OSENV_}.
+This rule allows these headers to be included
+along with arbitrary other headers from different environments
+without introducing a significant chance of name conflicts.
+In fact, the \oskit{} components derived from legacy systems,
+such as the Linux driver set and the FreeBSD drivers and TCP/IP stack,
+depend on this property,
+to allow them to include the \oskit{} headers
+defining the COM interfaces they are expected to export,
+along with the native Linux or BSD header files
+that the legacy code itself relies on.
+
+Once again,
+this rule creates a potential problem
+for header files whose purpose is to declare standard, well-known symbols,
+such as the minimal C library header files.
+For example, \texttt{string.h}
+clearly should declare \texttt{memcpy} simply as \texttt{memcpy}
+and not as \texttt{oskit_memcpy} or somesuch,
+since in the latter case the ``C library'' wouldn't be conforming to
+the standard C library interface.
+However, there are many types, structures, and definitions
+that are needed in both the minimal C library headers and the COM interfaces:
+for example, both the \texttt{oskit_ttystream} COM interface
+and the minimal C library's \texttt{termios.h}
+need to have some kind of \texttt{termios} structure;
+however, in the former case a disambiguating \texttt{oskit_} prefix is required,
+whereas in the latter case such a prefix is not allowed.
+Although technically these two \texttt{termios} structures
+exist in separate contexts and could be defined independently,
+for practical purposes it would be very convenient for them to coincide,
+to avoid having to perform unnecessary conversions
+in code that uses both sets of headers.
+Therefore, the solution used throughout the \oskit{} header files
+is to define the non-prefixed versions of equivalent symbols
+with respect to the prefixed versions whenever possible:
+for example, the \texttt{errno.h} provided by the minimal C library
+simply does a `{\tt \#include <oskit/error.h>}'
+and then defines all the \texttt{errno} values with lines of the form:
+
+\begin{verbatim}
+#define EDOM    OSKIT_EDOM
+#define ERANGE  OSKIT_ERANGE
+\end{verbatim}
+
+Unfortunately this is not possible for structures
+since C does not have a form of \texttt{typedef} statement
+for defining one structure tag as an alias for another.
+Therefore, the few structures that need to exist in both contexts
+(such as the \texttt{termios} structure mentioned above)
+are simply defined twice.
+Since these structures are generally well-defined
+and standardized by ANSI C, \posix{}, or CAE,
+they are not expected to change much over time,
+so the added maintenance burden should not be significant
+and is vastly outweighed by the additional flexibility
+provided by the clean separation of namespaces.
+
+\apisec{Common Header Files}
+
+This section describes a few basic header files
+that are used throughout the \oskit{}
+and are cross-included by many of the other \oskit{} headers.
+
+\api{boolean.h}{boolean type definitions}
+\label{oskit-boolean-h}
+\begin{apisyn}
+	\cinclude{oskit/boolean.h}
+\end{apisyn}
+\begin{apidesc}
+	Defines the fundamental values
+	{\tt TRUE} \ttindex{TRUE}
+	and
+	{\tt FALSE} \ttindex{FALSE}
+	for use with the machine-dependent {\tt oskit_bool_t} type.
+\end{apidesc}
+
+\api{compiler.h}{compiler-specific macro definitions}
+\label{oskit-compiler-h}
+\begin{apisyn}
+	\cinclude{oskit/compiler.h}
+\end{apisyn}
+\begin{apidesc}
+	Defines a variety of macros used to hide compiler-dependent ways
+	of doing things.
+
+	\begin{csymlist}
+	\item[OSKIT_BEGIN_DECLS, OSKIT_END_DECLS]
+		\ttindex{OSKIT_BEGIN_DECLS} \ttindex{OSKIT_END_DECLS}
+		All function prototypes should be surrounded by these macros,
+		so that a C++ compiler will identify them as C functions.
+	\item[OSKIT_INLINE]
+		\ttindex{OSKIT_INLINE}
+		Identifies a function as being inline-able.
+	\item[OSKIT_PURE]
+		\ttindex{OSKIT_PURE}
+		Identifies a function as ``pure.''
+		A pure function has no side-effects:
+		it examines no values other than its arguments
+		and changes no values other than its return value.
+	\item[OSKIT_NORETURN]
+		\ttindex{OSKIT_NORETURN}
+		Identifies a function as never returning (e.g., {\tt _exit}).
+	\item[OSKIT_STDCALL]
+		\ttindex{OSKIT_STDCALL}
+		Indicates that a function
+		uses an alternative calling convention compatibile with COM\@.
+		In particular,
+		this option indicates the called function will pop its
+		parameters unless there were a variable number of them.
+	\end{csymlist}
+\end{apidesc}
+
+\api{config.h}{\oskit{} configuration-specific definitions}
+\label{oskit-config-h}
+\begin{apisyn}
+	\cinclude{oskit/config.h}
+\end{apisyn}
+\begin{apidesc}
+	This file is generated by the {\tt configure} program.
+	It identifies a number of environment-dependent parameters.
+	Currently these are all related to the compiler and assembler
+	used to build the \oskit{}.
+
+	\begin{icsymlist}
+	\item[HAVE_CR4]
+		Defined if the assembler supports the \%cr4 register.
+	\item[HAVE_DEBUG_REGS]
+		Defined if the assembler supports the debug registers.
+	\item[HAVE_P2ALIGN]
+		Defined if the assembler supports the {\tt.p2align} pseudo-op.
+	\item[HAVE_CODE16]
+		Defined if your assembler supports the {\tt.code16} pseudo-op.
+	\item[HAVE_WORKING_BSS]
+		Defined if your assembler allows {\tt.space} within
+		{\tt.bss} segments.
+	\item[HAVE_PACKED_STRUCTS]
+		Defined if your compiler groks
+		{\tt __attribute__((packed))} on structs.
+	\item[HAVE_PURE]
+		Defined if your compiler groks
+		{\tt __attribute__((pure))} on functions.
+	\item[HAVE_NORETURN]
+		Defined if your compiler groks
+		{\tt __attribute__((noreturn))} on functions.
+	\item[HAVE_STDCALL]
+		Defined if your compiler groks
+		{\tt __attribute__((stdcall))} on functions.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{machine/types.h}{basic machine-dependent types}
+\label{oskit-machine-types-h}
+\begin{apisyn}
+	\cinclude{oskit/machine/boolean.h}
+\end{apisyn}
+\begin{apidesc}
+	This header file defines a number of types
+	whose exact definitions are dependent
+	on the processor architecture and compiler in use.
+
+	The following set of types
+	are guaranteed to be \emph{exactly} the indicated width
+	regardless of processor architecture;
+	they are used to get around the fact that
+	different C compilers assign different meanings
+	to the built-in C types such as \texttt{int} and \texttt{long}:
+	\begin{icsymlist}
+	\item[oskit_s8_t]	Signed 8-bit integer
+	\item[oskit_s16_t]	Signed 16-bit integer
+	\item[oskit_s32_t]	Signed 32-bit integer
+	\item[oskit_s64_t]	Signed 64-bit integer
+	\item[oskit_u8_t]	Unsigned 8-bit integer
+	\item[oskit_u16_t]	Unsigned 16-bit integer
+	\item[oskit_u32_t]	Unsigned 32-bit integer
+	\item[oskit_u64_t]	Unsigned 64-bit integer
+	\item[oskit_f32_t]	32-bit floating point type
+	\item[oskit_f64_t]	64-bit floating point type
+	\end{icsymlist}
+
+	The following types depend in various ways
+	on the target processor architecture:
+	\begin{icsymlist}
+	\item[oskit_bool_t]
+		This type represents the most efficient integer type
+		for storage of simple boolean values;
+		on typical architectures it is the smallest integer type
+		that the processor can handle with no extra overhead.
+	\item[oskit_addr_t]
+		This is an unsigned integer type the same size as a pointer,
+		which can therefore be used to hold
+		virtual or physical addresses and offsets.
+	\item[oskit_size_t]
+		This is an unsigned integer type
+		equivalent to \texttt{oskit_addr_t},
+		except that it is generally used to represent
+		the size of a data structure or memory buffer,
+		or a difference between two \texttt{oskit_addr_t}s.
+	\item[oskit_ssize_t]
+		This is a signed integer type
+		the same size as \texttt{oskit_size}.
+	\item[oskit_reg_t]
+		This is an unsigned integer type
+		of the same size as a general-purpose processor register;
+		it is generally but not necessarily always
+		equivalent to \texttt{oskit_addr_t}.
+	\item[oskit_sreg_t]
+		This is a signed integer type
+		the same size as \texttt{oskit_reg_t}.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{types.h}{basic machine-independent types}
+\label{oskit-types-h}
+\begin{apidesc}
+	This header file defines a few basic types
+	which are used throughout
+	many of the \oskit's COM interfaces.
+	These types correspond to standard \posix{} types
+	traditionally defined in \texttt{sys/types.h};
+	however, this does not mean that the client OS must use these types
+	as its standard definitions for the corresponding \posix{} symbols;
+	it only means that the client must use these types
+	when interacting with \oskit{} components
+	through the \oskit's COM interfaces.
+	All of the type names are prefixed by \texttt{oskit_},
+	for exactly this reason.
+
+	\begin{icsymlist}
+	\item[oskit_dev_t]
+		Type representing a device number;
+		used in the \texttt{oskit_stat} structure
+		in the \oskit's file system interfaces.
+		Note that the \oskit's file system components themselves
+		don't know or care about
+		the actual assignment or meaning of device numbers;
+		it is up to the client OS to determine
+		how these device numbers are used, if at all.
+	\item[oskit_ino_t]
+		Type representing a file serial number (``inode'' number),
+		again used in the \oskit's file system interfaces.
+		% XXX should be 64 bit?
+	\item[oskit_nlink_t]
+		Type representing the link count of a file.
+	\item[oskit_pid_t]
+		Type representing a process ID\@.
+		This type is used in a few COM interfaces,
+		such as the \texttt{oskit_ttystream} interface
+		which includes \posix-like job control methods.
+		Currently the \oskit{} currently does not include
+		any process management facilities,
+		but this type and the related methods that use it
+		are included in case such a facility is added in the future.
+	\item[oskit_uid_t]
+		Type representing a traditional \posix{} user ID\@.
+		The current \oskit{} components
+		do not know or care about \posix{} security,
+		but for example the NetBSD file system component
+		knows how to store and retrieve user IDs
+		in BSD file system partitions.
+	\item[oskit_gid_t]
+		Type representing a traditional \posix{} group ID\@.
+		The same considerations apply as for \texttt{oskit_uid_t}.
+	\item[oskit_mode_t]
+		Type representing a file type and access permissions bit mask;
+		again used in the file system interface.
+	\item[oskit_off_t]
+		Type representing a 64-bit file offset;
+		used in the file system interface.
+	\item[oskit_wchar_t]
+		Unicode ``wide'' character.
+	\end{icsymlist}
+\end{apidesc}
+

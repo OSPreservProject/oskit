@@ -1,0 +1,270 @@
+%
+% Copyright (c) 1999 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+\def\pd{packet dispatcher}
+\def\netio{\texttt{netio}}
+
+\label{pd}
+
+\section{Introduction}
+
+The \pd\ provides a mechanism for dispatching
+packets to one of several entities using \emph{packet filter}
+technology. The \pd\ API allows the
+user to specify the type of packet filter machinery to be used 
+internally (BPF+, DPF, etc.). 
+The entities register their interest in a type of packet using 
+filter-specific packet descriptions. 
+The \pd\ later demultiplexes incoming packets to the correct owner or,
+if a packet doesn't match any of the previously registered
+descriptions, to a user-defined default \netio. (See
+Section~\ref{oskit-netio} for general information about the \netio\
+interface.)
+
+The \pd's architecture is pictured in Figure~\ref{fig-pd-bw}.
+There are two data paths: one for packet description
+\emph{registration} and one for packet \emph{dispatch}. Packet
+owners register interest in a certain type of packets
+by calling {\tt oskit_packet_dispatcher_register} with
+a description of the packets along with
+a \netio\ object to which subsequently received,
+matching packets are pushed. The \pd's PID (Process ID,
+for lack of a better term) table
+provides the level-of-indirection necessary to map 
+filter-generated Filter IDs with caller-supplied PIDs.
+
+The type of packet filter used determines what format the packet
+descriptions take on. (As of this writing, only a single packet filter
+is implemented in the \oskit{}, but
+ the \pd\ code is implemented as if
+more than one were available to ease the burden in future work.)
+
+Because the \pd\ uses the \oskit{} \netio\ interface
+for both incoming and outgoing channels, the definition
+of a packet ``owner'' is not restricted in any way: it can run
+on different threads or the same thread, it can dispatch
+packets further or process them immediately, it can 
+process them inline or enqueue an event on an event queue.
+Owners can be flows, threads, processes---whatever 
+model fits the context. 
+
+The \pd\ can be used in several different contexts:
+used in conjunction with robust accounting, 
+it can detect a dearth in a packet owner's resources
+before expending resources processing packets destined
+to be dropped;
+the \pd\ can be used to process non-traditional
+packets such as IPv6; in an active network / server
+environment, the \pd\ can be used to dispatch packets
+to different Execution Environments. 
+
+\section{Example Use}
+
+The example application {\tt examples/x86/more/pd_ex.c} creates a \pd\
+which uses the \\
+{\tt OSKIT_PD_FILTER_DPF_INTERP } filter type, creates and
+registers a packet description for ARP requests, creates and registers
+a packet description for ARP replies, and dispatches incoming packets
+until a certain packet count is reached.
+
+\section{Restrictions}
+
+This section describes some of the important restrictions
+the \pd\ places on its use and future work:
+
+\begin{itemize}
+\item{
+	Currently, the packet dispatcher uses the default \netio\ 
+	implementation which disallows writes to the packet {\tt bufio}
+	objects. If modification of a packet is desired, a copy
+	must be made first. A better implementation would
+	leverage the \oskit{} IOLite interface.
+}
+\item{
+	A {\tt oskit_packet_dispatcher_destroy} 
+	call is needed.
+}
+\item{
+	Currently, only one \netio\ is associated with each
+	type of packet. Multiple owners of packets could be established 
+	by subclassing from this simple \pd\ and
+	extending the PID table (which is implemented as a hash
+	table) to either to hold multiple \netio~s in its
+	[key,value] pairs. 
+}
+\end{itemize}
+
+\section{Sanity checking}
+
+When the \oskit{} is compiled with debugging enabled ({\tt --enable-debug}),
+a number of sanity checks are compiled to help detect bad parameters. 
+
+\section{API reference}
+
+The following sections describe the functions exported by the Packet
+Dispatcher in detail.
+All of these functions, as well as the types necessary to use them,
+are defined in the header file {\tt <oskit/pd.h>}.
+
+%
+% oskit_packet_dispatcher_create
+%	
+
+\api{oskit_packet_dispatcher_create}{Create a packet dispatcher object}
+\begin{apisyn}
+	\cinclude{oskit/pd.h}
+
+	\funcproto oskit_s32_t oskit_packet_dispatcher_create(
+	{\tt oskit_pd_t **}pd, 
+	oskit_u32_t filter_type, 
+	oskit_netio_t **push_netio,
+	oskit_netio_t *default_outgoing);
+\end{apisyn}
+\begin{apidesc}
+	Upon successful
+	return, {\tt pd} points to the newly created packet dispatcher.
+	In subsequent \pd\ operations, the caller must pass back
+	a pointer to the same {\tt pd} structure which acts as
+ 	a handle for the \pd.
+
+	The caller must provide a pointer to the default  
+	\netio\ channel. Any packets which do not match any 
+	registered packet description will be pushed to the default
+	\netio. For example, after creation but before any
+	{\tt oskit_packet_dispatcher_register} calls, 
+	all received packets are routed to the default \netio\ 
+	since there are no 
+	packet descriptions registered in the packet dispatcher.
+
+	The caller must provide a pointer to a \netio\
+	object. This pointer is initialized during the call to represent
+	the packet dispatcher's incoming channel. 
+\end{apidesc}
+\begin{apiparm}
+	\item[pd]
+		Pointer to the \pd\ just created. Used as 
+		a handle in subsequent \pd\ calls. The caller
+		should think of \pd\ as an opaque object; 
+		modifications of the underlying structure are
+		not allowed. 
+	\item[filter_type]
+		A constant representing what 
+		filter machinery is desired for use inside
+		the \pd. The valid types are defined in 
+		{\tt <oskit/pd.h>}. As of this writing, there
+		is only one valid type: {\tt OSKIT_PD_FILTER_DPF_INTERP }.
+	\item[push_netio]
+		\netio\ from which the \pd\ will receive packets.
+		One might later pass this argument
+		to {\tt oskit_etherdev_open}, for example.
+	\item[default_outgoing]
+		The \netio\ to which packets not matching any
+		specified filter are pushed by the dispatcher. 
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% oskit_packet_dispatcher_register
+%	
+
+\api{oskit_packet_dispatcher_register}{Register an packet owner}
+\begin{apisyn}
+	\cinclude{oskit/pd.h}
+
+	\funcproto oskit_s32_t oskit_packet_dispatcher_register(
+	{\tt oskit_pd_t **}pd, 
+	oskit_s32_t *pdid,
+	oskit_netio_t *out_netio,
+	void *pdescr,
+	oskit_s32_t sz);
+\end{apisyn}
+\begin{apidesc}
+	This function is used to associate a packet owner (flow,
+	process, whatever) with a packet description. After
+	successful registration, the \pd\ will push packets
+	matching the given description to the given \netio. It
+	is the caller's responsibility to ensure their description
+	is unique so that ambiguity is avoided. 
+
+	The format of the packet description is determined by
+	the {\tt filter_type} argument to the 
+	{\tt oskit_packet_dispatcher_create} call. 
+\end{apidesc}
+\begin{apiparm}
+	\item[pd]
+		Handle to the \pd returned from previous
+		call to {\tt oskit_packet_dispatcher_create}. 
+	\item[pdid]
+		Upon return, the \pd\ ID associated with this packet
+		descriptor/owner pair. The user should use this
+		value to identify the pair when calling
+		{\tt oskit_packet_dispatcher_delete}. The value
+		is undefined if insertion wasn't successful (see
+		return value). 
+	\item[out_netio]
+		Pointer to the \netio\ to which packets
+		matching {\tt pdescr} are pushed.
+	\item[pdescr]
+		A description of the packet. The format of
+		the packet description is dependent upon
+		the type of filter machinery specified in the
+		\pd\ creation call. 
+	\item[sz]
+		The size of {\tt pdescr} in bytes. 
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% oskit_packet_dispatcher_delete
+%	
+
+\api{oskit_packet_dispatcher_delete}{Disassociate a packet owner / 
+	packet pair}
+\begin{apisyn}
+	\cinclude{oskit/pd.h}
+
+	\funcproto oskit_s32_t oskit_packet_dispatcher_register(
+	{\tt oskit_pd_t **}pd, 
+	oskit_s32_t fid);
+\end{apisyn}
+\begin{apidesc}
+	This function is used to disassociate a packet owner (flow,
+	process, whatever) from a packet description. 
+\end{apidesc}
+\begin{apiparm}
+	\item[pd]
+		Handle to the \pd returned from previous
+		call to {\tt oskit_packet_dispatcher_create}. 
+	\item[pdid]
+		The \pd\ ID of the owner/packet description pair
+		to be deleted. This ID was previously returned
+		in a call to {\tt oskit_packet_dispatcher_register}.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\psfigure{pd-bw}{
+	The Packet Dispatcher architecture has two data paths:
+	\emph{registration} and \emph{dispatch}. The PID table
+	provides the level-of-indirection necessary to map 
+	filter-generated Filter IDs with caller-supplied PIDs.
+}
+
+

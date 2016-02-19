@@ -1,0 +1,21 @@
+Directories: oskit/video/svgalib
+Target: liboskit_svgalib.a
+Documentation:
+Original Code Source:
+	Flux Research Group, University of Utah
+	hhanemaa@cs.ruu.nl (Harm Hanemaayer) et al.
+Description:
+	This directory contains the OSKit glue and svgalib source
+	for the liboskit_video_svgalib.a library.
+
+	Documentation previously included here can be found at:
+		ftp://flux.cs.utah.edu/flux/oskit/doc/svgalib-doc.tar.gz
+
+	include/ contains some linux kernel assembly files that
+	are needed for compiling the library.
+
+	oskit/ contains some simple support functions that svgalib
+	needs, along with more heavily modified versions of some of
+	the svgalib files (vga.c and vgamisc.c).
+
+	src/ contains slightly modified svgalib 1.3.0 sources.

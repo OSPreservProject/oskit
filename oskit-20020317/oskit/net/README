@@ -1,0 +1,19 @@
+
+Directories: oskit/oskit/net
+Target: 
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	1. Header files that describe COM interfaces for
+	simple BSD-Sockets. (socket.h)
+
+	2. freebsd.h: This header file contains the function
+	declarations needed to bring up and use the FreeBSD
+	derived network code.
+
+	The second part contains an OLD interface on top of which
+	the COM adaptors are implemented. (Functions such as
+	bsdnet_listen) Note that these are DEPRECATED - the
+	COM adaptors will soon be the only way to access
+	the functionality of the TCP/IP library.
+

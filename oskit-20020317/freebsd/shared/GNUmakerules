@@ -1,0 +1,80 @@
+#
+# Copyright (c) 1997-2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#
+# these GNUmakerules are shared between the FreeBSD derived stuff
+# (which is dev and net for now)
+#
+# This file is included by the actual GNUmakerules files in these 
+# directories. Unfortunately, one has to be careful *where* to
+# include it (after setting OBJFILES, for instance) 
+#
+
+#ifndef _oskit_freebsd_shared_makerules_
+_oskit_freebsd_shared_makerules_ = yes
+
+SRCDIRS += $(addprefix $(OSKIT_SRCDIR)/freebsd/,        \
+		shared                                  \
+		shared/$(HOST_ARCH)                     \
+		src/sys/kern                            \
+		src/sys/libkern)
+
+# include files
+INCDIRS += $(OSKIT_SRCDIR)/freebsd/dev/include		\
+	   $(OSKIT_SRCDIR)/freebsd/src/sys              \
+	   $(OSKIT_SRCDIR)/freebsd/src/include		\
+	   objinclude
+
+ifeq ($(HOST_ARCH),x86)
+OBJINC   = $(OSKIT_SRCDIR)/freebsd/src/sys/i386/include 
+else
+OBJINC   = $(OSKIT_SRCDIR)/freebsd/shared/arm32/include 
+endif
+
+# defines
+DEFINES += -DOSKIT -DKERNEL
+
+#
+# Override the build environment compiler setting of FreeBSD
+#
+OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/freebsd/shared/freebsd_version.h
+
+# Implicitly include the global.h header file at the top of _all_ sources.
+# This header #defines a bunch of global FreeBSD symbols
+# to ensure linker namespace cleanliness and avoid conflicts.
+OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/freebsd/dev/global.h
+
+### Include other appropriate make rules files ###
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+# Remove the -I- from the CPPFLAGS option string,
+# because some stupid code in FreeBSD uses #include <file.h>
+# to include private header files...
+OSKIT_CPPFLAGS := $(filter-out -I-,$(OSKIT_CPPFLAGS))
+
+# Create the objinclude/machine symlink.
+# We have to kludge a little to get it to work right,
+# because OSKIT_SRCDIR might be either an absolute or a relative path
+# and it will only work reliably if interpreted from _this_ directory.
+$(OBJFILES): objinclude/machine
+CLEAN_FILES += objinclude objinclude/machine objinclude_machine
+objinclude/machine:
+	-mkdir -p objinclude
+	ln -s ../objinclude_machine objinclude/machine
+	ln -s $(OBJINC) objinclude_machine
+
+#endif

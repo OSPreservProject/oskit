@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Copyright (c) 1994-1995 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Boot Loader, which is free software,
+# also known as "open source;" you can redistribute it and/or modify it under
+# the terms of the GNU General Public License (GPL), version 2, as published
+# by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# Many of the files in this directory are taken verbatim
+# from the Linux kernel source distribution.
+# This script updates these source files from a Linux source tree
+# whose location is specified by the first argument
+# (e.g. `update-from-linux /usr/src/linux').
+
+if [ $# -eq 0 ]; then
+	echo "Usage: $0 <linux-kernel-srcdir>"
+	echo "  e.g. $0 /usr/src/linux"
+	exit 1
+fi
+
+
+# This list is sorted for convenience;
+# please keep it that way.
+
+cp $1/include/linux/config.h .
+cp $1/include/linux/segment.h .
+cp $1/zBoot/crypt.h .
+cp $1/zBoot/gzip.h .
+cp $1/zBoot/inflate.c .
+cp $1/zBoot/lzw.h .
+cp $1/zBoot/unzip.c .

@@ -1,0 +1,1805 @@
+%
+% Copyright (c) 1996-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{libc}
+
+\section{Introduction}
+
+The \oskit{}'s minimal C library
+is a subset of a standard ANSI/POSIX C library 
+designed specifically for use in kernels or other restricted environments
+in which a ``full-blown'' C library cannot be used.
+The minimal C library provides many simple standard functions
+such as string, memory, and formatted output functions:
+functions that are often useful in kernels as well as application programs,
+but because ordinary application-oriented C libraries are unusable in kernels,
+must usually be reimplemented or manually ``pasted'' into the kernel sources
+with appropriate modifications to make them usable in the kernel environment.
+The versions of these functions provided by the \oskit{} minimal C library,
+like the other components of the \oskit{},
+are designed to be as generic and context-independent as possible,
+so that they can be used in arbitrary environments
+without the developer having to resort to
+the traditional manual cut-and-paste methods.
+This cleaner strategy brings with it
+the well-known advantages of careful code reuse:
+the kernel itself becomes smaller and simpler
+due to fewer extraneous ``utility'' functions hanging around in the sources;
+it is easier to maintain both the kernel, for the above reason,
+and the standard utility functions it uses,
+because there is only one copy of each to maintain;
+finally, the kernel can easily adopt new, improved implementations
+of common performance-critical functions as they become available,
+simply by linking against a new version of the minimal C library
+(e.g., new versions of {\tt memcpy} or {\tt bzero}
+optimized for particular architectures
+or newer family members of a given architecture).
+
+In general,
+the minimal C library provides \emph{only} functions
+specified in the ANSI C or POSIX.1 standards,
+and only a subset thereof.
+Furthermore, the provided implementations of these functions
+are designed to be as independent as possible
+from each other and from the environment in which they run,
+allowing arbitrary subsets of these functions to be used when needed
+without pulling in any more functionality than necessary
+and without requiring the OS developer
+to provide significant support infrastructure.
+For example, all of the ``simple'' functions
+which merely perform some computation on or manipulation of supplied data,
+such as the string instructions,
+are guaranteed to be completely independent of each other.
+
+The functions that are inherently environment-dependent in some way,
+such as {\tt printf}, which assumes
+the existence of some kind of ``standard output'' or ``console,''
+are implemented in terms of other
+clearly specified, environment-dependent functions.
+Thus, in order to use the minimal C library's implementation of {\tt printf},
+the OS developer must provide appropriate {\tt console_putchar}
+and {\tt console_putbytes} routines
+to be used to write characters to whatever acts as the ``standard output''
+in the current environment.
+All such dependencies between C library functions
+are explicitly stated in this document,
+so that it is always clear what additional functions the developer must supply
+in order to make use of a set of functions provided by the minimal C library.
+
+Since almost all of the functions and definitions
+provided by the \oskit{} minimal C library
+implement well-known, well-defined ANSI and POSIX C library interfaces
+which are amply documented elsewhere,
+we do not attempt to describe the purpose and behavior
+of each function in this chapter.
+Instead, only the peculiarities relevant to the minimal C library,
+such as implementation interdependencies and side effects,
+are described here.
+
+%XXX document the criteria deciding what goes in and what stays out.
+
+Note that many files and functions in the minimal C library
+are derived or taken directly from other source code bases,
+particularly Mach and BSD\@.
+Specific attributions are made in the source files themselves.
+
+\section{\textnormal{\posix{}} Interface}
+
+Some of the functions provided in the minimal C library depend on lower
+level I/O routines in the \posix{} library (see Section~\ref{posix-lib}) to
+provide mappings to the appropriate \oskit{} COM interfaces. For example,
+\texttt{fopen} in the C library will chain to \texttt{open} in the \posix{}
+library, which in turn will chain to the appropriate {\tt oskit_dir} and
+{\tt oskit_file} COM operations.
+
+\section{Unsupported Features}
+\label{libc-unsup}
+
+The following features in many C libraries
+are deliberately unsupported by the minimal C library,
+for reasons described below,
+and will remain unsupported
+unless a compelling counterargument arises:
+\begin{itemize}
+\item   {\bf File I/O:}
+	There is no support for file operations in the minimal C
+	library. While ``stream'' operations like {\tt fopen} \emph{are}
+	defined in the minimal C library, these functions depend on the
+	extended \posix{} support contained in the \posix{} library (see
+	Section~\ref{posix-lib}) to provide the necessary low level file
+	operations such as {\tt open}, {\tt read}, and {\tt write}.
+	Programs that do not use any of the stream operations need not
+	link with \posix{} library.
+\item	{\bf Locales:}
+	Typical programs that use the minimal C library,
+	particularly kernels,
+	are generally not the kinds of programs
+	that need extensive internationalization support
+	from the C library functions they use.
+	In practice, the string-related minimal C library functions
+	are typically used for printing diagnostic messages
+	and allowing the user to select boot time parameters
+	such as the root partition;
+	for these purposes, simplicity and compactness
+	are generally more important than multilingual flexibility.
+	If a particular (rare) kernel \emph{does} want
+	full internationalization support in the C library functions it uses,
+	and is prepared to pay the price in size and complexity,
+	then it can instead use the full internationalized implementations
+	from standard application-oriented C libraries,
+	rather than the simple ones provided by the minimal C library.
+\item	{\bf Multibyte characters:}
+	These are not supported for basically the same reasons as for locales.
+\item	{\bf I/O buffering:}
+	Although the \oskit{} minimal C library
+	provides high-level I/O functions
+	such as {\tt fprintf}, {\tt fputc}, {\tt fread}, etc.,
+	these functions do no buffering,
+	and instead simply translate directly
+	into calls to low-level I/O routines
+	(e.g., {\tt read} and {\tt write}).
+	We chose this strategy
+	because typical programs that use the minimal C library
+	only want to use high-level I/O functions
+	for the convenience they provide (particularly formatted I/O),
+	not for the performance benefits of buffering.
+	Full I/O buffering generally comes with
+	a great deal of C library code size and complexity,
+	and add many additional dependencies to the environment
+	(e.g., memory allocation for buffers, detection of line disciplines).
+	Furthermore, 
+	the mere act of buffering I/O implies
+	a major assumption about the environment and the use of these functions:
+	in particular,
+	it assumes that the underlying low-level I/O operations
+	have high per-invocation overhead
+	and that the high-level I/O operations are called
+	at fine enough granularity to make this overhead a problem in practice.
+	This assumption is often invalid for clients of the minimal C library,
+	which generally use I/O functions only sporadically if at all,
+	rather than intensively as many user-level applications do;
+	and in any case, one of the primary goals of the minimal C library
+	is to avoid such assumptions in the first place.
+	For these reasons,
+	we felt that I/O buffering is neither necessary nor appropriate
+	for the minimal C library to perform.
+\item	{\bf Floating-point math:}
+	In general, most kernels
+	and other programs likely to use the minimal C library
+	do not perform much, if any, floating point arithmetic;
+	in many cases they never even access the FPU
+	other than to save and restore its state on context switches.
+	For this reason, all of the floating-point math functions
+	that are a standard part of most C libraries
+	are omitted from the minimal C library.
+
+	There is limited support for printing floating
+	point numbers, however.
+	If this feature is desired,
+	\texttt{doprnt.c} can be compiled with \texttt{-DDOPRNT_FLOAT}
+	to enable the use of the \texttt{\%f} format specifier.
+\end{itemize}
+
+\apisec{Header Files}
+
+When the \oskit{} is installed using {\tt make install},
+a set of standard ANSI/POSIX-defined header files,
+containing definitions and function prototypes for the minimal C library,
+are installed in the selected {\tt include} directory
+under the subdirectory {\tt oskit/c/}.
+For example, the version of the ANSI C header file {\tt string.h}
+provided with the minimal C library
+is installed as {\tt \emph{prefix}/include/oskit/c/string.h}.
+These header files are installed in a subdirectory
+rather than in the top level {\tt include} directory
+so that if the \oskit{} is installed in a standard place
+shared by other packages and/or system files,
+such as {\tt /usr} or {\tt /usr/local},
+the minimal C library's header files will not conflict
+with header files provided by normal application-oriented C libraries,
+nor will applications ``accidentally'' use the minimal C library's header files
+when they really want the normal C library's header files.
+
+There are two main ways a kernel or other program
+can explicitly use the \oskit{} minimal C library's header files.
+The first is by including the {\tt oskit/c/} prefix
+directly in all relevant {\tt \#include} statements;
+e.g., `{\tt \#include <oskit/c/string.h>}'
+instead of `{\tt \#include <string.h>}'.
+However, since this method effectively makes the client code
+somewhat specific to the \oskit{} minimal C library
+by hard-coding \oskit{}-specific pathnames
+into the {\tt \#include} statements,
+this method should generally only be used
+if for some reason the code in question
+is extremely dependent on the \oskit{} minimal C library in particular,
+and it would never make sense for it to include
+corresponding header files from a different C library.
+
+For typical code using the minimal C library,
+which simply needs ``a {\tt printf}'' or ``a {\tt strcpy},''
+the preferred method of including the library's header files
+is to code the {\tt \#include} lines without the {\tt oskit/c/} prefix,
+just as in application code using an ordinary C library,
+and then add an appropriate {\tt -I} (include directory) directive
+to the compiler command line
+so that the {\tt oskit/c/} directory will be scanned automatically
+for these header files before the top-level {\tt include} directory
+and other include directories in the system are searched.
+Typically this {\tt -I} directive can be added to the {\tt CFLAGS} variable
+in the {\tt Makefile} used to build the program in question.
+In fact, the \oskit{} itself uses this method
+to allow code in other toolkit components and in the minimal C library itself
+to make use of definitions and functions provided by the minimal C library.
+(Of course, these dependencies are clearly documented,
+so that if you want to use
+other \oskit{} components but not the minimal C library,
+or only part of the minimal C library,
+it is possible to do so cleanly.)
+
+Except when otherwise noted,
+all of the definitions and functions described in this section
+are very simple, have few dependencies,
+and behave as in ordinary C libraries.
+Functions that are not self-contained
+and interact with the surrounding environment in non-trivial ways
+(e.g., the memory allocation functions)
+are described in more detail in later sections.
+
+\api{a.out.h}{semi-standard {\tt a.out} file format definitions}
+\label{aout-h}
+\begin{apidesc}
+	This header file simply cross-includes
+	the header file \texttt{oskit/exec/a.out.h},
+	which is part of the executable interpreter library
+	(see Section~\ref{exec-a-out-h})
+	and provides a minimal set of definitions
+	describing {\tt a.out}-format executable and object files.
+	Although this header file
+	is not standard ANSI or POSIX (thank goodness!),
+	it is a fairly strong Unix tradition,
+	and is especially relevant to operating system code,
+	and therefore is provided as part of the \oskit{}.
+\end{apidesc}
+
+\api{alloca.h}{explicit stack-based memory allocation}
+\label{alloca-h}
+\ttindex{alloca}
+\begin{apidesc}
+	This header file defines the \texttt{alloca} pseudo-function,
+	which allows C code to dynamically allocate memory
+	on the calling function's stack frame,
+	which will be freed automatically when the function returns.
+	This header is not ANSI or POSIX
+	but is a fairly well-established tradition.
+	The implementation of this function currently depends on being
+	compiled with gcc.
+\end{apidesc}
+
+\api{assert.h}{program diagnostics facility}
+\label{assert-h}
+\begin{apidesc}
+	This header file provides a standard {\tt assert} macro
+	as described in the C standard.
+	All uses of the {\tt assert} macro are compiled out
+	(they generate no code)
+	if the preprocessor symbol {\tt NDEBUG} is defined
+	before this header file is included.
+\end{apidesc}
+
+\api{ctype.h}{character handling functions}
+\label{ctype-h}
+\begin{apidesc}
+	This header file provides implementations
+	of the following standard character handling functions:
+	\begin{icsymlist}
+	\item[isascii]
+		Tests if a character is in the range 0--127.
+		This is not supplied in ISO C but exists on many systems.
+	\item[isalnum]
+		Tests if a character is alphanumeric.
+	\item[isalpha]
+		Tests if a character is alphabetic.
+	\item[iscntrl]
+		Tests if a character is a control character.
+	\item[isdigit]
+		Tests if a character is a decimal digit.
+	\item[isgraph]
+		Tests if a character is a printable non-space character.
+	\item[islower]
+		Tests if a character is a lowercase letter.
+	\item[isprint]
+		Tests if a character is a printable character, including space.
+	\item[ispunct]
+		Tests if a character is a punctuation mark.
+	\item[isspace]
+		Tests if a character is a whitespace character of any kind.
+	\item[isupper]
+		Tests if a character is a uppercase letter.
+	\item[isxdigit]
+		Tests if a character is a hexadecimal digit.
+	\item[toascii]
+		Converts an integer into a 7-bit ASCII character.
+	\item[tolower]
+		Converts a character to lowercase.
+	\item[toupper]
+		Converts a character to uppercase.
+	\end{icsymlist}
+	The implementations of these functions
+	provided by the minimal C library
+	are directly-coded inline functions,
+	and do not reference any global data structures
+	such as character type arrays.
+	They do not support locales (see Section~\ref{libc-unsup}),
+	and only recognize the basic 7-bit ASCII character set
+	(all characters above 126 are considered to be control characters).
+\end{apidesc}
+
+% XXX endian.h: should it be in the minimal C library at all?
+
+\api{errno.h}{error numbers}
+\label{errno-h}
+\begin{apidesc}
+	This file declares the global {\tt errno} variable,
+	and defines symbolic constants for all the {\tt errno} values
+	defined in the ISO/ANSI C, POSIX.1, and UNIX standards.
+	They are provided mainly for the convenience
+	of clients that can benefit from standardized error codes
+	and do not already have their own error handling scheme
+	and error code namespace.
+	The symbols defined in this header file
+	have the same values as the corresponding symbols
+	defined in \texttt{oskit/error.h}
+	(see~\ref{oskit-error-h}),
+	which are the error codes used through the \oskit's COM interfaces;
+	this way, error codes from arbitrary \oskit{} components
+	can be used directly as \texttt{errno} values
+	at least by programs that use the minimal C library.
+
+	The main disadvantage of using COM error codes as \texttt{errno} values
+	is that,
+	since they don't start from around 0 like typical Unix errno values,
+	it's impossible to provide
+	a traditional Unix-style \texttt{sys_errlist} table for them.
+	However, they are fully compatible
+	with the POSIX-blessed \texttt{strerror} and \texttt{perror} routines,
+	and in any case the minimal C library
+	is not intended to support ``legacy'' applications directly -
+	for that purpose, a ``real'' C library would be more appropriate,
+	and such a C library would probably use
+	more traditional \texttt{errno} values,
+	doing appropriate translation when interacting with COM interfaces.
+\end{apidesc}
+
+\api{fcntl.h}{POSIX low-level file control}
+\label{fcntl-h}
+\label{open}
+\begin{apidesc}
+	This header file defines prototypes
+	for the low-level POSIX functions {\tt creat} and {\tt open},
+	and provides symbolic constants
+	for the POSIX open mode flags ({\tt O_*}). Neither {\tt creat} nor
+	{\tt open} are defined in the minimal C library, but instead are
+	defined in the \posix{} library (see Section~\ref{posix-lib}).
+
+	The open mode constants defined by this header
+	are identical to and interchangeable with
+	the corresponding constants
+	defined in \texttt{oskit/fs/file.h}
+	for the \texttt{oskit_file} COM interface
+	(see~\ref{oskit-file-intf}).
+	These definitions are provided so that clients may standardize on a
+	single set of defintions, which are the same as those used by
+	the COM components. For example, the \freebsd{} C library
+	includes this header file, thus providing compatibility between the
+	the two libraries and the disk-based file systems.
+\end{apidesc}
+
+\api{float.h}{constants describing floating-point types}
+\label{float-h}
+\begin{apidesc}
+	This header file provides
+	the standard set of symbols required by the ISO C standard
+	describing various characteristics
+	of the \texttt{float}, \texttt{double}, and \texttt{long double} types.
+	There is nothing special
+	about the \oskit's definition of these symbols;
+	see the ANSI/ISO C or Single UNIX standard
+	for detailed information about this header file.
+\end{apidesc}
+
+\api{limits.h}{architecture-specific limits}
+\label{limits-h}
+\begin{apidesc}
+	This header file defines the following standard symbols
+	describing architecture-specific limits of basic numeric types:
+	\begin{icsymlist}
+	\item[CHAR_BIT]
+		Number of bytes in a \texttt{char}.
+	\item[CHAR_MAX]
+		Maximum value of a \texttt{char}.
+	\item[CHAR_MIN]
+		Minimum value of a \texttt{char}.
+	\item[SCHAR_MAX]
+		Maximum value of a \texttt{signed char}.
+	\item[SCHAR_MIN]
+		Minimum value of a \texttt{signed char}.
+	\item[UCHAR_MAX]
+		Maximum value of a \texttt{unsigned char}.
+	\item[SHRT_MAX]
+		Maximum value of a \texttt{short}.
+	\item[SHRT_MIN]
+		Minimum value of a \texttt{short}.
+	\item[USHRT_MAX]
+		Maximum value of a \texttt{unsigned short}.
+	\item[INT_MAX]
+		Maximum value of a \texttt{int}.
+	\item[INT_MIN]
+		Minimum value of a \texttt{int}.
+	\item[UINT_MAX]
+		Maximum value of a \texttt{unsigned int}.
+	\item[LONG_MAX]
+		Maximum value of a \texttt{long}.
+	\item[LONG_MIN]
+		Minimum value of a \texttt{long}.
+	\item[ULONG_MAX]
+		Maximum value of a \texttt{unsigned long}.
+	\item[SSIZE_MAX]
+		Maximum value of a \texttt{size_t}.
+	\end{icsymlist}
+
+	The minimal C library's \texttt{limits.h}
+	does \emph{not} define any of the POSIX symbols
+	describing operating system-specific limits,
+	such as maximum number of open files,
+	since the minimal C library has know way of knowing
+	how it will be used and thus what these values should be.
+\end{apidesc}
+
+\api{malloc.h}{memory allocator definitions}
+\label{malloc-h}
+\begin{apidesc}
+	This header file defines common types and functions used by
+	the minimal C library's default memory allocation functions.
+	This header file is \emph{not} a standard \posix{} or X/Open CAE
+	header file; instead its purpose is to expose the implementation
+	of the \texttt{malloc} facility so that the client can fully control
+	it and use it in arbitrary contexts.
+
+	The \texttt{malloc} package implements the following standard
+	allocation routines (also defined in \texttt{stdlib.h}).
+
+	\begin{csymlist}
+		\item[malloc]
+			Allocate a chunk of memory in the caller's heap.
+		\item[mustmalloc]
+			Like {\tt malloc},
+			but calls {\tt panic} if the allocation fails.
+		\item[memalign]
+			Allocate a chunk of aligned memory.
+		\item[calloc]
+			Allocate a zero-filled chunk of memory.
+		\item[mustcalloc]
+			Like {\tt calloc},
+			but calls {\tt panic} if the allocation fails.
+		\item[realloc]
+			Changes the allocated size of a chunk of memory while
+			preserving the contents of that memory.
+		\item[free]
+			Releases a chunk of memory.
+	\end{csymlist}
+
+	The base C library also provides additional routines
+	that allocate chunks of memory that are naturally aligned.
+	The user must keep track of the size of each allocated chunk
+	and free the memory with \texttt{sfree} rather than the ordinary
+	\texttt{free}.
+
+	\begin{csymlist}
+		\item[smalloc]
+			Allocate a chunk of user-managed memory in the
+			caller's heap.
+		\item[smemalign]
+			Allocate an aligned chunk of user-managed memory.
+		\item[scalloc]
+			Currently not implemented.
+		\item[srealloc]
+			Currently not implemented.
+		\item[sfree]
+			Free a user-managed chunk of memory previously
+			allocated by an \texttt{s*} allocation.
+	\end{csymlist}
+
+	The following are specific to the LMM implementation.  They take an
+	additional flag to allow requests for specific types of memory.
+
+	\begin{csymlist}
+		\item[mallocf]
+			Allocate a chunk of user-managed memory in the
+			caller's heap.
+		\item[memalignf]
+			Allocate an aligned chunk of user-managed memory.
+		\item[smallocf]
+			Allocate a chunk of user-managed memory in the
+			caller's heap.
+		\item[smemalignf]
+			Allocate an aligned chunk of user-managed memory.
+	\end{csymlist}
+
+	The following functions are frequently overridden by the client OS:
+
+	\begin{csymlist}
+		\item[morecore]
+			Called by \texttt{malloc} and \texttt{realloc}
+			varients when an attempt to allocate memory from
+			the LMM fails.
+			The default version does nothing.
+		\item[mem_lock]
+			Called to ensure exclusive access to the
+			underlying LMM\@.
+			The default version does nothing.
+		\item[mem_unlock]
+			Called when exclusive access is no longer needed.
+			The default version does nothing.
+	\end{csymlist}
+
+	See Section~\ref{memalloc} for details on these functions.
+\end{apidesc}
+
+\api{math.h}{floating-point math functions and constants}
+\begin{apidesc}
+	This header file provides function prototypes
+	for the math functions conventionally found in \texttt{libm},
+	the standard C math library.
+	Although these functions are not part of the minimal C library,
+	an implementation of the math functions is available
+	in the \freebsd{} math library;
+	see Chapter~\ref{freebsd-math} for details.
+	This header file also defines various floating-point constants,
+	such as the value of $\pi$,
+	as described in the Unix CAE specification.
+	Since these functions and their implementations are fully standard,
+	they are not described in further detail here;
+	refer to the ISO C and Unix standards for more information.
+\end{apidesc}
+
+\api{netdb.h}{definitions for network database operations}
+\begin{apidesc}
+	This header file defines structures and prototypes
+	for Internet domain name service (DNS) operations,
+	such as finding the IP address for a host name and vice versa.
+
+	% XXX Godmar: state the properties of your implementation.
+
+\end{apidesc}
+
+\api{setjmp.h}{nonlocal jumps}
+\label{setjmp-h}
+\begin{apidesc}
+	This header provides definitions
+	for the minimal \texttt{setjmp}/\texttt{longjmp} facility
+	provided in the minimal C library.
+	This facility differs from standard ones in two ways:
+	\begin{itemize}
+	\item	Floating-point state is not saved and restored,
+		since in many kernel environments
+		it is important that the kernel itself
+		not make use of floating point registers.
+	\item	Signal state is not saved and restored,
+		since the minimal C library
+		has no concept of signals.
+	\end{itemize}
+
+	In summary, this header file defines the following symbols:
+	\begin{icsymlist}
+	\item[jmp_buf]
+		An array type describing a buffer
+		for \texttt{setjmp} to save state in.
+	\item[setjmp]
+		Function to record the current stack and register state.
+	\item[longjmp]
+		Function to return to a previously saved state.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{signal.h}{signal handling}
+\label{signal-h}
+\begin{apidesc}
+	The minimal
+	C library has no support for signals, and thus
+	does not implement any of the functions prototyped 
+	in this header file. 
+	The header file is here for client OSes that wish to
+	support \posix{} signal semantics.
+
+	% XXX: POSIX and Unix standards?
+	% XXX: Mention they are BSD values?
+\end{apidesc}
+
+\api{stdarg.h}{variable arguments}
+\label{stdard-h}
+\begin{apidesc}
+	This header provides definitions for accessing
+	variable argument lists.
+	It simply chains to x86-specific definitions.
+
+	\begin{icsymlist}
+	\item[va_list]
+		Type used to declare local state variable used in traversing
+		the variable argument list.
+	\item[va_start]
+		Initializes the \texttt{va_list} state variable. 
+		Must be called before \texttt{va_arg} or \texttt{va_end}.
+	\item[va_arg]
+		This macro returns the value of the next argument in the
+		variable argument list, and advances the \texttt{va_list} 
+		state variable.
+	\item[va_end]
+		This macro is called after all the arguments have been read.  
+	\end{icsymlist}
+\end{apidesc}
+
+\api{stddef.h}{common definitions}
+\label{stddef-h}
+\begin{apidesc}
+	This header file defines the symbol {\tt NULL}
+	and the type {\tt size_t}
+	if they haven't been defined already.
+	It also defines \texttt{wchar_t} and the \texttt{offsetof} macro.
+\end{apidesc}
+
+\api{stdio.h}{standard input/output}
+\label{stdio-h}
+\begin{apidesc}
+	This header provides definitions for the standard input and output
+	facilities provided by the minimal C library. Many of these routines
+	simply chain to the low-level I/O routines in the \posix{} library,
+	and do no buffering. 
+	\begin{icsymlist}
+		\item[putchar]
+			Output a character to {\tt stdout}.
+		\item[puts]
+			Output a string to a stream.
+		\item[printf]
+			Formatted output to {\tt stdout}.
+		\item[vprintf]
+			Formatted output to {\tt stdout} with a
+			{\tt stdarg.h} {\tt va_list} argument.
+		\item[sprintf]
+			Formatted output to a string buffer.
+		\item[snprintf]
+			Formatted output of up to len characters into a string
+			buffer.
+		\item[vsprintf]
+			Formatted output to a string buffer with a
+			{\tt stdarg.h} {\tt va_list} argument.
+		\item[vsnprintf]
+			Formatted output of up to len characters into a string
+			buffer with a
+			{\tt stdarg.h} {\tt va_list} argument.
+		\item[getchar]
+			Input a character from {\tt stdin}.
+		\item[gets]
+			Input a string from {\tt stdin}.
+		\item[fgets]
+			Input a string from a stream.
+		\item[fopen]
+			Open a stream.
+		\item[fclose]
+			Close a stream.
+		\item[fread]
+			Read bytes from a stream.
+		\item[fwrite]
+			Write bytes to a stream.
+		\item[fputc]
+			Output a character to a stream.
+		\item[fputs]
+			Output a string to a stream.
+		\item[fgetc]
+			Input a character from a stream.
+		\item[fprintf]
+			Formatted output to a stream.
+		\item[vfprintf]
+			Formatted output to a stream with a
+			{\tt stdarg.h} {\tt va_list} argument.
+		\item[fscanf]
+			Formatted input from a stream.
+		\item[sscanf]
+			Formatted input from a string.
+		\item[fseek]
+			Reposition a stream.
+		\item[feof]
+			Check for end-of-file in an input stream.
+		\item[ftell]
+			Return the current position in a stream.
+		\item[rewind]
+			Reset a stream to the beginning.
+		\item[hexdump]
+			Print a buffer in hexdump style.
+		\item[putc]
+			Macro-expanded to fputc.
+	\end{icsymlist}
+
+\end{apidesc}
+
+\api{stdlib.h}{standard library functions}
+\label{stdlib-h}
+\begin{apidesc}
+	This header file defines the symbol {\tt NULL}
+	and the type {\tt size_t}
+	if they haven't been defined already,
+	and provides prototypes
+	for the following functions in the minimal C library:
+	\begin{icsymlist}
+	\item[atol]
+		Convert an ASCII decimal number into a {\tt long}.
+	\item[strtol]
+		Convert an ASCII number into a {\tt long}.
+	\item[strtoul]
+		Convert an ASCII number into an {\tt unsigned long}.
+	\item[strtod]
+		Convert ASCII string to \texttt{double}.
+	\item[malloc]
+		Allocate a chunk of memory in the caller's heap.
+	\item[mustmalloc]
+		Like {\tt malloc},
+		but calls {\tt panic} if the allocation fails.
+	\item[calloc]
+		Allocate a zero-filled chunk of memory.
+	\item[mustcalloc]
+		Like {\tt calloc},
+		but calls {\tt panic} if the allocation fails.
+	\item[realloc]
+		Changes the allocated size of a chunk of memory while
+		preserving the contents of that memory.
+	\item[free]
+		Releases a chunk of memory.
+	\item[exit]
+		Cause normal program termination; see Section~\ref{exit}.
+	\item[abort]
+		Cause abnormal program termination; see Section~\ref{abort}.
+	\item[panic]
+		Cause abnormal termination and print a message.
+		Not a standard C function; see Section~\ref{panic}.
+	\item[atexit]
+		Register a function to be called on exit.
+	\item[getenv]
+	\label{getenv}
+		Search for a string in the environment.
+	\end{icsymlist}
+
+	Prototypes for the following functions are also provided, but they
+	are not implemented in the minimal C library. See the \freebsd{} C
+	library in Section~\ref{freebsd-libc}.
+	\begin{icsymlist}
+	\item[abs]
+		Compute the absolute value of an integer.
+	\item[atoi]	\label{atoi}
+		Convert an ASCII decimal number into an {\tt int}.
+	\item[atof]
+		Convert ASCII string to \texttt{double}.
+	\item[qsort]
+		Sort an array of objects.
+	\item[rand]
+		Compute a pseudo-random integer.
+		Not thread safe; uses static data.
+	\item[srand]
+		Seed the pseudo-random number generator.
+		Not thread safe; uses static data.
+	\end{icsymlist}
+
+\end{apidesc}
+
+\api{string.h}{string handling functions}
+\label{string-h}
+\begin{apidesc}
+	This header file defines the symbol {\tt NULL}
+	if it hasn't been defined already,
+	and provides prototypes
+	for the following functions in the minimal C library:
+	\begin{icsymlist}
+	\item[memcpy]
+		\label{memcpy}
+		Copy data from one location in memory to another.
+		Our implementation behaves correctly
+		when source and destination overlap.
+	\item[memmove]
+		Like \texttt{memcpy} but is guaranteed to behave correctly
+		when source and destination overlap.
+	\item[memset]
+		\label{memset}
+		Set the contents of a block of memory to a uniform value.
+
+	\item[strlen]
+		\label{strlen}
+		Find the length of a null-terminated string.
+	\item[strcpy]
+		Copy a string to another location in memory.
+	\item[strncpy]
+		Copy a string, up to a specified maximum length.
+	\item[strdup]
+		Return a copy of a string in newly-allocated memory.
+		Depends on {\tt malloc}, Section~\ref{malloc}.
+	\item[strcat]
+		Concatenate a second string onto the end of a first.
+	\item[strncat]
+		Concatenate two strings, up to a specified maximum length.
+	\item[strcmp]
+		\label{strcmp}
+		Compare two strings.
+	\item[strncmp]
+		Compare two strings, up to a specified maximum length.
+
+	\item[strchr]
+		Find the first occurrence of a character in a string.
+	\item[strrchr]
+		Find the last occurrence of a character in a string.
+	\item[strstr]
+		Find the first occurrence of a substring in a larger string.
+	\item[strtok]
+		\label{strtok}
+		Scan for tokens in a string.
+		Not thread safe; uses static data.
+	\item[strpbrk]
+		Locate the first occurrence in a string
+		of one of several characters.
+	\item[strspn]
+		Find the length of an initial span of characters in a given set.
+	\item[strcspn]
+		Measure a span of characters \emph{not} in a given set.
+	\item[strerror]
+		Returns a pointer to a message string for an error number.
+	\end{icsymlist}
+
+	The following deprecated functions are provided
+	for compatibility with existing code:
+	\begin{icsymlist}
+	\item[bcmp]
+		Compare two byte strings.
+	\item[bcopy]
+		Copy data from one location in memory to another.
+	\item[bzero]
+		Clear the contents of a memory block to zero.
+	\item[ffs]
+		Find first bit set in a bit string.
+	\item[index]
+		Find the first occurrence of a character in a string.
+	\item[rindex]
+		Find the last occurrence of a character in a string.
+	\item[strcasecmp]
+		Compare two strings, ignoring case.
+	\item[strncasecmp]
+		Compare two strings, ignoring case, up to a specified length.
+	\item[strsep]
+		Separate strings.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{strings.h}{string handling functions (deprecated)}
+\label{strings-h}
+\begin{apidesc}
+	For compatibility with existing software,
+	a header file called {\tt strings.h} is provided
+	which acts as a synonym for {\tt string.h} (Section~\ref{string-h}).
+\end{apidesc}
+
+\api{sys/gmon.h}{GNU profiling support definitions}
+\label{sys-gmon-h}
+\begin{apidesc}
+% XXX check this out further - is it appropriate? (sys/gmon.h)
+	GNU profiling support definitions.
+\end{apidesc}
+
+\api{sys/ioctl.h}{I/O control definitions}
+\label{sys-ioctl-h}
+\begin{apidesc}
+	Format definitions for `ioctl' commands.  From BSD4.4.
+\end{apidesc}
+
+\api{sys/mman.h}{memory management and mapping definitions}
+\label{sys-mman-h}
+\begin{apidesc}
+	This file includes constant definitions and function prototypes for
+	memory management operations.
+	\begin{icsymlist}
+		\item[mmap]
+			Map a file into a region of memory.
+		\item[mprotect]
+			Change the protections associated with an
+			{\tt mmap}ed region.
+		\item[munmap]
+			Unmap a file from memory.
+	\end{icsymlist}
+	None of these routines are implemented in the minimal C library.
+
+	The defined constant values are the same as traditional BSD,
+	though the values of {\tt PROT_READ} and {\tt PROT_EXEC} are reversed.
+\end{apidesc}
+
+\api{sys/param.h}{system parameters}
+\label{sys-param-h}
+\begin{apidesc}
+	This file should be included by code that requires certain system- and
+	machine-dependent parameters and functions.
+	\begin{icsymlist}
+		\item[htonl]
+			Covert a 32-bit value from host byte order to network
+			byte order.
+		\item[htons]
+			Covert a 16-bit value from host byte order to network
+			byte order.
+		\item[ntohl]
+			Covert a 32-bit value from network byte order to host
+			byte order.
+		\item[ntohs]
+			Covert a 16-bit value from network byte order to host
+			byte order.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{sys/reboot.h}{reboot definitions (deprecated)}
+\label{sys-reboot-h}
+\begin{apidesc}
+	Definitions the arguments to the reboot system call.
+	% XXX deprecated;memory management and mapping used only by boot code.  Should it be here at all?
+\end{apidesc}
+
+\api{sys/signal.h}{signal handling (deprecated)}
+\label{sys-signal-h}
+\begin{apidesc}
+	This header simply includes the base C library \texttt{signal.h}.
+	%XXX As with c/signal.h?  is deprecated correct here?
+\end{apidesc}
+
+\api{sys/stat.h}{file operations}
+\label{sys-stat-h}
+\begin{apidesc}
+	This header includes constant definitions and function prototypes for
+	file operations.
+	\begin{icsymlist}
+		\item[chmod]
+			Change the access mode of a file.
+		\item[fchmod]
+			Change the access mode of a file descriptor.
+		\item[stat]
+			Get statistics on a named file.
+		\item[lstat]
+			Get statistics on a named file without following
+			symbolic links.
+		\item[fstat]
+			Get statistics on an open file by file descriptor.
+		\item[mkdir]
+			Create a directory.
+		\item[mkfifo]
+			Create a fifo.
+		\item[mknod]
+			Create a special file.
+		\item[umask]
+			Get/set creation mode mask.
+	\end{icsymlist}
+	None of these routines are implemented in the minimal C library.
+	Refer to the \posix{} library in Section~\ref{posix-lib}.
+\end{apidesc}
+
+\api{sys/termios.h}{terminal handling functions and definitions (deprecated)}
+\label{sys-termios-h}
+\begin{apidesc}
+	This header simply includes the base C library \texttt{termio.h}.
+	%XXX Again, is this correct??
+\end{apidesc}
+
+\api{sys/time.h}{timing functions}
+\label{sys-time-h}
+\begin{apidesc}
+	This header includes constant definitions and function prototypes for
+	timing and related functions, none of which are implemented in the
+	minimal C library. Refer to the \posix{} library
+	(Section~\ref{posix-lib}) and the \freebsd{} C library
+	(Section~\ref{freebsd-libc}) for implementation of these functions.
+\end{apidesc}
+
+\api{sys/types.h}{general POSIX types}
+\label{sys-types-h}
+\begin{apidesc}
+	% XXX What to say?
+	General POSIX types.
+\end{apidesc}
+
+\api{sys/wait.h}{a POSIX wait specification}
+\label{sys-wait-h}
+\begin{apidesc}
+	Note that the minimal
+	C library has no support for processes, and thus
+	doesn't implement any of the functions prototyped 
+	in this header file.  
+	The header file is here in case client OSes wish to
+	support POSIX \texttt{wait} semantics.
+\end{apidesc}		
+
+\api{termios.h}{terminal handling functions and definitions}
+\label{termios-h}
+\begin{apidesc}
+	The minimal C library does not fully support termios.  Some of the
+	termio stuff is implemented elsewhere to support \oskit{} devices.
+\end{apidesc}
+
+\api{unistd.h}{POSIX standard symbolic constants}
+\begin{apidesc}
+	This file contains the required symbolic constants for a \posix{}
+	system.
+	These include the symbolic {\tt access} and {\tt seek} constants:
+	\begin{icsymlist}
+		\item[R_OK]
+			Test for read permission.
+		\item[W_OK]
+			Test for write permission.
+		\item[X_OK]
+			Test for execute permission.
+		\item[F_OK]
+			Test for file existence.
+		\item[SEEK_SET]
+			Set file offset to value.
+		\item[SEEK_CUR]
+			Set file offset to current plus value.
+		\item[SEEK_END]
+			Set file offset to EOF plus value.
+	\end{icsymlist}
+	This file defines no \posix{} compile-time or execution-time constants.
+	Additionally defined are the constants:
+	\begin{icsymlist}
+		\item[STDIN_FILENO]
+			File descriptor for {\tt stdin}.
+		\item[STDOUT_FILENO]
+			File descriptor for {\tt stdout}.
+		\item[STDERR_FILENO]
+			File descriptor for {\tt stderr}.
+	\end{icsymlist}
+	prototypes for standard \posix{} functions:
+	\begin{icsymlist}
+		\item[_exit]
+			Terminate a process.
+		\item[access]
+			Check file accessibility.
+		\item[close]
+			Close a file.
+		\item[lseek]
+			Reposition read/write file offset.
+		\item[read]
+			Read from a file.
+		\item[unlink]
+			Remove directory entries.
+		\item[write]
+			Write to a file.
+	\end{icsymlist}
+
+	Of the above routines, only {\tt _exit} is considered part of the
+	minimal C library.  The remaining functions are part of the
+	extended \posix{} environment.  Refer to Section~\ref{posix-lib}
+	for details.
+\end{apidesc}
+
+\api{utime.h}{file times}
+\label{utime-h}
+\begin{apidesc}
+	This file defines the {\tt utimbuf} structure, as well as the
+	prototype for the \posix{} function {\tt utime}, which sets the
+	access and modification times of a named file. This function is not
+	implemented in the minimal C library. Refer to Section~\ref{posix-lib}
+	for details.
+\end{apidesc}
+
+\api{sys/utsname.h}{system identification}
+\label{utsname-h}
+\begin{apidesc}
+	This file defines the {\tt utsname} structure, as well as the
+	prototype for the \posix{} function {\tt uname}, which returns a
+	series of null terminated strings of information identifying the
+	current system. This function is not implemented in the minimal C
+	library. Refer to Section~\ref{posix-lib} for details.
+\end{apidesc}
+
+\apisec{Memory Allocation}
+\label{memalloc}
+
+All of the default memory allocation functions in the minimal C library are
+built on top of the \oskit{} LMM, described in Chapter~\ref{lmm}.
+
+There are three families of memory allocation routines available in the
+minimal C library.
+First is the standard
+{\tt malloc}, {\tt realloc}, {\tt calloc}, and {\tt free}.
+These work as in any standard C library.  
+
+The second family,
+{\tt smalloc}, {\tt smemalign}, and {\tt sfree},
+assume that the caller will keep track of the size of allocated memory blocks.
+Chunks allocated with {\tt smalloc}-style functions must be freed
+with {\tt sfree} rather than the normal {\tt free}.
+These functions are not part of the POSIX standard,
+but are \emph{much} more memory efficient
+when allocating many power-of-two-size chunks naturally aligned to their size
+(e.g., when allocating naturally-aligned pages or superpages).
+The normal {\tt memalign} function attaches a prefix to each allocated block
+to keep track of the block's size,
+and the presence of this prefix makes it impossible
+to allocate naturally-aligned, natural-sized blocks successively in memory;
+only every \emph{other} block can be used,
+greatly increasing fragmentation and effectively halving usable memory.
+(Note that this fragmentation property is not peculiar
+to the \oskit{}'s implementation of {\tt memalign};
+most versions of {\tt memalign} produce have this effect.)
+
+The third family,
+{\tt mallocf}, {\tt memalignf}, {\tt smallocf}, and {\tt smemalignf},
+allow LMM flags to be passed to the more common allocation routines.
+These are useful for allocating memory of a specific type
+(see~\ref{lmm-regions}).
+Memory allocated with these routines should be freed with {\tt free}
+or {\tt sfree} as appropriate.
+
+All of the memory management functions,
+if they are unable to allocate a block out
+of the LMM pool, call the {\tt morecore} function
+and then retry the allocation if {\tt morecore} returns non-zero.
+The default behavior for this function is simply to return 0,
+signifying that no more memory is available.
+In environments in which a dynamically growable heap is available,
+you can override the {\tt morecore} function to grow the heap as appropriate.
+
+All of the memory allocation functions make calls to {\tt mem_lock}
+and {\tt mem_unlock} to protect access to the LMM pool under 
+all of these services.  The default implementation of these
+synchronization functions in the minimal C library is to do nothing.
+However, when the C library is initialized (see
+Section~\ref{oskit-init-libc} or Section~\ref{oskit-init-freebsd-libc}),
+a query for the lock manager will be made
+(See Section~\ref{lock-mgr}) to determine if there is a default
+implementation of locks available, and will use that implementation to
+guarantee thread/SMP safety. The absence of a lock manager implementation
+implies a single threaded environment, and thus locks are unnecessary.
+Additionally, they can be overridden with functions
+that acquire and release a lock of some kind appropriate to the environment
+in order to make the allocation functions thread- or SMP-safe.
+Also, note that if you link in {\tt liboskit_kern} before {\tt liboskit_c},
+the kernel support library provides its own default implementation
+of {\tt mem_lock} and {\tt mem_unlock},
+which call {\tt base_critical_enter} and {\tt base_critical_leave}
+respectively;
+this provides simple and robust, though probably far from optimal,
+memory allocation protection for kernel code running on the bare hardware.
+
+\api{malloc_lmm}{LMM pool used by the default memory allocation functions}
+\label{malloc-lmm}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	{\tt extern lmm_t \csymbol{malloc_lmm};}
+\end{apisyn}
+\begin{apidesc}
+	The LMM pool used by all default memory allocation functions
+	either directly or indirectly.
+
+	In the base environemnt,
+	this LMM is initialized at boot time to contain all
+	the physical memory available in the system
+	(see Section~\ref{phys-lmm}).
+	``Available memory'' means all that is not used by base
+	environment data structures or by the OS kernel image itself.
+\end{apidesc}
+
+\api{malloc}{allocate uninitialized memory}
+\label{malloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *malloc(size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Standard issue {\tt malloc} function.
+	Calls {\tt mallocf} with flags value zero to allocate the memory.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of desired allocation.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{mustmalloc}{allocate uninitialized memory and panic on failure}
+\label{mustmalloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *mustmalloc(size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Calls {\tt malloc} to allocate memory,
+	{\tt assert}ing that the return is non-zero;
+	i.e., {\tt mustmalloc} will {\tt panic} if no memory is available.
+
+	Note that if {\tt NDEBUG} is defined, {\tt assert} will do
+	nothing and this routine is identical to {\tt malloc}.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of desired allocation.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory if it returns at all.
+\end{apiret}
+
+\api{memalign}{allocate aligned uninitialized memory}
+\label{memalign}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *memalign(size_t alignment, size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Allocate uninitialized memory with the specified byte alignment;
+	e.g., an alignment value of 32 will return a block aligned on a
+	32-byte boundary.
+	Calls {\tt memalignf} with flags value zero to allocate the memory.
+
+	Note that the alignment is \emph{not} the same as used by the
+	underlying LMM routines.  The alignment parameter in LMM calls
+	is the number of low-order bits that should be zero in the
+	returned pointer.
+\end{apidesc}
+\begin{apiparm}
+	\item[alignment]
+		Desired byte-alignment of the returned block.
+	\item[size]
+		Size in bytes of desired allocation.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{calloc}{allocate cleared memory}
+\label{calloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *calloc(size_t nelt, size_t eltsize);
+\end{apisyn}
+\begin{apidesc}
+	Standard issue {\tt calloc} function.
+	Calls {\tt malloc} to allocate the memory and
+	{\tt memset} to clear it.
+\end{apidesc}
+\begin{apiparm}
+	\item[nelt]
+		Number of elements being allocated.
+	\item[eltsize]
+		Size of each element.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{mustcalloc}{allocate cleared memory and panic on failure}
+\label{mustcalloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *mustcalloc(size_t nelt, size_t eltsize);
+\end{apisyn}
+\begin{apidesc}
+	Calls {\tt calloc} to allocate memory,
+	{\tt assert}ing that the return is non-zero;
+	i.e., {\tt mustcalloc} will {\tt panic} if no memory is available.
+
+	Note that if {\tt NDEBUG} is defined, {\tt assert} will do
+	nothing and this routine is identical to {\tt calloc}.
+\end{apidesc}
+\begin{apiparm}
+	\item[nelt]
+		Number of elements being allocated.
+	\item[eltsize]
+		Size of each element.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory if it returns at all.
+\end{apiret}
+
+\api{realloc}{change the size of an existing memory block}
+\label{realloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *realloc(void *buf, size_t new_size);
+\end{apisyn}
+\begin{apidesc}
+	Standard issue {\tt realloc} function.
+	Calls {\tt malloc} if \emph{buf} is zero,
+	otherwise calls {\tt lmm_alloc} to allocate an entirely
+	new block of memory, uses {\tt memcpy} to copy the old block,
+	and {\tt lmm_free}s that block when done.
+
+	May call {\tt morecore} if the initial attempt to allocate
+	memory fails.
+\end{apidesc}
+\begin{apiparm}
+	\item[buf]
+		Pointer to memory to be enlarged.
+	\item[new_size]
+		Desired size of resulting block.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{free}{release an allocated memory block}
+\label{free}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void free(void *buf);
+\end{apisyn}
+\begin{apidesc}
+	Standard issue {\tt free} function.
+	Calls {\tt lmm_free} to release the memory.
+
+	Note that {\tt free} must only be called with memory allocated
+	by one of:
+	{\tt malloc}, {\tt realloc}, {\tt calloc}, {\tt mustmalloc},
+	{\tt mustcalloc}, {\tt mallocf}, {\tt memalign}, or {\tt memalignf}.
+\end{apidesc}
+\begin{apiparm}
+	\item[buf]
+		Pointer to memory to be freed.
+\end{apiparm}
+
+\api{smalloc}{allocated uninitialized memory with explicit size}
+\label{smalloc}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *smalloc(size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Identical to {\tt malloc} except that
+	the user must keep track of the size of the allocated chunk
+	and pass that size to \texttt{sfree} when releasing the chunk.
+
+	Calls {\tt smallocf} with flags value zero to allocate the memory.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of desired allocation.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{smemalign}{allocate aligned memory with explicit size}
+\label{smemalign}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *smemalign(size_t alignment, size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Identical to {\tt memalign} except that
+	the user must keep track of the size of the allocated chunk
+	and pass that size to \texttt{sfree} when releasing the chunk.
+
+	Allocates uninitialized memory with the specified byte alignment;
+	e.g., an alignment value of 32 will return a block aligned on a
+	32-byte boundary.
+	Calls {\tt smemalignf} with flags value zero to allocate the memory.
+
+	Note that the alignment is \emph{not} the same as used by the
+	underlying LMM routines.  The alignment parameter in LMM calls
+	is the number of low-order bits that should be zero in the
+	returned pointer.
+\end{apidesc}
+\begin{apiparm}
+	\item[alignment]
+		Desired byte-alignment of the returned block.
+	\item[size]
+		Size in bytes of desired allocation.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{sfree}{release a memory block with explicit size}
+\label{sfree}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void sfree(void *buf, size_t size);
+\end{apisyn}
+\begin{apidesc}
+	Frees a block of memory with the indicated size.
+	Calls {\tt lmm_free} to release the memory.
+
+	Note that {\tt sfree} must only be called with memory allocated
+	by one of:
+	{\tt smalloc}, {\tt smallocf}, {\tt smemalign}, or {\tt smemalignf}
+	and that the size given must match that used on allocation.
+\end{apidesc}
+\begin{apiparm}
+	\item[buf]
+		Pointer to memory to be freed.
+	\item[size]
+		Size of memory block being freed.
+\end{apiparm}
+
+\api{mallocf}{allocate uninitialized memory with explicit LMM flags}
+\label{mallocf}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *mallocf(size_t size, unsigned~int flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocates uninitialized memory from {\tt malloc_lmm}.
+	The interface is similar to {\tt malloc} but with an additional
+	\emph{flags} parameter which is passed to {\tt lmm_alloc}.
+	
+	For kernels running in the base environment on an x86,
+	meaningful values for \emph{flags} are as described in
+	Section~\ref{phys-lmm-h}.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of desired allocation.
+	\item[flags]
+		Flags to pass to {\tt lmm_alloc}.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{memalignf}{allocate aligned uninitialized memory with explict LMM flags}
+\label{memalignf}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *memalignf(size_t alignment, size_t size,
+		 unsigned~int flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocate uninitialized memory with the specified byte alignment;
+	e.g., an alignment value of 32 will return a block aligned on a
+	32-byte boundary.
+	The interface is similar to {\tt malloc} but with an additional
+	\emph{flags} parameter which is passed to {\tt lmm_alloc}.
+	
+	For kernels running in the base environment on an x86,
+	meaningful values for \emph{flags} are as described in
+	Section~\ref{phys-lmm-h}.
+
+	Note that the alignment is \emph{not} the same as used by the
+	underlying LMM routines.  The alignment parameter in LMM calls
+	is the number of low-order bits that should be zero in the
+	returned pointer.
+\end{apidesc}
+\begin{apiparm}
+	\item[alignment]
+		Desired byte-alignment of the returned block.
+	\item[size]
+		Size in bytes of desired allocation.
+	\item[flags]
+		Flags to pass to {\tt lmm_alloc}.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{smallocf}{allocated uninitialized memory with explicit size and LMM flags}
+\label{smallocf}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *smallocf(size_t size, unsigned~int flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocates uninitialized memory from {\tt malloc_lmm}.
+	The interface is similar to {\tt smalloc} but with an additional
+	\emph{flags} parameter which is passed to {\tt lmm_alloc}.
+	As with {\tt smalloc},
+	the user must keep track of the size of the allocated chunk
+	and pass that size to \texttt{sfree} when releasing the chunk.
+	
+	For kernels running in the base environment on an x86,
+	meaningful values for \emph{flags} are as described in
+	Section~\ref{phys-lmm-h}.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of desired allocation.
+	\item[flags]
+		Flags to pass to {\tt lmm_alloc}.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{smemalignf}{allocate aligned memory with explicit size and LMM flags}
+\label{smemalignf}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void *smemalignf(size_t alignment, size_t size,
+		 unsigned~int flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocate uninitialized memory with the specified byte alignment;
+	e.g., an alignment value of 32 will return a block aligned on a
+	32-byte boundary.
+	The interface is similar to {\tt smemalign} but with an additional
+	\emph{flags} parameter which is passed to {\tt lmm_alloc}.
+	As with {\tt smemalign},
+	the user must keep track of the size of the allocated chunk
+	and pass that size to \texttt{sfree} when releasing the chunk.
+	
+	For kernels running in the base environment on an x86,
+	meaningful values for \emph{flags} are as described in
+	Section~\ref{phys-lmm-h}.
+
+	Note that the alignment is \emph{not} the same as used by the
+	underlying LMM routines.  The alignment parameter in LMM calls
+	is the number of low-order bits that should be zero in the
+	returned pointer.
+\end{apidesc}
+\begin{apiparm}
+	\item[alignment]
+		Desired byte-alignment of the returned block.
+	\item[size]
+		Size in bytes of desired allocation.
+	\item[flags]
+		Flags to pass to {\tt lmm_alloc}.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the allocated memory or zero if none.
+\end{apiret}
+
+\api{morecore}{add memory to {\tt malloc} memory pool}
+\label{morecore}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto int morecore(size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This routine is called directly or indirectly by any of the
+	memory allocation routines in this section when a call to the
+	underlying LMM allocation routine fails.
+	This allows a kernel to add more memory to {\tt malloc_lmm}
+	as needed.
+
+	The default version of {\tt morecore} in the minimal C library
+	just returns zero indicating no more memory was available.
+	Client OSes should override this routine as necessary.
+\end{apidesc}
+\begin{apiparm}
+	\item[size]
+		Size in bytes of memory that should be addeed to
+		{\tt malloc_lmm}.
+\end{apiparm}
+\begin{apiret}
+	Returns non-zero if the indicated amount of memory was added,
+	zero otherwise.
+\end{apiret}
+
+\api{mem_lock}{Lock access to {\tt malloc} memory pool}
+\label{mem-lock}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void mem_lock(void);
+\end{apisyn}
+\begin{apidesc}
+	This routine is called from any default memory allocation routine
+	before it attempts to access {\tt malloc_lmm}.
+
+	Coupled with {\tt mem_unlock},
+	this provides a way to make memory allocation thread and MP safe.
+ 	In a multithreaded client OS, these functions will use the default
+	lock implementation as provided by the lock manager (see
+	Section~\ref{lock-mgr}), to protect accesses to	the
+	\texttt{malloc_lmm}. Or, these functions may be overridden with a
+	suitable synchronization primitive. 
+
+   	Note that the kernel support library provides defaults for
+	{\tt mem_lock} and {\tt mem_unlock} that call
+	\texttt{base_critical_enter} and \texttt{base_critical_leave}
+	respectively.
+	However, you'll only get these versions if you use the kernel
+	support library and link it in \emph{before} the minimal C library.
+\end{apidesc}
+
+\api{mem_unlock}{Unlock access to {\tt malloc} memory pool}
+\label{mem-unlock}
+\begin{apisyn}
+        \cinclude{oskit/c/malloc.h}
+
+	\funcproto void mem_unlock(void);
+\end{apisyn}
+\begin{apidesc}
+	This routine is called from any default memory allocation routine
+	after all accesses to {\tt malloc_lmm} are complete.
+
+	Coupled with {\tt mem_lock},
+	this provides a way to make memory allocation thread and MP safe.
+ 	In a multithreaded client OS, these functions will use the default
+	lock implementation as provided by the lock manager (see
+	Section~\ref{lock-mgr}), to protect accesses to	the
+	\texttt{malloc_lmm}. Or, these functions may be overridden with a
+	suitable synchronization primitive. 
+
+   	Note that the kernel support library provides defaults for
+	{\tt mem_lock} and {\tt mem_unlock} that call
+	\texttt{base_critical_enter} and \texttt{base_critical_leave}
+	respectively.
+	However, you'll only get these versions if you use the kernel
+	support library and link it in \emph{before} the minimal C library.
+\end{apidesc}
+
+
+\apisec{Standard I/O Functions}
+\label{printf}
+
+The versions of {\tt sprintf}, {\tt vsprintf},
+{\tt sscanf}, and {\tt vsscanf}
+provided in the \oskit{}'s minimal C library
+are completely self-contained;
+they do not pull in the code for {\tt printf}, {\tt fprintf},
+or other ``file-oriented'' standard I/O functions.
+Thus, they can be used in any environment,
+regardless of whether some kind of console or file I/O is available.
+
+The routines {\tt printf}, {\tt puts}, {\tt putchar}, {\tt getchar}, etc.,
+are all defined in terms of {\tt console_putchar}, {\tt console_getchar},
+{\tt console_puts}, and {\tt console_putbytes}. This means that you can get
+working formatted ``console'' output merely by providing an appropriate
+implementation of the aforementioned console functions. In the base
+environment, these routines are defined in the kernel library (see
+Section~\ref{kern-x86pc-base-console}).
+
+The standard I/O functions that actually take a {\tt FILE*} argument,
+such as {\tt fprintf} and {\tt fwrite},
+and as such are fundamentally dependent on the notion of files,
+are implemented in terms of the low-level I/O functions in the
+\posix{} library (see Section~\ref{posix-lib}). However, unlike in ``real''
+C libraries, the high-level file I/O functions provided by the minimal C
+library only implement the minimum of functionality to provide the basic
+API: in particular, they do no buffering, so for example an {\tt fwrite}
+translates directly to a {\tt write}.  This design reduces code size and
+minimizes interdependencies between functions, while still providing
+familiar, useful services such as formatted file I/O.
+
+% XXX currently ungetc isn't supported; should we support it?
+% (Requires one-character buffering.)
+
+
+\apisec{Initialization}
+
+\api{oskit_init_libc}{Load the \oskit{} C library}
+\label{oskit-init-libc}
+\begin{apisyn}
+        \cinclude{oskit/c/fs.h}
+
+        \funcproto void oskit_load_libc(oskit_services_t *services);
+\end{apisyn}
+\begin{apidesc}
+	\texttt{oskit_load_libc} allows for internal initializatons to be
+	done. This routine \emph{must} be called when the operating system is
+	initialized, typically from the Client OS library. The
+	\texttt{services} database is used to lookup other interfaces
+	required by the C library, and is maintained as internal state to
+	the library. 
+\end{apidesc}
+\begin{apiparm}
+	\item[services] A reference to a services database preloaded with
+	interfaces required by the C library.
+\end{apiparm}
+
+\api{oskit_init_libc}{Initialize the \oskit{} C library}
+\begin{apisyn}
+         \funcproto void oskit_init_libc(void);
+\end{apisyn}
+\begin{apidesc}
+	\texttt{oskit_init_libc} allows for secondary initializations to be
+	performed by the C library, in cases where lazy initialization is
+	not appropriate. It must be called sometime after
+	\texttt{oskit_load_libc}.
+\end{apidesc}
+
+
+\apisec{Termination Functions}
+
+\api{exit}{terminate normally}
+\label{exit}
+
+\begin{apidesc}
+	\texttt{exit} calls up to 32 functions installed via 
+	\texttt{atexit} in reverse order of installation before
+	it calls \texttt{_exit}.
+
+	\texttt{_exit}, which terminates the calling process in Unix,
+	calls \texttt{oskit_libc_exit} with the exit status code
+	(see Section~\ref{oskit-libc-exit}).
+\end{apidesc}
+
+\api{abort}{terminate abnormally}
+\label{abort}
+
+\begin{apidesc}
+	\texttt{abort} calls \texttt{_exit(1)}.
+\end{apidesc}
+	
+\api{panic}{terminate abnormally with an error message}
+\label{panic}
+
+\apisec{Miscellaneous Functions}
+
+\api{hexdump}{print a buffer as a hexdump}
+\label{hexdump}
+\begin{apisyn}
+        \cinclude{oskit/c/stdio.h}
+
+        \funcproto void hexdumpb(void *base, void *buf, int nbytes);\\
+        \funcproto void hexdumpw(void *base, void *buf, int nwords);
+\end{apisyn}
+\begin{apidesc}
+	These functions print out a buffer as a hexdump.
+	For example (the box is included):
+	\begin{verbatim}
+.---------------------------------------------------------------------------.
+| 00000000       837c240c 00741dc7 05007010 00000000       .|$..t....p..... |
+| 00000010       008b4424 0ca30470 10008b04 24a30870       ..D$...p....$..p |
+| 00000020       1000eb2c c7050070 10000100 0000833c       ...,...p.......< |
+| 00000030       2400740a c7050070 10000200 00008b44       $.t....p.......D |
+`---------------------------------------------------------------------------'
+        \end{verbatim}
+
+	The first form treats the buffer as an array of \emph{bytes} whereas
+	the second treats the buffer as an array of \emph{words}.
+	This distinction is only important on little-endian machines and
+	only affects the appearance of the four middle columns of hex
+	numbers---the last column of output is identical for both.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[base]
+		What the first column of output should start at.
+		Passing zero will make the first column show the offset
+		within the buffer rather than an absolute address,
+		which is what happens when \texttt{base} equals \texttt{buf}.
+	\item[buf]
+		The address of what to dump.
+	\item[nbytes]
+		How many bytes to dump.
+	\item[nwords]
+		How many words to dump.
+\end{apiparm}
+
+\api{sigcontext_dump}{dump machine specific sigcontext structure}
+\begin{apisyn}
+        \cinclude{oskit/c/signal.h}
+
+        \funcproto void sigcontext_dump(struct~sigcontext *scp);
+\end{apisyn}
+\begin{apidesc}
+	Dump machine-specific state from a sigcontext structure to stdout.
+	On the x86 this includes the processor registers and a stack
+	backtrace originating at the saved EBP value.
+\end{apidesc}
+\begin{apiparm}
+	\item[scp]
+		Pointer to sigcontext structure to dump.
+\end{apiparm}

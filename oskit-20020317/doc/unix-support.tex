@@ -1,0 +1,263 @@
+%
+% Copyright (c) 1999, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{unix}
+
+\section{Introduction}
+
+The ``Unix support'' library provides the substrate to debug and run
+certain \oskit{} components in user-mode on Unix-like systems such
+as Linux and \freebsd{}.  In particular, you
+can use the networking stack with a second network interface, run the
+Linux file system code using a regular file instead of a raw
+partition, and use general \oskit{} timers.
+
+By default, programs to be run in this environment
+are compiled against the \oskit{} headers and linked
+against the \oskit{} C library, rather than using the native system
+headers and libraries.  This allows more complete \oskit{} kernels to be
+run in user mode, but requires linking with an extra ``native OS''
+glue library (see section~\ref{sec:nativeos}) in addition to the
+Unix support library.
+
+The difference between a standard \oskit{} kernel and one running under
+Unix is shown in Figure~\ref{fig-oskitunix}.  When running under Unix,
+the low-level kernel and driver support is replaced with glue code
+that provides the same interfaces, but does so by 
+using Unix system calls instead of accessing the hardware directly.  
+The FS and Net components can optionally be replaced; they
+can either be Unix support glue, or the original unmodified code.
+
+\psfigure{oskitunix}{%
+	Organization of \oskit{} Unix support Framework.
+}
+
+
+\subsection{Supported Platforms}
+
+Support is provided for Linux (ELF with glibc headers), along
+with \freebsd{} 2.x (a.out) and 3.x and above (a.out or ELF).
+A number of example
+programs that use this code can be built in the {\tt examples/unix}
+directory.
+
+To run on Linux it's recommended that you use a 2.2.x kernel.  The
+2.0.x kernels don't support {\tt sigaltstack} or the 
+{\tt SO_SNDLOWAT}, {\tt SO_RECVLOWAT}, {\tt SO_SNDTIMEO} or 
+{\tt SO_RCVTIMEO} socket options which are needed for general \oskit{}
+support.  If you do run on a 2.0.x kernel, make sure you disable the
+{\tt STACKGUARD} code in the pthreads library (currently the only
+thing that uses {\tt sigaltstack}) and make sure that your \oskit{}
+program can tolerate those socket options being undefined.
+
+Linux doesn't allow the above socket options to be set: they can only
+be queried, which may be a problem since the \oskit{} sets them
+on occasion.
+None of the example programs should rely on this behavior however.
+
+
+\subsection{Native OS library}
+\label{sec:nativeos}
+
+Two problems arise since applications are compiled with the \oskit{}
+header files and linked against the \oskit{} libraries.  First, is
+the issue of binary-level compatibility between the \oskit{} and any
+particular Unix system.  Since the \oskit{} definitions of system data
+structures and flags (e.g., the layout of the {\tt stat} structure, or
+the value of error codes) are likely to differ from those of the native OS,
+there is a need for glue code to map between the two.  Additionally,
+the Unix glue layer needs a way to call the underlying Unix system's syscalls.
+It cannot invoke them directly by name (e.g., {\tt read}) since those names
+are redefined by the \oskit{}.  The \emph{Native OS} library solves both
+of these problems, converting syscall arguments, structures and error
+return codes as well as providing syscall stubs for the native system calls.
+The Native OS library for Linux can be found in
+{\tt oskit/examples/unix/linux}; the \freebsd{} version is in
+{\tt oskit/examples/unix/freebsd}.
+
+
+\section{Converting your \oskit{} kernel to run on Unix}
+
+Unless you have a simple \oskit{} kernel (e.g., one that doesn't access the
+disk or network), you'll need to modify it to run with
+the Unix support code.  The changes aren't pervasive and mostly apply
+to the initialization code.  For example, all of the changes to get the
+example kernels to run are {\tt \#ifdef}'ed with {\tt OSKIT_UNIX}, so it
+should be easy to see what needs to be changed.  To avoid compile-time 
+dependencies you can check the global variable {\tt
+  oskit_usermode_simulation}.  This variable is used, for example, by
+the libstartup libraries to determine which environment they should
+initialize for.
+
+There are two different ways to access the network with the Unix
+library.  You can either use an emulated network, where socket calls
+are mapped directly to system socket calls, or you can talk to an
+interface directly.  The emulated network needs to be initialized
+before it can be used, so there is a convenience function in
+{\tt liboskit_startup.a} to do just that.  You should call
+{\tt start_network_native} ({\tt start_network_native_pthreads} if your
+kernel uses the pthreads library) where you would otherwise initialize
+the network device.  See {\tt socket_bsd}, {\tt http_proxy} and
+{\tt disknet} as some examples of how to do this.  
+
+To talk to an interface directly you don't have to make any changes to
+your \oskit{} kernel, you need to call {\tt oskit_linux_init_net} to
+initialize the network devices.  When you subsequently do an
+{\tt osenv_device_lookup} for an ethernet device, you'll get a special one
+from the Unix support library that talks directly to an interface.  This
+allows you to run your own TCP/IP stack on an interface.  See
+section~\ref{subsec:running:network} for more detailed information on
+how to run your \oskit{} kernel in this mode.  
+
+As with the network, you can access the disk directly or through an
+emulation layer.  To be able to access the standard Unix filesystem
+space, you'll need to initialize it by calling {\tt start_fs_native}
+which takes a pathname specifying where your \oskit{} filesystem should
+be rooted in the Unix filesystem (threaded applications use
+{\tt start_fs_native_pthreads}).  The current working directory is
+currently set to the same as the root directory.
+
+To access the disk directly {\tt oskit_linux_block_open} is
+overridden by the Unix library so that takes a filename instead of a
+disk name.  You can specify a regular file or a special file (so as to
+access the raw device). 
+
+The {\tt socket_bsd} example kernel can use either method and so is a
+good one to look at to see the changes.  The {\tt linux_fs_com} and
+{\tt netbsd_fs_com} kernels are good examples of using a regular file under
+Unix for your filesystem.
+
+
+\section{Building for Unix user-mode}
+
+Your link line will also need to change to build with the Unix support
+code.  The first thing that will need to change are the start files
+({\tt crt0.o} for a.out and {\tt crt*.o} for ELF).  The
+Unix support specific start files are installed in the {\tt lib/unix}
+subdirectory of your installed \oskit{} tree.
+
+The second step is to put {\tt unix_support.o}
+({\tt unix_support_pthreads.o} if you're using pthreads) and the appropriate
+Native OS library ({\tt liblinuxsys.a} or {\tt libfreebsdsys.a}) first
+in the link line and add {\tt -loskit_unix} to the list of libraries.  
+
+Getting all of this correct is messy and a pain.  Look at the changes
+that were made in the example kernel makefiles
+({\tt examples/x86/GNUmakerules} vs. {\tt examples/unix/GNUmakerules}).
+
+You can also use the installed GCC driver script
+(bin/ix86-oskit-gcc).  This turns your native compiler into a
+cross-compiler for the \oskit{} by causing it to use a different ``specs''
+file (the specs file can be found in the \oskit{} tree at
+{\tt unsupported/scripts/gcc-driver-script-unix.specs}).  Currently the
+driver script will only work on an a.out system.
+
+
+\section{Running \oskit{} kernels with Unix support}
+
+What you get at the end of the build process is a regular Unix executable,
+which you can run as normal.  Any arguments that you would normally
+pass to your \oskit{} kernel at the boot prompt can be passed on the
+command line.
+
+
+\subsection{Disk}
+
+If you are using the emulated filesystem, then your \oskit{} program will
+see the same filesystem space as any other regular Unix executable
+It's root and current working directory (``cwd'') are the same as the
+parameter you passed to {\tt start_fs_native}.
+Thus, unlike a standard Unix program, your cwd is
+{\emph NOT} the same as where you ran it.
+
+
+\subsection{Networking}
+\label{subsec:running:network}
+
+If you're using the emulated network then there's nothing you have to
+do, things should work the same as a Unix executable.  If you're
+accessing an interface directly you'll have to do some more work.
+Since \oskit{} kernels assume that they're the only thing that can access
+the net, the best way to do networking is to dedicate one or more interface
+for use by the \oskit{} on Unix.
+
+There are a couple environment variables that you'll need to set:
+
+\begin{itemize}
+
+\item {\tt ETHERIF} - A list of interfaces to be used by the \oskit{} Unix code.
+This list is a comma separated sequence of interface names, where the names are
+the same as used by the native {\tt ifconfig} command.  For example, this
+might be ``de1,de2'' under \freebsd{} or ``eth1,eth2'' under Linux.
+The default value for {\tt ETHERIF} is ``de1'' for \freebsd{} and 
+``eth1'' for Linux.
+
+\item {\tt ETHERADDR} - The address of your ethernet card.  The
+address should be set in the same format as reported by {\tt ifconfig} for
+that interface (i.e., xx:xx:xx:xx:xx:xx, where `x' is a hex digit).  This
+variable is only needed if, for some reason, the support code is unable
+to determine the address from the interface itself.
+
+\end{itemize}
+
+There are also some differences between running on Linux and \freebsd{}.
+
+\subsubsection{Linux}
+
+First off, you're going to have to run as root to be able to take over
+an ethernet interface under Linux.  This makes sense, since if any
+user could hijack an interface you'd be in big trouble.
+
+You're going to want to turn arp off on the interface you'll be using.
+Also, set the IP address to be a local address (see rfc1918,
+{\tt http://www.faqs.org/rfcs/rfc1918.html}).  The following commands
+assume that you're using eth1.
+
+\begin{verbatim}
+ifconfig eth1 -arp up 10.1.1.1
+\end{verbatim}
+
+You can also use {\tt ipfwadm} to make sure the Linux network stack
+never sees the packets.  The following commands will add a rule to
+deny packets for all protocol types for both input and output.
+
+\begin{verbatim}
+ipfwadm -I -a deny -P all -W eth1
+ipfwadm -O -a deny -P all -W eth1
+\end{verbatim}
+
+\subsubsection{\freebsd{}}
+
+The Unix support library networking code uses the Berkeley Packet Filter
+(``BPF'') to get it's packets.  If your kernel isn't compiled with BPF support
+you'll have to build a new kernel.  To do this, put {\tt options
+bpfilter 2} in your kernel config file and rebuild.  You should set
+the number of packet filter instances to at least 2 so that you can
+run {\tt tcpdump} along with your \oskit{} kernel.  Normally you'll have to be
+root to use the packet filter, but access is only determined by the
+permissions on {\tt /dev/bpf}\emph{n}, so you don't necessarily have to.  You'll
+have to determine for yourself if the risk of having an exploitable
+packet filter is greater than the risk of running your \oskit{} kernels
+as root.
+
+As with Linux, you should take measures to ``isolate'' the interfaces you
+are working with.  First use a local address and disable arp:
+
+\begin{verbatim}
+ifconfig de1 inet 10.1.1.1 netmask 255.0.0.0 -arp
+\end{verbatim}
+
+If your kernel is configured with {\tt IPFIREWALL}, you can keep packets
+out of the BSD network stack with:
+
+\begin{verbatim}
+ipfw add deny all from any to any via de1
+\end{verbatim}

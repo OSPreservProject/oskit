@@ -1,0 +1,21 @@
+
+Directories: oskit/oskit/x86
+Target: Lots of stuff
+Documentation: 
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Mach Project, Carnegie Mellon University (asm.h, base_trap.h, 
+		eflags.h, fp_reg.h, paging.h, pio.h, proc_reg.h, 
+		seg.h, spin_lock.h, trap.h, tss.h, pc/keyboard.h,
+		pc/pic.h)
+	BSD Project, University of California, Berkeley (pc/isa.h, 
+		pc/pit.h, pc/rtc.h) 
+Description:  
+	Machine dependent header files.
+
+	The c/, exec/, and smp/ directories contain
+	header files used by the machine-independent
+	versions.
+
+	The dos/, and pc/, contain definitions specific
+	DOS and PC hardware in particular.

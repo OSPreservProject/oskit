@@ -1,0 +1,578 @@
+%
+% Copyright (c) 1997-1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{exec}
+
+The \oskit{} provides a small library
+that can recognize and load program executables in a variety of formats.
+It is analogous to the GNU Binary File Descriptor (BFD) library,
+except that it only supports loading linked program executables
+rather than general reading and writing of all types of object files.
+For this reason, it is much smaller and simpler than BFD.
+
+Furthermore, as with the other \oskit{} components,
+the executable interpreter library is designed to be
+as generic and environment-independent as possible,
+so that it can readily be used in any situation in which it is useful.
+For example, the library does not directly do any memory allocation;
+it operates purely using memory provided to it explicitly.
+Furthermore, it does not make any assumptions
+about how a program's code and data are to be written
+into the proper target address space;
+instead it uses generic callback functions for this purpose.
+All of the library functions are pure,
+not containing or relying on any global shared state.
+
+All of the executable loading functions
+take pointers to two callback functions as parameters;
+the library calls these functions,
+which the client OS must provide,
+to load data from the executable
+and map or copy it into the address space of the program being loaded.
+Since all loading is done through these callback functions,
+the \oskit's executable interpreter code
+can be used to load executables
+either into the same address space as the program currently running
+(e.g., loading a kernel from a boot loader)
+or into a different address space.
+The prototypes and semantics of these callback functions
+are defined below, in Section~\ref{exec-types}.
+
+\apisec{Header Files}
+
+This section describes the header files
+provided with the \oskit's executable interpreter library.
+For normal use of the library,
+only \texttt{exec.h} is needed;
+however, the other headers are provided
+as a convenience for clients
+that need to do their own executable interpretation.
+
+\api{exec.h}{definitions for executable interpreter functions}
+\begin{apidesc}
+	This header file contains all the function prototypes
+	for the executable loading functions described below,
+	and all other symbol definitions required
+	to use the executable program interpreter functions.
+	Ths \texttt{exec.h} header file
+	also defines the following error codes,
+	returned from the executable loading functions:
+	\begin{icsymlist}
+	\item[EX_NOT_EXECUTABLE]
+		Indicates that the file
+		is not in any recognized executable format.
+	\item[EX_WRONG_ARCH]
+		Indicates that the file
+		is in a recognized executable file format,
+		but it is an executable for a different processor architecture.
+	\item[EX_CORRUPT]
+		Indicates that the file appears
+		to be an executable file in a recognized format,
+		but something is seriously wrong with it
+		(e.g., the file was truncated or mangled).
+	\item[EX_BAD_LAYOUT]
+		Indicates that something is wrong
+		with the memory or file image layout
+		described by the executable file.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{a.out.h}{semi-standard {\tt a.out} file format definitions}
+\label{exec-a-out-h}
+\begin{apidesc}
+	This header file defines a set of structures and symbols
+	describing \texttt{a.out}-format object and executable files.
+	Since the \texttt{a.out} format is extremely nonstandard
+	and varies widely even across different operating systems
+	for the same processor architecture,
+	this header file only provides
+	a minimal, ``least-common-denominator'' set of definitions
+	that applies to all the \texttt{a.out} variants we know of.
+	Therefore, actually interpreting \texttt{a.out} files
+	requires considerably more information
+	than is provided in this header file;
+	for more information,
+	see the source code for the \oskit's \texttt{a.out} interpreter,
+	in \texttt{exec/x86/aout.c}.
+
+	An \texttt{a.out} file contains a simple fixed-size header,
+	represented by the following structure:
+
+	\cstruct{exec}{
+		unsigned long  	a_magic;        /* Magic number */
+		unsigned long   a_text;         /* Size of text segment */
+		unsigned long   a_data;         /* Size of initialized data */
+		unsigned long   a_bss;          /* Size of uninitialized data */
+		unsigned long   a_syms;         /* Size of symbol table */
+		unsigned long   a_entry;        /* Entry point */
+		unsigned long   a_trsize;       /* Size of text relocation */
+		unsigned long   a_drsize;       /* Size of data relocation */
+	};
+
+	The \texttt{a_magic} field
+	typically contain one of the following traditional magic numbers:
+	\begin{icsymlist}
+	\item[OMAGIC]
+		Used for relocatable object files (\texttt{.o}'s).
+	\item[NMAGIC]
+		Originally used for executable files
+		before demand-loading;
+		current systems generally no longer use this.
+	\item[ZMAGIC]
+		This is the standard magic number
+		for demand-loadable executable files;
+		however, the exact meaning of this magic number
+		varies from system to system.
+	\item[QMAGIC]
+		An alternate demand-loadable format,
+		in which the \texttt{a.out} header itself
+		is actually part of the text segment.
+	\end{icsymlist}
+
+	In addition, this header defines the \texttt{nlist} structure
+	which describes the format of \texttt{a.out} symbol table entries:
+
+	\cstruct{nlist}{
+		long		n_strx;		/* Offset of symbol name
+						   in the string table */
+		unsigned char	n_type;		/* Symbol/relocation type */
+		char		n_other;	/* Miscellaneous info */
+		short		n_desc;		/* Miscellaneous info */
+		unsigned long	n_value;	/* Symbol value */
+	};
+\end{apidesc}
+
+\api{elf.h}{standard 32-bit ELF file format definitions}
+\begin{apidesc}
+	This header file contains a number of
+	structure and symbol definitions
+	describing the data structures used in ELF files.
+	Since these names and their meanings
+	are fairly well standardized,
+	they are not described here;
+	instead, see the ELF specification for details.
+\end{apidesc}
+
+\apisec{Types}
+\label{exec-types}
+
+This section describes the types and other symbols
+which the client OS must interact with
+in order to use the executable interpreter library.
+These symbols are defined in \texttt{oskit/exec/exec.h}.
+
+\api{exec_read_func_t}{executable file reader callback}
+\label{exec-read}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\funcproto typedef~int exec_read_func_t(void *handle,
+		oskit_addr_t file_ofs, void *buf, oskit_size_t size,
+		\outparam oskit_size_t *actual);
+\end{apisyn}
+\begin{apidesc}
+	This type describes the function prototype
+	of the \texttt{read} callback function
+	which the client OS must supply to the executable interpreter;
+	it is used by the executable interpreter library
+	to read ``metadata'' from the executable file
+	such as the executable file's header
+	(as opposed to the actual executable data itself).
+	It is basically analogous in purpose and semantics
+	to the standard \textsc{posix} \texttt{read} function.
+\end{apidesc}
+\begin{apiparm}
+	\item[handle]
+		This is simply the opaque pointer value
+		originally passed by the client
+		in the call to the executable interpreter;
+		the client's callbacks typically use it
+		to locate any state relevant to the executable being loaded.
+		The actual use or meaning of this parameter
+		is completely opaque to the executable interpreter library.
+	\item[file_ofs]
+		This parameter indicates
+		the offset in the file at which to start reading.
+	\item[buf]
+		The buffer into which to read data.
+	\item[size]
+		The maximum amount of data to read from the file.
+		Less than this much data may be read
+		if end-of-file is reached during the read.
+	\item[actual]
+		The client callback returns
+		the amount of data actually read in this parameter.
+		It should be equal to the requested size
+		unless the end-of-file was reached.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	or an error code on failure.
+	The error code may be either
+	one of the \texttt{EX_} error codes
+	defined in \texttt{exec.h},
+	or it may be a caller-defined error code,
+	which the executable interpreter code
+	will simply pass directly back through to the original caller.
+\end{apiret}
+
+\api{exec_read_exec_func_t}{executable file reader callback}
+\label{exec-read-exec}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\funcproto typedef~int exec_read_exec_func_t(void *handle,
+		oskit_addr_t file_ofs, oskit_size_t file_size,
+		oskit_addr_t mem_addr, oskit_size_t mem_size,
+		exec_sectype_t section_type);
+\end{apisyn}
+\begin{apidesc}
+	This type describes the function prototype
+	of the \texttt{read_exec} callback function
+	which the client OS must supply to the executable interpreter;
+	it is used by the executable interpreter library
+	to read actual executable code and data from the executable file
+	to be copied or mapped into the loaded program's image.
+	It is also used to indicate to the client
+	where debugging information can be found in the executable,
+	and what format it is in.
+	The executable interpreter generally calls this function
+	once for each ``section'' it finds in the executable file,
+	indicating where in the executable file to load or map from
+	and where in the resulting program image to copy or map to.
+	The actual executable data itself
+	never actually ``passes through''
+	the generic executable interpreter itself;
+	instead, the interpreter merely ``directs'' the loading process,
+	giving the client OS ultimate flexibility
+	in the way the loading is performed.
+	In fact, the client's callback function
+	does not even necessarily need to ``load'' the executable:
+	for example, if the client merely wants
+	to determine the memory layout described by the executable file,
+	it can provide a callback that does not actually load anything
+	but instead just records the information
+	passed by the executable interpreter.
+
+	Note that not all sections in an executable file
+	are necessarily relevant to the loaded program image itself:
+	for example, the executable interpreter also calls this callback
+	when it encounters debug sections that the client may be interested in.
+	Therefore, to avoid choking on such sections,
+	the client's implementation of this callback function
+	should always check the \emph{section_type} parameter
+	and ignore sections for which \texttt{EXEC_SECTYPE_ALLOC} is not set
+	and it doesn't otherwise know how to deal with.
+\end{apidesc}
+\begin{apiparm}
+	\item[handle]
+		This is simply the opaque pointer value
+		originally passed by the client
+		in the call to the executable interpreter;
+		the client's callbacks typically use it
+		to locate any state relevant to the executable being loaded.
+		The actual use or meaning of this parameter
+		is completely opaque to the executable interpreter library.
+	\item[file_ofs]
+		This parameter indicates
+		the offset in the file
+		at which the section's data begins.
+		This is only valid for sections that \emph{have} file data:
+		for example, for BSS sections,
+		which are allocated but not loaded,
+		this parameter is undefined.
+	\item[file_size]
+		Size of the section's data in the executable file,
+		or zero for sections that have no file data,
+		such as BSS sections.
+	\item[mem_addr]
+		The address in the loaded program's address space
+		at which this section should be loaded.
+		This address is found in or deduced from
+		the executable file's metadata,
+		and generally indicates the address
+		for which this section of the program was linked.
+		For sections that are not allocated in the program image
+		(sections without the \texttt{EXEC_SECTYPE_ALLOC} flag),
+		this parameter is undefined and should be ignored.
+	\item[mem_size]
+		The amount of memory to allocate for this section
+		in the loaded program's address space.
+		This is usually equal to \emph{file_size},
+		but may be larger,
+		in which case the remaining portion of the section
+		past the end of the data actually loaded from the file
+		must be initialized to zero.
+	\item[section_type]
+		Indicates the type of this section;
+		it is a mask of the flag bits
+		described below in Section~\ref{exec-sectype}.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	or an error code on failure.
+	The error code may be either
+	one of the \texttt{EX_} error codes
+	defined in \texttt{exec.h},
+	or it may be a caller-defined error code,
+	which the executable interpreter code
+	will simply pass directly back through to the original caller.
+\end{apiret}
+
+\api{exec_sectype_t}{section type flags word}
+\label{exec-sectype}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	%XXX
+	typedef int exec_sectype_t;
+\end{apisyn}
+\begin{apidesc}
+	The following flag definitions
+	describe the \texttt{section_type} value
+	that the executable program interpreter library
+	passes back to the client in the \texttt{read_exec} callback:
+	\begin{icsymlist}
+	\item[EXEC_SECTYPE_READ]
+		Indicates that the pages into which this section is loaded
+		should be given read permission.
+	\item[EXEC_SECTYPE_WRITE]
+		Indicates that the pages into which this section is loaded
+		should be given write permission.
+	\item[EXEC_SECTYPE_EXECUTE]
+		Indicates that the pages into which this section is loaded
+		should be given execute permission.
+	\item[EXEC_SECTYPE_PROT_MASK]
+		This is a bit mask containing the above three bits;
+		it can be used to isolate the protection information
+		in the section type flags word.
+	\item[EXEC_SECTYPE_ALLOC]
+		This bit indicates that this section's virtual address range
+		is valid and the corresponding region should be allocated
+		in the loaded program's virtual address space.
+		Most normal program sections
+		include both \texttt{EXEC_SECTYPE_ALLOC}
+		and \texttt{EXEC_SECTYPE_LOAD},
+		indicating that the section should be allocated and loaded.
+		However, a section with only \texttt{EXEC_SECTYPE_ALLOC}
+		corresponds to an uninitialized data or ``BSS'' section:
+		the section's address range is allocated and zero-filled.
+		Sections that don't include \texttt{EXEC_SECTYPE_ALLOC}
+		typically contain debugging, symbol table, relocations,
+		or other information not normally loaded with the program.
+	\item[EXEC_SECTYPE_LOAD]
+		This bit indicates that
+		at least some of the section's virtual address range
+		should be initialized by loading it
+		from the executable program image,
+		as specified in the \texttt{file_ofs} and \texttt{file_size}
+		parameters to the \texttt{read_exec} function above.
+		Implies \texttt{EXEC_SECTYPE_ALLOC}.
+	\item[EXEC_SECTYPE_DEBUG]
+		Indicates that this section contains debugging information,
+		such as symbol table or line number information.
+		The specific type of debugging information it contains
+		is indicated by other bits defined below.
+	\item[EXEC_SECTYPE_AOUT_SYMTAB]
+		Indicates that this section
+		is the symbol table section from an \texttt{a.out} executable.
+		Implies \texttt{EXEC_SECTYPE_DEBUG}.
+	\item[EXEC_SECTYPE_AOUT_STRTAB]
+		Indicates that this section
+		is the string table section from an \texttt{a.out} executable.
+		Implies \texttt{EXEC_SECTYPE_DEBUG}.
+	\end{icsymlist}
+\end{apidesc}
+
+\api{exec_info_t}{executable information structure}
+\label{exec-info}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\cstruct{exec_info}{
+		exec_format_t	format;		/* Executable file format */
+		oskit_addr_t	entry;		/* Entrypoint address */
+		oskit_addr_t	init_dp;	/* Initial data pointer */
+	};
+	%XXX
+	typedef struct exec_info exec_info_t;
+\end{apisyn}
+\begin{apidesc}
+	Each of the executable interpreter functions described below
+	fills in a caller-provided structure of this type
+	after successfully loading an executable.
+	This structure contains miscellaneous information
+	about the executable:
+	in particular,
+	information needed to actually start the program running.
+	\begin{icsymlist}
+	\item[format]	The file format in which the executable was expressed.
+			%XXX haven't documented exec_format_t
+	\item[entry]	The entrypoint address of the executable,
+			which is where it should start running.
+	\item[init_dp]	This value is only relevant on some architectures
+			(and in particular \emph{not} the x86);
+			it is a secondary address,
+			typically loaded into another processor register
+			when the program is started
+			and used as a ``data pointer''
+			for accessing global data.
+	\end{icsymlist}
+\end{apidesc}
+
+\apisec{Function Reference}
+
+This section describes the actual functions
+exported to the client OS by the executable interpreter library,
+\texttt{liboskit_exec.a}.
+
+\api{exec_load}{detect the type of an executable file and load it}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\funcproto int exec_load(exec_read_func_t *read,
+				 exec_read_exec_func_t *read_exec,
+				 void *handle, \outparam exec_info_t *info);
+\end{apisyn}
+\begin{apidesc}
+	This is the primary entrypoint to the executable interpreter:
+	it automatically detects the type of an executable file
+	and loads it using the specified callback functions.
+	This function simply calls, in succession,
+	each of the format-specific executable loader functions
+	that apply to the architecture
+	for which the \oskit{} was compiled,
+	until one succeeds or returns an error
+	other than \texttt{EX_NOT_EXECUTABLE}.
+\end{apidesc}
+\begin{apiparm}
+	\item[read]
+		Specifies the metadata reader callback function,
+		as described in Section~\ref{exec-read}.
+	\item[read_exec]
+		Specifies the executable data reader callback function,
+		as described in Section~\ref{exec-read-exec}.
+	\item[handle]
+		An opaque pointer value
+		which the executable interpreter
+		simply passes through to the callback functions.
+	\item[info]
+		A pointer to an \texttt{exec_info} structure
+		which the executable interpreter will fill
+		with information about the loaded executable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	or an error code on failure.
+	The error code may be either
+	one of the \texttt{EX_} error codes
+	defined in \texttt{exec.h},
+	or it may be a caller-defined error code
+	returned by one of the callback functions
+	and passed through to the client.
+\end{apiret}
+
+\api{exec_load_elf}{load a 32-bit ELF executable file}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\funcproto int exec_load_elf(exec_read_func_t *read,
+				 exec_read_exec_func_t *read_exec,
+				 void *handle, \outparam exec_info_t *info);
+\end{apisyn}
+\begin{apidesc}
+	This function recognizes, interprets, and loads executables
+	in the ELF (Executable and Linkable File) format.
+\end{apidesc}
+\begin{apiparm}
+	\item[read]
+		Specifies the metadata reader callback function,
+		as described in Section~\ref{exec-read}.
+	\item[read_exec]
+		Specifies the executable data reader callback function,
+		as described in Section~\ref{exec-read-exec}.
+	\item[handle]
+		An opaque pointer value
+		which the executable interpreter
+		simply passes through to the callback functions.
+	\item[info]
+		A pointer to an \texttt{exec_info} structure
+		which the executable interpreter will fill
+		with information about the loaded executable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	or an error code on failure.
+	The error code may be either
+	one of the \texttt{EX_} error codes
+	defined in \texttt{exec.h},
+	or it may be a caller-defined error code
+	returned by one of the callback functions
+	and passed through to the client.
+\end{apiret}
+
+\api{exec_load_aout}{load an {\tt a.out}-format executable file}
+\begin{apisyn}
+	\cinclude{oskit/exec/exec.h}
+
+	\funcproto int exec_load_aout(exec_read_func_t *read,
+				 exec_read_exec_func_t *read_exec,
+				 void *handle, \outparam exec_info_t *info);
+\end{apisyn}
+\begin{apidesc}
+	This function recognizes, interprets, and loads executables
+	in the traditional Unix \texttt{a.out} file format.
+	Unfortunately, there are many variants of the \texttt{a.out} format,
+	even on a single processor architecture,
+	each with similar but incompatible interpretations.
+	Furthermore,
+	there is no completely reliable and unambiguous way
+	to differentiate between many of these formats:
+	they often use the same magic numbers
+	even though they have very different meanings.
+	However, by using some hairy but fairly reliable heuristics,
+	tthe \oskit's \texttt{a.out} loader for the x86 architecture
+	simultaneously supports Linux, NetBSD, FreeBSD, and Mach executables,
+	in the \texttt{OMAGIC}, \texttt{NMAGIC}, \texttt{QMAGIC},
+	and several \texttt{ZMAGIC} variants.
+	Thus, at least for executables linked on one of these systems,
+	the \oskit's loader should ``just work.''
+	Nevertheless, the \texttt{a.out} format is very outdated at best,
+	and we strongly recommend anyone using the \oskit{}
+	to use a more modern and powerful executable format such as ELF.
+\end{apidesc}
+\begin{apiparm}
+	\item[read]
+		Specifies the metadata reader callback function,
+		as described in Section~\ref{exec-read}.
+	\item[read_exec]
+		Specifies the executable data reader callback function,
+		as described in Section~\ref{exec-read-exec}.
+	\item[handle]
+		An opaque pointer value
+		which the executable interpreter
+		simply passes through to the callback functions.
+	\item[info]
+		A pointer to an \texttt{exec_info} structure
+		which the executable interpreter will fill
+		with information about the loaded executable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	or an error code on failure.
+	The error code may be either
+	one of the \texttt{EX_} error codes
+	defined in \texttt{exec.h},
+	or it may be a caller-defined error code
+	returned by one of the callback functions
+	and passed through to the client.
+\end{apiret}
+

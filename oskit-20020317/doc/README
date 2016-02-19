@@ -1,0 +1,13 @@
+
+Directories: oskit/doc
+Target: oskit.ps
+Documentation: This is it. 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	oskit.ps, oskit.2up.ps, oskit-www.html, and oskit.txt 
+
+	LaTeX documentation for all of the OSKit.
+	Individual chapters may be turned into PostScript form
+	using the sa-CHAPTER.ps target, as in `make sa-com.ps'
+
+	~575 (or more) pages.

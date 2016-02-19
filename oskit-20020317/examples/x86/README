@@ -1,0 +1,17 @@
+
+Directories: oskit/examples/x86
+Targets: Lots
+Documentation: See the headers of each .c
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Each .c file in this directory is an example kernel.
+	All the kernels demonstrate or test some functionality 
+	of the OSKit.  
+
+	Many of them hardcode various options, such as the
+	ether device to open, or the drive partition to use,
+	in #defines at the top of the file.
+
+	Note that many of these are not really x86-specific,
+	but are here for historical reasons.  They will eventually
+	migrate.

@@ -1,0 +1,140 @@
+#
+# Copyright (c) 1999, 2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_examples_dyntest_makerules_
+_oskit_examples_dyntest_makerules__ = yes
+
+#
+# There are several parts, which must be combined in a multiboot file.
+# See the Image target below.
+#
+TARGETS = dyntest dummy.so dopey.so
+
+#
+# Build the whole thing directly, if you have mkmbimage on your path.
+#
+#TARGETS = Image
+
+all: $(TARGETS)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/dyntest			\
+		$(OSKIT_SRCDIR)/examples/x86/shared
+
+INCDIRS +=	$(OSKIT_SRCDIR)/freebsd/libc/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/sys			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386		\
+		$(OBJDIR)/freebsd/libc/objinclude			\
+		$(OSKIT_SRCDIR)/examples/dyntest
+
+CLEAN_FILES   += $(TARGETS) *.gdb *.so dyntest
+OSKIT_CFLAGS  += -DOSKIT
+LDSCRIPT      := $(OSKIT_SRCDIR)/rtld/ldscript
+MORE_LDFLAGS  := -static -T $(LDSCRIPT) -export-dynamic
+
+#
+# The C library is made up of several pieces. 
+#
+CLIB_P   = -loskit_freebsd_c_r -loskit_com -loskit_threads
+CLIB     = -loskit_freebsd_c -loskit_posix -loskit_com -loskit_freebsd_c
+
+#
+# The threads stuff is also made up of several pieces. The default case
+# is just the POSIX scheduler plus the stub library to make the linker
+# happy. Add or (replace with) the realtime scheduler if you like.
+#
+THRDLIBS   = -loskit_threads -loskit_svm -loskit_amm
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS    = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+#
+# This builds the kernel. There are several oddities. stub.so is linked
+# in with the kernel, but it could be any shared library. The linker will
+# not create the necessary .dynamic sections unless there is at least one
+# .so file in the link line. Then, we use -export-dynamic to make sure that
+# *all* of the kernel symbols are entered into the .dynamic symbol table.
+# By default, only those symbols that are referenced inside the .so files
+# are exported. Lastly, add -static to make sure that only .a files are
+# searched for all of the other oskit libraries, since we do not want the
+# kernel proper to be composed of shared libraries (won't boot). Oh, there
+# is a special ldscript associated with the RTLD, but all that does is move
+# the start of kernel text up to 0x100000, as required for all OSKit kernels.
+#
+dyntest: $(OBJDIR)/lib/multiboot_dyn.o dyntest.o stub.so $(DEPENDLIBS) 
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) $(LDFLAGS) $(MORE_LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos -loskit_memfs \
+		$(THRDLIBS) \
+		-loskit_bootp -loskit_freebsd_net -loskit_fsnamespace_r \
+		-loskit_linux_dev -loskit_dev -loskit_kern \
+		-loskit_lmm -loskit_netbsd_fs \
+		-loskit_diskpart -loskit_rtld \
+		 $(CLIB_P) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+#
+# This is a trivial shared library. The kernel (above) will load this
+# with dlopen(). All of its external references will be undefined, and
+# the runtime loader will link those symbols against the symbols in the
+# oskit kernel. Note the -shared options, which creates the .so file.
+#
+dummy.so: dummy.o
+	$(LD) $(OSKIT_LDFLAGS) -shared -o dummy.so dummy.o
+
+#
+# This is a slightly different example. It is intended to be loaded by
+# the (as yet unfinished) oskit_spawn() function, which will load the
+# the object in a new name/address space, with its own pthread context
+# to run in. This file is self contained, since it will not be linked
+# against the kernel symbols. Rather, its a complete program with a main()
+# function, which gets loaded/relocated into a new part of the address
+# space. Once loaded, it is given a thread context, and main is invoked.
+# Thereafter, it runs like any other thread.
+#
+foo.so: $(OBJDIR)/lib/crtd.o foo.o dols.o dummy.so $(DEPENDLIBS)
+	$(LD) $(OSKIT_LDFLAGS) -shared	\
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_rtld $(CLIB)
+
+#
+# Another trivial shared library, which is dynamically loaded by
+# foo.so above.
+#
+dopey.so: dopey.o
+	$(LD) $(OSKIT_LDFLAGS) -shared -o dopey.so dopey.o
+
+#
+# This is the stub.so file. It does absolutely nothing except cause the
+# regular linker to generate the necessary .dynamic sections in the kernel.
+# See the kernel link line above.
+#
+stub.so: stub.o
+	$(LD) $(OSKIT_LDFLAGS) -shared -o stub.so stub.o
+
+#
+# Build a multiboot image that has all the files needed to run the example
+# kernel above. 
+#
+Image:	dyntest dummy.so foo.so dopey.so
+	mkmbimage dyntest foo.so dummy.so dopey.so
+
+endif
+

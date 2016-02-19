@@ -1,0 +1,272 @@
+%
+% Copyright (c) 1996-2002 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+\ifwww
+  \usepackage[tex4ht,html,2]{tex4ht}
+\fi
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\newcommand{\oskitversion}{0.97}
+
+\ifwww
+  \newcommand{\oskittitledraft}{D R A F T \\}
+\else
+  \newcommand{\oskittitledraft}{\texttt{D~R~A~F~T}\\[5ex]}
+\fi
+\title{\oskittitledraft
+The OSKit: The Flux Operating System Toolkit\\
+Version \oskitversion\\
+(SnapShot 20020317)}
+
+\author{The Flux Research Group \\[1ex]
+	Department of Computer Science \\
+	University of Utah \\[1ex]
+	{\normalsize Salt Lake City, UT, USA 84112} \\[2ex]
+	{\small	\em \htmladdnormallink{http://www.cs.utah.edu/flux/oskit/}%
+		{http://www.cs.utah.edu/flux/oskit/}} \\
+	{\small \em oskit@flux.cs.utah.edu}
+}
+
+% Fix the date so subsequent re-makes don't get a new date with same content.
+\date{March 17, 2002}
+
+\makeatletter
+%% The `begin' and `end' commands are hooks that we use when producing the WWW
+%% version.  See `tex4ht.cfg'.
+\gdef\@oskitcopyright@begin{}
+\gdef\@oskitcopyright@end{}
+\gdef\@oskitcopyright{}
+\def\oskitcopyrightbegin#1{\gdef\@oskitcopyright@begin{#1}}
+\def\oskitcopyrightend#1{\gdef\@oskitcopyright@end{#1}}
+\def\oskitcopyright#1{\gdef\@oskitcopyright{#1}}
+\makeatother
+
+\oskitcopyright{%
+Copyright \copyright\ 1996-2002, University of Utah.  All rights reserved.
+The University of Utah grants you the right to copy and reproduce this
+document or portions thereof for academic, research, evaluation, and
+personal use only, provided that this title page appears prominently.
+To arrange for alternate terms, contact the University at csl-dist@cs.utah.edu
+or +1-801-585-3271.}
+
+% We don't need no steenkin' equations - just gimme a working underscore!
+\catcode`\_=\active 
+
+\newcommand{\fluke}{Fluke}
+\newcommand{\oskit}{OSKit}
+\newcommand{\posix}{\textsc{posix}}
+\newcommand{\freebsd}{FreeBSD}
+
+\newcommand{\com}[1]{}
+\newcommand{\rat}[1]{\footnote{{\bf Rationale:} #1} }
+\newcommand{\xxx}[1]{{\em {\bf Fix: } #1}}
+
+\setlength{\textheight}{9in}
+\setlength{\textwidth}{6.5in}
+\setlength{\topmargin}{-0.5in}
+\setlength{\oddsidemargin}{0in}
+\setlength{\evensidemargin}{0in}
+
+\newcommand{\psfigure}[2]{%
+\begin{figure}%
+\centering
+\includegraphics[width=0.95\columnwidth]{#1.eps}%
+\caption{\footnotesize #2}%
+\label{fig-#1}%
+\end{figure}%
+}
+
+% simple, inline code fragment
+% from Leigh
+\newenvironment{codefrag}{%
+  \begin{trivlist}%
+    \leftskip .5in%
+    \item[]%
+    \begin{minipage}[c]{.9\linewidth}%
+  }{%
+    \end{minipage}%
+    \end{trivlist}}%
+
+% "Icons" flagging processor- and machine-dependent sections
+\ifwww
+  \newcommand{\pc}{(PC)}
+  \newcommand{\intel}{(X86)}
+  \newcommand{\intelpc}{(X86 PC)}
+  \newcommand{\parisc}{(PA-RISC)}
+\else
+  \newcommand{\boxed}[1]{{~\vbox{\hrule\hbox{\vrule{\vbox{\vskip 1pt\hbox{%
+  \hskip 1pt\rm\tiny\uppercase{#1}\hskip 1pt}\vskip 1pt}}\vrule}\hrule}~}}
+  \newcommand{\pc}{\boxed{pc}}
+  \newcommand{\intel}{\boxed{x86}}
+  \newcommand{\intelpc}{\boxed{x86 pc}}
+  \newcommand{\parisc}{\boxed{pa-risc}}
+\fi
+
+% Devices.
+\def\ostodrv{\begin{apipart}{Direction}OS $\rightarrow$ Component\end{apipart}}
+\def\drvtoosn{\begin{apipart}{Direction}Component $\rightarrow$ OS,
+					Nonblocking\end{apipart}}
+\def\drvtoosb{\begin{apipart}{Direction}Component $\rightarrow$ OS,
+					Blocking\end{apipart}}
+% Network.
+\def\ostonet{\begin{apipart}{Direction}OS $\rightarrow$ 
+			Network stack\end{apipart}}
+\def\nettoos{\begin{apipart}{Direction}Network stack $\rightarrow$ 
+			OS \end{apipart}}
+% Filesystem.
+\def\ostofs{\begin{apipart}{Direction}client OS $\rightarrow$ filesystem library\end{apipart}}
+\def\fstoos{\begin{apipart}{Direction}filesystem library $\rightarrow$ client OS\end{apipart}}
+
+
+% Macro to generate index entries in a typewriter font
+\newcommand{\ttindex}[1]{\index{#1@{\texttt{#1}}}}
+
+% C symbol definitions - leave the space after \bf,
+% otherwise latex2html will screw it up.
+\newcommand{\csymbol}[1]{{\large\bf #1}\ttindex{#1}}
+
+% C function prototypes
+% These sorta work with latex2html, funcproto args are just passed on as is.
+\def\funcparamname[#1#2]{\if*#1{\tt *}\funcparamname[#2]\else{\em #1#2}\fi}
+\def\funcparams[#1 #2, #3]{%
+{\tt #1} \funcparamname[#2]%
+\if!#3\else, \funcparams[#3]\fi}
+\def\funcparamlistnonempty(#1){(\funcparams[#1, !])}
+\def\funcparamlistvoid[#1(void)#2]{%
+\if!#2\funcparamlistnonempty#1\else({\tt void})\fi}
+\def\funcparamlist(#1){\funcparamlistvoid[(#1)(void)!]}
+%
+% \funcproto note:
+% For functions returning pointers there must be NO space (or newline)
+% between the * and the symbol or else the index will wind up with a
+% space as the first char of the symbol.
+%
+\def\funcproto#1 #2#3(#4);{%
+\if*#2{\tt #1 #2}\csymbol{#3}\else{\tt #1} \csymbol{#2#3}\fi%
+\funcparamlist(#4);}
+\def\outparam{{\rm [out] }}
+\def\inoutparam{{\rm [in/out] }}
+
+% Lists of function definitions
+% This won't work with latex2html.
+\newenvironment{funcdefs}{\list{}{\def\makelabel##1{\funcproto##1}}\catcode`\_=\active}{\endlist}
+
+% C structure declarations
+\def\cstructelements[ #1 #2; /*#3*/#4]{\if!#3\else~&{\tt#1}&{\tt#2};&/* #3 &*/\\
+	\cstructelements[#4]\fi}
+\def\cstructhairy#1\{#2\};{\par\noindent{\tt struct }\csymbol{#1} \{\\
+	\begin{tabular}{lllll}\cstructelements[#2 ; /*!*/]\end{tabular} \\ \}}
+\newcommand{\cstruct}[2]{\cstructhairy #1\{#2\};}
+
+% Miscellaneous C stuff
+\newcommand{\cinclude}[1]{\texttt{\#include $<$#1$>$}}
+\newenvironment{csymlist}{\begin{list}{}{\def\makelabel##1{{\tt##1}\/:
+	}}}{\end{list}}
+\newenvironment{icsymlist}{\begin{list}{}{\def
+	\makelabel##1{\ttindex{##1}{\tt##1}\/:
+	}}}{\end{list}}
+
+% API definitions and sections
+\newcommand{\apisec}[1]{\newpage\section{#1}}
+\newcommand{\apiintf}[2]{\newpage\section{{\tt #1}: #2}\ttindex{#1}}
+% This works pretty well: gives a little extra space over just \subsection.
+\newcommand{\api}[2]{\pagebreak[1]\subsection{{\tt #1}: #2}\ttindex{#1}}
+\newenvironment{apipart}[1]{\subsubsection*{{\sc#1}} \begin{quote}}{\end{quote}}
+\newenvironment{apisyn}{\begin{apipart}{Synopsis}}{\end{apipart}}
+\newenvironment{apidesc}{\begin{apipart}{Description}}{\end{apipart}}
+\newenvironment{apiparm}{\begin{apipart}{Parameters}%
+	\begin{list}{}{\def\makelabel##1{{\em##1}\/: }}}{%
+	\end{list}\end{apipart}}
+\newenvironment{apiret}{\begin{apipart}{Returns}}{\end{apipart}}
+\newenvironment{apierr}{\begin{apipart}{Errors}}{\end{apipart}}
+\newenvironment{apirel}{\begin{apipart}{Related Information}}{\end{apipart}}
+\newenvironment{apidep}{\begin{apipart}{Dependencies}\begin{csymlist}}{%
+	\end{csymlist}\end{apipart}}
+
+% Define a copyright environment that won't waste a lot of paper...
+\newenvironment{copyrightEnv}%
+	{\tt \obeylines \noindent \footnotesize \catcode`\&=11}%
+	{\dotfill\vskip 6pt}
+
+% Redefine the "theindex" env so it makes a TOC entry.  This is verbatim from
+% book.cls with one line added.
+\ifwww\else
+\makeatletter
+\renewenvironment{theindex}
+               {\if@twocolumn
+                  \@restonecolfalse
+                \else
+                  \@restonecoltrue
+                \fi
+                \columnseprule \z@
+                \columnsep 35\p@
+                \twocolumn[\@makeschapterhead{\indexname}]%
+                \addcontentsline{toc}{chapter}{\indexname}%
+                \@mkboth{\MakeUppercase{\indexname}}%
+                        {\MakeUppercase{\indexname}}%
+                \thispagestyle{plain}\parindent\z@
+                \parskip\z@ \@plus .3\p@\relax
+                \let\item\@idxitem}
+               {\if@restonecol\onecolumn\else\clearpage\fi}
+\makeatother
+\fi
+
+%% Redefine `\maketitle' to include our copyright notice.  This is almost
+%% identical to the `titlepage' version of `\maketitle' from the LaTeX2e
+%% standard `book.cls' file.
+%%
+\makeatletter
+\renewcommand{\maketitle}{\begin{titlepage}%
+  \let\footnotesize\small
+  \let\footnoterule\relax
+  \let \footnote \thanks
+  \null\vfil
+  \vskip 60\p@
+  \begin{center}%
+    {\LARGE \@title \par}%
+    \vskip 3em%
+    {\large
+     \lineskip .75em%
+      \begin{tabular}[t]{c}%
+        \@author
+      \end{tabular}\par}%
+      \vskip 1.5em%
+    {\large \@date \par}%       % Set date in \large size.
+  \end{center}\par
+  \vfill                        % <<< new
+  \noindent%                    % <<< new
+  {\small%                      % <<< new
+   \@oskitcopyright@begin%      % <<< new
+   \@oskitcopyright%            % <<< new
+   \@oskitcopyright@end}%       % <<< new
+  \@thanks
+  \vfil\null
+  \end{titlepage}%
+  \setcounter{footnote}{0}%
+  \global\let\thanks\relax
+  \global\let\maketitle\relax
+  \global\let\@thanks\@empty
+  \global\let\@author\@empty
+  \global\let\@date\@empty
+  \global\let\@title\@empty
+  \global\let\title\relax
+  \global\let\author\relax
+  \global\let\date\relax
+  \global\let\and\relax
+}
+\makeatother
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% End of file.
+

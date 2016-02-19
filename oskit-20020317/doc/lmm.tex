@@ -1,0 +1,910 @@
+%
+% Copyright (c) 1996-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{lmm}
+
+\section{Introduction}
+
+The list-based memory manager is a component that
+provides simple but extremely generic and flexible memory management services.
+It provides functionality at a lower level
+than typical ANSI C {\tt malloc}-style memory allocation mechanisms.%
+\footnote{%
+	The LMM is designed quite closely along the lines
+	of the Amiga operating system's low-level memory management system.
+}
+For example, the LMM does not keep track
+of the sizes of allocated memory blocks;
+that job is left to the client of the LMM library
+or other high-level memory allocation mechanisms.
+(For example,
+the default version of {\tt malloc()} provided by the minimal C library,
+described in Section~\ref{malloc},
+is implemented on top of the LMM.)
+
+The LMM attempts to make as few assumptions as possible
+about the environment in which it runs and the use to which it is put.
+For example, it does not assume
+that all allocatable ``heap'' memory is contained
+in one large continuous range of virtual addresses,
+as is the case in typical Unix process environments.
+Similarly, it does not assume that the heap can be expanded on demand
+(although the LMM can certainly be used in situations
+in which the heap \emph{is} expandable).
+It does not assume that it is OK to ``waste'' pages
+on the assumption that they will never be assigned ``real'' physical memory
+unless they are actually touched.
+It does not assume that there is only one ``type'' of memory,
+or that all allocatable memory in the program
+should be managed as a single heap.
+Thus, the LMM is suited for use in a wide variety of environments,
+and can be used for both physical and virtual memory management.
+
+The LMM has the following main features:
+
+\begin{itemize}
+\item	Very efficient use of memory.
+	At most fourteen bytes are wasted in a given allocation
+	(because of alignment restrictions);
+	there is \emph{no} memory overhead for properly-aligned allocations.
+
+\item	Support for allocating memory with specific alignment properties.
+	Memory can be allocated at any given power-of-two boundary,
+	or at an arbitrary offset beyond a specified power-of-two boundary.
+	Allocation requests can also be constrained to specific address ranges
+	or even exact addresses.
+
+\item	Support for allocations of memory of a specific ``type.''
+	For example, on the PC architecture,
+	sometimes memory needs to be allocated specifically
+	from the first 16MB of physical memory, or from the first 1MB of memory.
+
+\item	Support for a concept of \emph{allocation priority},
+	which allows certain memory regions to be preferred over others
+	for allocation purposes.
+
+\item	The LMM is pure and does not use any global variables;
+	thus, different LMM pools are completely independent of each other
+	and can be accessed concurrently without synchronization.
+	Section~\ref{pure-env} describes the pure execution environment
+	supported by the LMM in more detail.
+
+\item	Extremely flexible management of the memory pool.
+	LMM pools can be grown or shrunk at any time,
+	under the complete control of the caller.
+	The client can also ``map'' the free memory pool,
+	locating free memory blocks without allocating them.
+\end{itemize}
+
+Some of the LMM's (potential) disadvantages
+with respect to more conventional memory allocators are:
+
+\begin{itemize}
+\item	It requires the caller to remember the size of each allocated block,
+	and pass its size back as a parameter to {\tt lmm_free}.
+	Thus, a {\tt malloc} implemented on top of this memory manager
+	would have to remember the size of each block somewhere.
+
+\item	Since the LMM uses sequential searches through linked lists,
+	allocations are not as blazingly fast
+	as in packages that maintain separate free lists
+	for different sizes of memory blocks.
+	However, performance is still generally acceptable for many purposes,
+	and higher-level code is always free
+	to cache allocated blocks of commonly used sizes
+	if extremely high-performance memory allocation is needed.
+	(For example,
+	a {\tt malloc} package built on top of the LMM could do this.)
+
+\item	The LMM does not know how to ``grow'' the free list automatically
+	(e.g., by calling {\tt sbrk()} or some equivalent);
+	if it runs out of memory, the allocation simply fails.
+	If the LMM is to be used in the context of a growable heap,
+	an appropriate grow-and-retry mechanism must be provided
+	at a higher level.
+
+\item	In order to avoid making the LMM dependent on threading mechanisms,
+	it does not contain any internal synchronization code.
+	The LMM can be used in multithreaded environments,
+	but the calling code must explicitly serialize execution
+	while invoking LMM operations on a particular LMM heap.
+	However, LMM operations on different heaps are fully independent
+	and do not need to be synchronized with each other.
+\end{itemize}
+
+\section{Memory regions}
+\label{lmm-regions}
+
+The LMM maintains a concept of a \emph{memory region},
+represented by the data type {\tt lmm_region_t},
+which represents a range of memory addresses
+within which free memory blocks may be located.
+Multiple memory regions can be attached to a single LMM pool,
+with different attributes attached to each region.
+
+The attributes attached to memory regions
+include a set of caller-defined flags,
+which typically represent fundamental properties
+of the memory described by the region
+(i.e., the ways in which the region can be used),
+and a caller-specified \emph{allocation priority},
+which allows the caller to specify that some regions
+are to be preferred over others for satisfying allocation requests.
+
+It is not necessary for all the memory addresses covered by a region
+to actually refer to valid memory locations;
+the LMM will only ever attempt to access subsections of a region
+that are explicitly added to the free memory pool using {\tt lmm_add_free}.
+Thus, for example, it is perfectly acceptable
+to create a single region covering all virtual addresses
+from 0 to {\tt (oskit_addr_t)-1},
+as long as only the memory areas that are actually valid and usable
+are added to the free pool with {\tt lmm_add_free}.
+
+The LMM assumes that if more than one region is attached to an LMM pool,
+the address ranges of those regions do not overlap each other.
+Furthermore, the end address of each region
+must be larger than the start address, using unsigned arithmetic:
+a region must not ``wrap around'' the top of the address space to the bottom.
+These restrictions are not generally an issue,
+but can be of importance in some situations
+such as when running on the x86 with funny segment layouts.
+
+\subsection{Region flags}
+
+The region flags, of type {\tt lmm_flags_t},
+generally indicate certain \emph{features} or \emph{capabilities}
+of a particular range of memory.
+Allocation requests can specify a mask of flag bits
+that indicate which region(s) the allocation may be made from.
+For each flag bit set in the allocation request,
+the corresponding bit \emph{must} be set in the region
+in order for the region to be considered for satisfying the allocation.
+
+For example, on PCs,
+the lowest 1MB of physical memory is ``special''
+in that only it can be accessed from real mode,
+and the lowest 16MB of physical memory is special
+in that only it can be accessed by the built-in DMA controller.
+Thus, typical behavior on a PC would be to create three LMM regions:
+one covering the lowest 1MB of physical memory, one covering the next 15MB,
+and one covering all other physical memory.
+The first region would have the ``1MB memory'' and ``16MB memory'' bits set
+in its associated flags word,
+the second region would have only the ``16MB memory'' bit set,
+and the third region would have neither.
+Normal allocations would be done with a flags word of zero,
+which allows the allocation to be satisfied from any region,
+but, for example, allocations of DMA buffers would be done
+with the ``16MB memory'' flag set,
+which will force the LMM to allocate from either the first or second region.
+(In fact, this is the default arrangement used by the {\tt libkern} library
+when setting up physical memory for an OS running on a PC;
+see Section~\ref{phys-lmm} for more details.)
+
+\subsection{Allocation priority}
+
+The second attribute associated with each region,
+the \emph{allocation priority},
+indicates in what order the regions should be searched for free memory
+to satisfy memory allocation requests.
+Regions with a higher allocation priority value
+are preferred over regions with a lower priority.
+
+Allocation priorities are typically useful in two situations.
+First, one section of a machine's physical memory
+may provide faster access than other regions for some reason,
+for example because it is directly connected to the processor
+rather than connected over a slower bus of some kind.
+(For example, the Amiga has what is known as ``fast'' memory,
+which typically supports faster access because
+it does not contend with ongoing DMA activity in the system.)
+In this case, if it is not likely that all available memory will be needed,
+the memory region describing the faster memory might be given higher priority
+so that the LMM will allocate from it whenever possible.
+
+Alternatively, it can be useful to give a region a \emph{lower} priority
+because it is in some way more ``precious'' than other memory,
+and should be conserved by satisfying normal allocation requests
+from other regions whenever possible.
+For example, on the PC,
+it makes sense to give 16MB memory a lower priority than ``high'' memory,
+and 1MB memory a still lower priority;
+this will decrease the likelihood of using up precious ``special'' memory
+for normal allocation requests which just need any type of memory,
+and causing memory shortages when special memory really \emph{is} needed.
+
+\section{Example use}
+
+To make an LMM pool ready for use, a client generally proceeds in three stages:
+\begin{enumerate}
+\item	Initialize the LMM pool, using {\tt lmm_init}.
+\item	Add one or more memory regions to the LMM, using {\tt lmm_add_region}.
+\item	Add some free memory to the pool, using {\tt lmm_add_free}.
+	(The free memory added should overlap
+	at least one of the regions added in step 2;
+	otherwise it will simply be thrown away.)
+\end{enumerate}
+
+Here is an example initialization sequence
+that sets up an LMM pool for use in a Unix-like environment,
+using an (initially) 1MB memory pool to service allocations.
+It uses only one region, which covers all possible memory addresses;
+this allows additional free memory areas to be added to the pool later
+regardless of where they happen to be located.
+\begin{verbatim}
+#include <oskit/lmm.h>
+
+lmm_t lmm;
+lmm_region_t region;
+
+int setup_lmm()
+{
+  unsigned mem_size = 1024*1024;
+  char *mem = sbrk(mem_size);
+  if (mem == (char*)-1)
+    return -1;
+
+  lmm_init(&lmm);
+  lmm_add_region(&lmm, &region, (void*)0, (oskit_size_t)-1, 0, 0);
+  lmm_add_free(&lmm, mem, mem_size);
+
+  return 0;
+}
+\end{verbatim}
+
+After the LMM pool is set up properly,
+memory blocks can be allocated from it
+using any of the {\tt lmm_alloc} functions
+described in the reference section below,
+and returned to the memory pool using the {\tt lmm_free} function.
+
+\section{Restrictions and guarantees}
+
+This section describes some of the important restrictions
+the LMM places on its use.
+Many of these are restrictions one would expect to be present;
+however, they are listed here anyway in order to make them explicit
+and to make it more clear in what situations the LMM can and can't be used.
+
+As mentioned previously,
+the LMM implements no internal synchronization mechanisms,
+so if it is used in a multithreaded environment,
+the caller must explicitly serialize execution
+when performing operations on a particular LMM pool.
+
+If a client uses multiple LMM memory pools,
+then each pool must manage disjoint blocks of memory.
+In other words, a particular chunk of memory
+must never be present on two or more LMM pools at once.
+However, as long as the actual memory blocks in different pools are disjoint,
+the overall memory \emph{regions} managed by the pools can overlap.
+For example, it is OK if pages 1 and 3 are managed by one LMM pool
+and page 2 is managed by another,
+as long as none of those pages are managed by two LMM pools at once.
+
+The LMM uses the memory it manages
+as storage space for free list information.
+This means that the LMM is not suitable
+for managing memory that cannot be accessed directly
+using normal C pointer arithmetic in the local address space,
+or memory with special access semantics, such as flash memory.
+In such a situation, you must use a memory management system
+that stores free memory metadata separately from the free memory itself.
+
+The LMM guarantees that it will not use any memory
+other than the memory explicitly given to it for its use
+through the {\tt lmm_init}, {\tt lmm_add_region}, and {\tt lmm_add_free} calls.
+This implies that no ``destructor'' functions need to be provided by the library
+in order to destroy LMM pools, regions, or free lists:
+an LMM pool can be ``destroyed'' by the caller
+simply by overwriting or reinitializing the memory with something else.
+Of course, it is up to the caller to ensure
+that no attempts are made to use an LMM pool that has been destroyed.
+
+\section{Sanity checking}
+
+When the \oskit{} is compiled with debugging enabled ({\tt --enable-debug}),
+a fairly large number of sanity checks are compiled into the LMM library
+to help detect memory list corruption bugs and such.
+Assertion failures in the LMM library can indicate bugs
+either in the LMM itself or in the application using it
+(e.g., freeing blocks twice, overwriting allocated buffers, etc.).
+In practice such assertion failures
+usually tend to be caused by the application,
+since the LMM library itself is quite well-tested and stable.
+For additional help in debugging memory management errors
+in applications that use the C-standard malloc/free interfaces,
+the \oskit{}'s {\tt memdebug} library can be used as well
+(see Section~\ref{libmemdebug}).
+
+Note that the sanity checks in the LMM library
+are likely to slow down the library considerably under normal use,
+so it may be a good idea to turn off this debugging support
+when linking the LMM into ``stable'' versions of a program.
+
+
+\section{API reference}
+
+The following sections describe the functions exported by the LMM in detail.
+All of these functions, as well as the types necessary to use them,
+are defined in the header file {\tt <oskit/lmm.h>}.
+
+\api{lmm_init}{initialize an LMM pool}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_init(lmm_t *lmm);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes an LMM pool.
+	The caller must provide a pointer to an {\tt lmm_t} structure,
+	which is typically (but doesn't have to be) statically allocated;
+	the LMM system uses this structure to keep track
+	of the state of the LMM pool.
+	In subsequent LMM operations,
+	the caller must pass back a pointer to the same {\tt lmm} structure,
+	which acts as a handle for the LMM pool.
+
+	Note that the LMM pool initially contains no regions or free memory;
+	thus, immediate attempts to allocate memory from it will fail.
+	The caller must register one or more memory regions
+	using {\tt lmm_add_region},
+	and then add some free memory to the pool using {\tt lmm_add_free},
+	before the LMM pool will become useful for servicing allocations.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		A pointer to an uninitialized structure of type {\tt lmm_t}
+		which is to be used to represent the LMM pool.
+\end{apiparm}
+
+\api{lmm_add_region}{register a memory region in an LMM pool}
+\label{lmm-add-region}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_add_region(lmm_t *lmm, lmm_region_t *region,
+					void *addr, oskit_size_t size,
+					lmm_flags_t flags, lmm_pri_t pri);
+\end{apisyn}
+\begin{apidesc}
+	This function attaches a new memory region to an LMM pool.
+	The region describes a contiguous range of addresses
+	with specific attributes,
+	in which free memory management may need to be done.
+
+	The caller must supply a structure of type {\tt lmm_region_t}
+	in which the LMM can store critical state for the region.
+	This structure must remain available for the exclusive use of the LMM
+	for the entire remaining lifetime of the LMM pool
+	to which it is attached.
+	However, the contents of the structure is opaque;
+	client code should not examine or modify its contents directly.
+
+	The caller must only ensure
+	that if multiple regions are attached to a single LMM pool,
+	they refer to disjoint address ranges.
+
+	Note that this routine does not actually make any free memory available;
+	it merely registers a range of addresses
+	in which free memory \emph{might} be made available later.
+	Typically this call is followed
+	by one or more calls to {\tt lmm_add_free},
+	which actually adds memory blocks to the pool's free memory list.
+
+	The act of registering a new region
+	does not cause any of the memory described by that region
+	to be accessed or modified in any way by the LMM;
+	only the {\tt lmm_region_t} structure itself is modified at this point.
+	The LMM will only access and modify memory
+	that is explicitly added to the free list using {\tt lmm_add_free}.
+	This means, for example,
+	that it is safe to create a single region with a base of 0
+	and a size of {\tt (oskit_size_t)-1},
+	regardless of what parts of that address range
+	actually contain valid memory.
+
+	See Section~\ref{lmm-regions} for general information on memory regions.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The LMM pool to which the region should be added.
+	\item[region]
+		A pointer to a structure in which the LMM maintains
+		the critical state representing the region.
+		The initial contents of the structure don't matter;
+		however, the structure must remain available and untouched
+		for the remaining lifetime of the LMM pool
+		to which it is attached.
+	\item[addr]
+		The start address of the region to add.
+		Different regions attached to a single LMM pool
+		must cover disjoint areas of memory.
+	\item[size]
+		The size of the region to add.
+		Must be greater than zero,
+		but no more than {\tt (oskit_addr_t)-1 - \emph{addr}};
+		in other words, the region must not wrap around
+		past the end of the address space.
+	\item[flags]
+		The attribute flags to be associated with the region.
+		Allocation requests will be satisfied from this region
+		only if all of the flags specified in the allocation request
+		are also present in the region's flags word.
+	\item[pri]
+		The allocation priority for the region,
+		as a signed integer.
+		Higher priority regions will be preferred
+		over lower priority regions for satisfying allocations.
+\end{apiparm}
+
+\api{lmm_add_free}{add a block of free memory to an LMM pool}
+\label{lmm-add-free}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_add_free(lmm_t *lmm, void *block, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This routine declares a range of memory to be available for allocation,
+	and attaches that memory to the specified LMM pool.
+	The memory block will be made available
+	to satisfy subsequent allocation requests.
+
+	The caller can specify a block of any size and alignment,
+	as long as the block does not wrap around the end of the address space.
+	The LMM may discard a few bytes at the beginning and end of the block
+	in order to enforce internal alignment constraints; however,
+	the LMM will never touch memory \emph{outside} the specified block
+	(unless, of course, that memory is part of another free block).
+
+	If the block's beginning or end happens to coincide exactly
+	with the beginning or end of a block already on the free list,
+	then the LMM will merge the new block with the existing one.
+	Of course, the block may be further subdivided or merged later
+	as memory is allocated from the pool and returned to it.
+
+	The new free block will automatically be associated
+	with whatever region it happens to fall in.
+	If the block crosses the boundary between two regions,
+	then it is automatically split between the regions.
+	If part of the block does not fall within \emph{any} region,
+	then that part of the block is simply ignored and forgotten about.
+	(By extension, if the entire block does not overlap any region,
+	the entire block is dropped on the floor.)
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The LMM pool to add the free memory to.
+	\item[block]
+		The start address of the memory block to add.
+		There are no alignment restrictions.
+	\item[size]
+		The size of the block to add, in bytes.
+		There are no alignment restrictions,
+		but the size must not be so large
+		as to wrap around the end of the address space.
+\end{apiparm}
+
+\api{lmm_remove_free}{remove a block of memory from an LMM pool}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_remove_free(lmm_t *lmm,
+		void *block, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This routine is complementary to {\tt lmm_add_free}:
+	it removes all free memory blocks in a specified address range
+	from an LMM memory pool.
+	After this call completes,
+	unless the caller subsequently adds memory in this range
+	back onto the LMM pool using {\tt lmm_add_free} or {\tt lmm_free}
+	it is guaranteed that no subsequent memory allocation
+	will return a memory block that overlaps the specified range.
+
+	The address range specified to this routine
+	does not actually all have to be on the free list.
+	If the address range contains several smaller free memory blocks,
+	then all of those free blocks are removed from the pool
+	without touching or affecting any memory parts of the address range
+	that \emph{weren't} in the free memory list.
+	Similarly, if a free block crosses the beginning or end of the range,
+	then the free block is ``clipped''
+	so that the part previously extending into the address range
+	is removed and thrown away.
+
+	One use for this routine
+	is to reserve a specific piece of memory for some special purpose,
+	and ensure that no subsequent allocations use that region.
+	For example, the example MultiBoot boot loaders in the \oskit{}
+	use this routine to reserve the address range
+	that will eventually be occupied by the OS executable being loaded,
+	ensuring that none of the information structures to be passed to the OS
+	will overlap with the final position of its executable image.
+
+	This routine works by finding all the free memory in the given
+	range and allocating it.
+	This means that if blocks were allocated in that range \emph{before}
+	the \texttt{lmm_remove_free} call and then freed afterwords,
+	then they will be candidates for future allocations.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The LMM pool from which to remove free memory.
+	\item[block]
+		The start address of the range
+		in which to remove all free memory.
+	\item[size]
+		The size of the address range.
+\end{apiparm}
+
+\api{lmm_alloc}{allocate memory}
+\label{lmm-alloc}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void *lmm_alloc(lmm_t *lmm, oskit_size_t size,
+				   lmm_flags_t flags);
+\end{apisyn}
+\begin{apidesc}
+	This is the primary routine used to allocate memory from an LMM pool.
+	It searches for a free memory block of the specified size
+	and with the specified memory type requirements
+	(indicated by the \emph{flags} argument),
+	and returns a pointer to the allocated memory block.
+	If no memory block of sufficient size and proper type can be found,
+	then this function returns NULL instead.
+
+	Note that unlike with \emph{malloc},
+	the caller must keep track of the size of allocated blocks
+	in order to allow them to be freed properly later.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which to allocate.
+	\item[size]
+		The number of contiguous bytes of memory needed.
+	\item[flags]
+		The memory type required for this allocation.
+		For each bit set in the \emph{flags} parameter,
+		the corresponding bit in a region's flags word must also be set
+		in order for the region to be considered for allocation.
+		If the \emph{flags} parameter is zero,
+		memory will be allocated from any region.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the memory block allocated,
+	or NULL if no sufficiently large block of the correct type is available.
+	The returned memory block will be at least doubleword aligned,
+	but no other alignment properties are guaranteed by this routine.
+\end{apiret}
+
+\api{lmm_alloc_aligned}{allocate memory with a specific alignment}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void *lmm_alloc_aligned(lmm_t *lmm, oskit_size_t size,
+		lmm_flags_t flags,
+		int align_bits, oskit_addr_t align_ofs);
+\end{apisyn}
+\begin{apidesc}
+	This routine allocates a memory block
+	with specific alignment constraints.
+	It works like {\tt lmm_alloc},
+	except that it enforces the rule that
+	the lowest \emph{align_bits} bits of the address of the returned block
+	must match the lowest \emph{align_bits} of \emph{align_ofs}.
+	In other words,
+	\emph{align_bits} specifies an alignment boundary as a power of two,
+	and \emph{align_ofs} specifies an offset from ``natural'' alignment.
+	If no memory block with the proper requirements can be found,
+	then this function returns NULL instead.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which to allocate.
+	\item[size]
+		The number of contiguous bytes of memory needed.
+	\item[flags]
+		The memory type required for this allocation.
+		For each bit set in the \emph{flags} parameter,
+		the corresponding bit in a region's flags word must also be set
+		in order for the region to be considered for allocation.
+		If the \emph{flags} parameter is zero,
+		memory will be allocated from any region.
+	\item[align_bits]
+		The number of low bits of the returned memory block address
+		that must match the corresponding bits in \emph{align_ofs}.
+	\item[align_ofs]
+		The required offset from natural power-of-two alignment.
+		If \emph{align_ofs} is zero,
+		then the returned memory block will be naturally aligned
+		on a $2^{align_bits}$ boundary.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the memory block allocated,
+	or NULL if no memory block satisfying the specified requirements
+	can be found.
+\end{apiret}
+
+\api{lmm_alloc_gen}{allocate memory with general constraints}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void *lmm_alloc_gen(lmm_t *lmm,
+		oskit_size_t size, lmm_flags_t flags,
+		int align_bits, oskit_addr_t align_ofs,
+		oskit_addr_t in_min, oskit_size_t in_size);
+\end{apisyn}
+\begin{apidesc}
+	This routine allocates a memory block
+	meeting various alignment and address constraints.
+	It works like {\tt lmm_alloc_aligned},
+	except that as an additional constraint,
+	the returned memory block must fit entirely in the address range
+	specified by the \emph{in_min} and \emph{in_size} parameters.
+
+	If \emph{in_size} is equal to \emph{size},
+	then memory will only be allocated
+	if a block can be found at \emph{exactly} the address
+	specified by \emph{in_min};
+	i.e., the returned pointer will either be \emph{in_min} or NULL.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which to allocate.
+	\item[size]
+		The number of contiguous bytes of memory needed.
+	\item[flags]
+		The memory type required for this allocation.
+		For each bit set in the \emph{flags} parameter,
+		the corresponding bit in a region's flags word must also be set
+		in order for the region to be considered for allocation.
+		If the \emph{flags} parameter is zero,
+		memory will be allocated from any region.
+	\item[align_bits]
+		The number of low bits of the returned memory block address
+		that must match the corresponding bits in \emph{align_ofs}.
+	\item[align_ofs]
+		The required offset from natural power-of-two alignment.
+		If \emph{align_ofs} is zero,
+		then the returned memory block will be naturally aligned
+		on a $2^{align_bits}$ boundary.
+	\item[in_min]
+		Start address of the address range
+		in which to search for a free block.
+		The returned memory block, if found,
+		will have an address no lower than \emph{in_min}.
+	\item[in_size]
+		Size of the address range in which to search for the free block.
+		The returned memory block, if found,
+		will fit entirely within this address range,
+		so that $mem_block+size <= in_min+in_size$.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the memory block allocated,
+	or NULL if no memory block satisfying all of the specified requirements
+	can be found.
+\end{apiret}
+
+\api{lmm_alloc_page}{allocate a page of memory}
+\label{lmm-alloc-page}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void *lmm_alloc_page(lmm_t *lmm, lmm_flags_t flags);
+\end{apisyn}
+\begin{apidesc}
+	This routine allocates a memory block
+	that is exactly one minimum-size hardware page in size,
+	and is naturally aligned to a page boundary.
+	The same effect can be achieved
+	by calling {\tt lmm_alloc_aligned} with appropriate parameters;
+	this routine merely provides a simpler interface
+	for this extremely common action.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which to allocate.
+	\item[flags]
+		The memory type required for this allocation.
+		For each bit set in the \emph{flags} parameter,
+		the corresponding bit in a region's flags word must also be set
+		in order for the region to be considered for allocation.
+		If the \emph{flags} parameter is zero,
+		memory will be allocated from any region.
+\end{apiparm}
+\begin{apiret}
+	Returns a pointer to the memory page allocated,
+	or NULL if no naturally-aligned page can be found.
+\end{apiret}
+
+\api{lmm_free}{free previously-allocated memory}
+\label{lmm-free}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_free(lmm_t *lmm, void *block, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This routine is used to return a memory block
+	allocated with one of the above {\tt lmm_alloc} functions
+	to the LMM pool from which it was allocated.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which the memory block was allocated.
+	\item[block]
+		A pointer to the memory block to free,
+		as returned by one of the {\tt lmm_alloc} functions.
+	\item[size]
+		The size of the memory block to free,
+		as specified to the allocation function
+		when the block was allocated.
+\end{apiparm}
+
+\api{lmm_free_page}{free a page allocated with lmm_alloc_page}
+\label{lmm-free-page}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_free_page(lmm_t *lmm, void *block);
+\end{apisyn}
+\begin{apidesc}
+	This routine simply calls {\tt lmm_free}
+	with {\tt PAGE_SIZE} as the \emph{size} argument,
+	providing a companion to {\tt lmm_alloc_page}.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The memory pool from which the page was allocated.
+	\item[block]
+		A pointer to the page to free,
+		as returned by the {\tt lmm_alloc_page} function.
+\end{apiparm}
+
+\api{lmm_avail}{find the amount of free memory in an LMM pool}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto oskit_size_t lmm_avail(lmm_t *lmm, lmm_flags_t *flags);
+\end{apisyn}
+\begin{apidesc}
+	This routine returns the number of bytes of free memory
+	currently exist in the specified LMM memory pool
+	of a certain memory type, specified by the \emph{flags} argument.
+
+	Note that the returned value does not imply
+	that a block of that size can be allocated;
+	due to fragmentation it may only be possible
+	to allocate memory in significantly smaller chunks.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The LMM pool in which to tally free memory.
+	\item[flags]
+		The memory type to determine the availability of.
+		Only memory regions whose flags words
+		contain all the bits set in the \emph{flags} parameter
+		will be considered in counting available memory.
+		If \emph{flags} is zero,
+		then \emph{all} free memory in the LMM pool will be counted.
+\end{apiparm}
+\begin{apiret}
+	Returns the number of bytes of free memory available
+	of the requested memory type.
+\end{apiret}
+
+\api{lmm_find_free}{scan a memory pool for free blocks}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_find_free(lmm_t *lmm,
+		\inoutparam oskit_addr_t *inout_addr,
+		\outparam oskit_size_t *out_size,
+		\outparam lmm_flags_t *out_flags);
+\end{apisyn}
+\begin{apidesc}
+	This routine can be used to locate free memory blocks in an LMM pool.
+	It searches the pool for free memory
+	starting at the address specified in {\tt *}\emph{inout_addr},
+	and returns a description of the lowest block of available memory
+	starting at at least this address.
+	The address and size of the next block found
+	are returned in {\tt *}\emph{inout_addr} and {\tt *}\emph{out_size},
+	respectively,
+	and the memory type flags associated with
+	the region in which the block was found
+	are returned in {\tt *}\emph{out_flags}.
+	If no further free memory can be found above the specified address,
+	then this routine returns with {\tt *}\emph{out_size} set to zero.
+
+	If the specified {\tt *}\emph{inout_addr}
+	points into the middle of a free block,
+	then a description of the \emph{remainder} of the block is returned,
+	i.e., the part of the block starting at {\tt *}\emph{inout_addr}
+	and extending to the end of the free block.
+
+	This routine does not actually cause any memory to be allocated;
+	it merely reports on available memory blocks.
+	The caller must not actually attempt
+	to use or modify any reported blocks
+	without allocating them first.
+	The caller can allocate a block reported by this routine
+	using {\tt lmm_alloc_gen},
+	using its \emph{in_min} and \emph{in_size} parameters
+	to constrain the address of the allocated block
+	to exactly the address reported by {\tt lmm_find_free}.
+	If this allocation is done
+	immediately after the call to {\tt lmm_find_free},
+	without any intervening memory allocations,
+	then the allocation is guaranteed to succeed.
+	However, any intervening memory allocation operations
+	will effectively invalidate the information returned by this routine,
+	and a subsequent attempt to allocate the reported block may fail.
+\end{apidesc}
+\begin{apiparm}
+	\item[lmm]
+		The LMM pool in which to search for free memory.
+	\item[inout_addr]
+		On entry, the value pointed to by this parameter
+		must be the address at which to start searching for free memory.
+		On return, it contains the start address
+		of the next free block actually found.
+	\item[out_size]
+		On return, the value pointed to by this parameter
+		contains the size of the next free memory block found,
+		or zero if no more free blocks could be located.
+	\item[out_flags]
+		On return, the value pointed to by this parameter
+		contains the flags word associated with the region
+		in which the next free memory block was found.
+\end{apiparm}
+
+\api{lmm_dump}{display the free memory list in an LMM pool}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_dump(lmm_t *lmm);
+\end{apisyn}
+\begin{apidesc}
+	This routine is primarily used for debugging the LMM
+	and the code that uses it.
+	It scans through the LMM pool
+	and calls {\tt printf} to display each attached memory region
+	and all the blocks of free memory currently contained in each.
+\end{apidesc}
+
+\api{lmm_stats}{display statistics for an LMM pool}
+\begin{apisyn}
+	\cinclude{oskit/lmm.h}
+
+	\funcproto void lmm_stats(lmm_t *lmm);
+\end{apisyn}
+\begin{apidesc}
+	Uses {\tt printf} to display a one-line summary of an LMM
+	in the form:
+
+	\begin{codefrag}
+	\begin{verbatim}
+	LMM=0x0017e644: 117506664 bytes in 3 regions, 6 nodes
+	\end{verbatim}
+	\end{codefrag}
+
+	which lists the address of the LMM pool, the total number of
+	bytes contained in it, the number of regions attached via
+	{\tt lmm_add_region}, and the number of nodes used to
+	describe the memory.
+	This routine is primarily used for tracking down memory leaks
+	and list fragmentation problems.
+\end{apidesc}

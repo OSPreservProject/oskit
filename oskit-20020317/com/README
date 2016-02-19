@@ -1,0 +1,9 @@
+
+Directories: oskit/com
+Target: liboskit_com.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Generates a library with ALL the COM iids and other
+	generic com infrastructure (currently no generic
+	infrastructure is in here, though.)

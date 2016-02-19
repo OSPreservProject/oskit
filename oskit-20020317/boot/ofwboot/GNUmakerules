@@ -1,0 +1,73 @@
+#
+# Copyright (c) 2000, 2001 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Boot Loader, which is free software,
+# also known as "open source;" you can redistribute it and/or modify it under
+# the terms of the GNU General Public License (GPL), version 2, as published
+# by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _boot_bsd_makerules_
+_boot_bsd_makerules_ = yes
+
+TARGETS = ofwboot ofwboot.image
+
+#DEFINES += -DBOOT_SERVER=\"155.99.212.138\" -DTFTP_ROOT=\"/z/dnard/\" -DDEF_KERNEL=\"/z/dnard/oskit/kernel\"
+CLEAN_FILES += $(TARGETS)
+OSKIT_CFLAGS += -DOSKIT
+OSKIT_LDFLAGS += -X -Ttext 0x18100000
+
+# Where to look for src files.
+SRCDIRS += $(OSKIT_SRCDIR)/boot/ofwboot
+
+# Libraries we need to link with
+LIBS = -loskit_startup -loskit_clientos -loskit_bootp -loskit_udp \
+	-loskit_linux_dev -loskit_dev -loskit_kern -loskit_c -loskit_lmm 
+DEPENDLIBS := $(patsubst -l%,$(OBJDIR)/lib/lib%.a,$(LIBS))
+
+INCDIRS += $(OSKIT_SRCDIR)/oskit/c
+
+all: $(TARGETS)
+install: $(INSTALL_TARGETS)
+prepare::
+
+# Include the makefile containing the generic rules.
+# This must come here since it depends on SRCDIRS and sets OBJFILES.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPS = $(OBJDIR)/lib/multiboot.o $(OBJFILES) $(DEPENDLIBS) $(OBJDIR)/lib/crtn.o
+
+ofwboot: $(DEPS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking $@"
+	$(LD) -o $@ $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		$(OBJDIR)/lib/multiboot.o \
+		$(OBJFILES) $(LIBS) \
+		$(OBJDIR)/lib/crtn.o
+	cp $@ $@.debug
+	$(STRIP) $@
+CLEAN_FILES += ofwboot.debug
+
+#
+# Make OFW boot adaptor images.
+#
+IMAGES	    :=	$(foreach FILE, $(TARGETS), $(FILE).image)
+CLEAN_FILES +=	$(IMAGES)
+BOOTDIR      =	$(OBJDIR)/boot/ofw
+export BOOTDIR
+
+images:		$(IMAGES)
+
+%.image:	% $(OBJDIR)/boot/ofw/ofwboot.o
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating OFW image $@"
+	cp $< $<.strip
+	$(STRIP) $<.strip
+	$(OBJDIR)/boot/ofw/mkofwimage -o $@ $<.strip
+	rm -f $<.strip
+
+endif

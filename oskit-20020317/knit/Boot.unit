@@ -1,0 +1,786 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Bootstrap code
+//
+// Not entirely working yet
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+include "Glue.unit"
+
+bundletype PlainLDSymbols_T = {
+  _start,
+  end,
+  _end,
+  edata,
+  _edata,
+  __ANNO_START__, 
+  __ANNO_END__,
+}
+
+unit PXE_Boot = {
+  imports[ ld_symbols : PlainLDSymbols_T,
+           pxe_crt    : PXECRT_T,
+         ];
+  exports[ progress : Progress_T,
+           bios     : { i16_bios_main },
+           _exit    : _Exit_T,
+         ];
+  flatten;
+  link{
+    [bios,_exit,vm,environ,segments] <- BIOS <- [pic,gdt,tss,cpu,panic,start32];
+    [cpu,gate,pic,idt,trap,tss,gdt,base_irq]
+               <- x86           <- {segments,anno,panic,stdout,string,softint};
+    [anno]     <- base_anno     <- [ld_symbols];                    
+    [softint]  <- null_softint  <- [panic,trap];
+    [panic]    <- libc_panic   <- [exit,stdout,stack_trace];
+    [exit,atexit] <- libc_exit <- [_exit];
+    [stdout]   <- libc_stdout  <- [console];  // really only needs putchar
+    [console]  <- serial_console  <- [critical,panic];
+    [string]   <- libc_string  <- [];
+    [critical] <- base_critical <- [];
+    [stack_trace] <- stack_trace <- [stdout];
+    [start32]  <- invoke32      <- [main,cmdline,exit];
+
+    cmdline = environ + argv;
+    [argv]  <- %{ int   prog_argc = 1; 
+                  char* prog_argv[2] = { "kernel", 0 };
+               %};
+
+    [main]     <- pxe_boot   <- [pxe_crt, bios,lmm,exec,string,phys_lmm,vm,panic,
+                                 net,stdout,reset,stack_trace];
+    [lmm]      <- LMM          <- [panic,stdout];
+    // Includes both aout and elf support - excessive?
+    [exec]     <- exec         <- [];
+    // doesn't use i16_ext_mem.c at present
+    [phys_lmm] <- phys_lmm_bios <- [bios,lmm,vm,stdout,panic,ld_symbols];
+    [net]      <- libc_net      <- [sprintf];
+    [sprintf]  <- libc_sprintf  <- [];
+    [reset]    <- base_reset    <- [vm];
+
+    // no progress information printed - better hope it works first time
+    [progress] <- null_progress <- [_exit];
+  }
+}
+
+bundletype PXECRT_T = {
+  pxe_databucket,
+  pxe_entrypoint,
+  pxe_routine,
+  pxenv_offset,
+  pxenv_segment,
+  i16_pxe_invoke,
+  i16_pxe_exit,
+} 
+
+unit pxe_boot = {
+  imports[ pxe_crt    : PXECRT_T,
+           bios       : BIOS_T,
+           lmm        : LMM_T,
+           exec       : Exec_T,
+           string     : String_T,
+           phys_lmm   : PhysLMM_T,
+           vm         : VM_T,
+           panic      : Panic_T,
+           net        : Net_T,
+           stdout     : Stdout_T,
+           reset      : Reset_T,
+           stack_trace: StackTrace_T,
+         ];
+  exports[ out : Main_T, ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/pxe/main.c",         
+    "boot/pxe/malloc.c",         
+    "boot/boot_start.c",         
+  } with flags boot_pxe;
+  files{
+    "boot/do_boot.S",         
+  } with flags { flags boot_pxe, flags asm };
+}
+
+// To be linked against these files (which must come first on link line)
+//    "boot/linux/i16_bootsect.S",      // prints an error message (huh?)
+//    "boot/linux/i16_setup.S",         // LILO entrypoint
+
+unit Linux_Boot = {
+  imports[ ld_symbols : PlainLDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           bios     : { i16_bios_main },
+           start32  : { start32 },
+           exit32   : { exit32 },
+         ];
+  flatten;
+  link{
+    [bios,exit32,vm,environ,segments] <- BIOS <- [pic,gdt,tss,cpu,panic,start32];
+    [main]     <- linux_boot   <- [ld_symbols,malloc,string,panic,stdout,
+                                   vm,rtc,phys_lmm,lmm,bios,exec];
+
+    [rtc]      <- rtclock      <- [];
+
+    [cpu,gate,pic,idt,trap,tss,gdt,base_irq]
+               <- x86           <- {segments,anno,panic,stdout,string,softint};
+    [softint]  <- null_softint  <- [panic,trap];
+    [anno]     <- base_anno     <- [ld_symbols];                    
+
+    [string]   <- libc_string  <- [];
+    [stdout]   <- libc_stdout  <- [console];  // really only needs putchar
+    [stdin]    <- libc_stdin   <- [console,stdout];
+    [console]  <- vga_console  <- [vga,kbd,stdout];
+    [vga]      <- VGA          <- [critical,vm,string];
+    [kbd]      <- KBD          <- [critical];
+    [panic]    <- libc_panic   <- [exit,stdout,stack_trace];
+    [stack_trace] <- stack_trace <- [stdout];
+    [exit,atexit] <- libc_exit <- [_exit];
+    [lmm]      <- LMM          <- [panic,stdout];
+    [iids]     <- oskit_IIDs   <- [];
+
+//    [memobj]   <- mem_obj      <- [lmm, phys_lmm, mem_lock, string, iids];
+//    [malloc]   <- libc_malloc  <- [memobj, panic, string];
+
+
+    [malloc_lmm0]  <- malloc_lmm   <- [lmm,phys_lmm];
+    [malloc_lmm1]  <- lmm_lock     <- [malloc_lmm0,mem_lock];
+    [malloc_flags] <- malloc_flags <- [malloc_lmm1];
+    [malloc]       <- malloc       <- [malloc_flags,panic,string];
+
+    [critical] <- base_critical <- [];
+    [mem_lock] <- top_and_bottom_safe_mem_lock <- [critical];
+
+    // Includes both aout and elf support - excessive?
+    [exec]     <- exec         <- [];
+
+    // doesn't use i16_ext_mem.c at present
+    [phys_lmm] <- phys_lmm_bios <- [bios,lmm,vm,stdout,panic,ld_symbols];
+
+    // no progress information printed - better hope it works first time
+    [progress] <- null_progress <- [_exit];
+
+    [start32]  <- invoke32 <- [main,cmdline,exit];
+
+    cmdline = environ + argv;
+    [argv]  <- %{ int   prog_argc = 1; 
+                  char* prog_argv[2] = { "kernel", 0 };
+               %};
+  }
+}
+
+unit invoke32 = {
+  imports[ main : Main_T, cmdline : { prog_argc, prog_argv, environ}, exit : Exit_T ];
+  exports[ start32 : { start32 } ];
+  depends{ exports + inits + finis needs imports };
+  %{
+int    prog_argc;
+char** prog_argv; 
+char** environ;
+
+void start32(void)
+{
+// If we're flattening, the number of arguments has to match so
+// we often have to skip the environ argument
+//        exit(main(prog_argc, prog_argv, environ));
+        exit(main(prog_argc, prog_argv));
+}
+  %} with flags libc;
+}
+
+unit null_progress = {
+  imports[ _exit : { _exit } ];
+  exports[ out : Progress_T ];
+  depends{ exports + inits + finis needs imports };
+  %{
+void progress(char* what, int rc)
+{
+        if (rc) _exit(rc);
+}
+  %} with flags libc;
+}
+
+bundletype BIOS_T = { 
+  i16_bios_main, 
+  base_real_int,
+  base_i16_switch_to_pmode,
+  base_i16_switch_to_real_mode,
+}
+
+// mk_unit -n linux_extern boot/linux/i16_bootsect.o boot/linux/i16_setup.o
+// mk_unit -n linux_boot boot/linux/boot_start.o boot/linux/misc.o boot/linux/do_boot.o boot/linux/unzip.o boot/linux/extended_mem_size.o boot/linux/inflate.o
+
+unit linux_boot = {
+  imports[ ld_symbols : PlainLDSymbols_T, 
+           malloc     : Malloc_T,
+           string     : String_T,
+           panic      : Panic_T,
+           stdout     : Stdout_T,
+           vm         : VM_T,
+           rtc        : RTC_T,
+           phys_lmm   : PhysLMM_T,
+           lmm        : LMM_T,
+           bios       : BIOS_T,
+           exec       : Exec_T,
+         ];
+  exports[ out : Main_T, ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/boot_start.c",              // a multiboot adaptor
+    "boot/extended_mem_size.c",       // read memsize from RTC (yow!)
+    "boot/linux/unzip.c",             // decompress (pkzip/gzip)
+    "boot/linux/inflate.c",           // decompress (huffman)
+    "boot/linux/misc.c",              // everything else (random mess)
+  } with flags boot_linux;
+  files{
+    "boot/do_boot.S",                 // more_multiboot stuff
+  } with flags { flags boot_linux, flags asm };
+}
+
+// mk_unit -n i16 kern/i16_bios_main.o kern/i16_putchar.o kern/i16_init_vm.o kern/raw_real_int.o  kern/i16_real_int.o kern/i16_raw.o kern/base_i16_a20.o kern/i16_a20.o kern/i16_test_a20.o kern/i16_exit.o kern/i16_base_gdt_init.o libc/i16_panic.o libc/i16_printf.o libc/i16_doprnt.o libc/i16_puts.o libc/environ.o kern/phys_mem_va.o kern/linear_base_va.o kern/real_cs.o  
+
+unit BIOS = {
+  imports[ pic     : PIC_T,
+           gdt     : GDT_T,
+           tss     : TSS_T,
+           cpu     : CPU_T,
+           panic   : Panic_T,
+           start32 : { start32 },
+         ];
+  exports[ out      : BIOS_T,
+           _exit    : { _exit },
+           vm       : VM_T,
+           environ  : { environ },
+           segments : Segments_T, 
+         ];
+  depends{ (exports - _exit) + inits + finis needs imports };
+  noflatten; // too much .code16 code in here
+  files{
+    "kern/x86/pc/i16/i16_bios_main.c",  // sequences i16 stuff in right modes
+    "kern/x86/pc/i16/i16_putchar.c",
+    "kern/x86/pc/i16/i16_init_vm.c",
+    "kern/x86/pc/i16/raw_real_int.c",
+    "kern/x86/pc/i16/i16_real_int.S",
+    "kern/x86/pc/i16/i16_raw.c",
+    "kern/x86/pc/i16/base_i16_a20.c",
+    "kern/x86/pc/i16/i16_a20.c",
+    "kern/x86/pc/i16/i16_test_a20.S",
+    "kern/x86/pc/i16/i16_exit.c",
+
+    "kern/x86/i16/i16_base_gdt_init.c",
+
+    "kern/x86/real_cs.c",
+    "kern/x86/phys_mem_va.c",
+    "kern/x86/linear_base_va.c",
+  } with flags kern;
+  files{
+    "libc/x86/i16/i16_panic.c",
+    "libc/x86/i16/i16_printf.c",
+    "libc/x86/i16/i16_doprnt.c",
+    "libc/x86/i16/i16_puts.c",
+    "libc/stdlib/environ.c",
+  } with flags libc;
+  rename{ _exit._exit to exit32 };
+}
+
+
+
+// mk_unit -n phys_lmm_bios kern/base_conv_mem_init.o kern/base_ext_mem_init.o kern/phys_lmm_add.o kern/phys_lmm_init.o kern/phys_mem_min.o kern/phys_mem_max.o
+
+unit phys_lmm_bios = {
+  imports[ bios   : BIOS_T,
+           lmm    : LMM_T,
+           vm     : VM_T,
+           stdout : Stdout_T,
+           panic  : Panic_T,
+           ld_syms: PlainLDSymbols_T,
+         ];
+  exports[ out : PhysLMM_T, ];
+  initializer init for exports;
+  depends{ exports + inits + finis needs imports };
+  files{
+    "kern/x86/pc/base_conv_mem_init.c",
+    "kern/x86/pc/base_ext_mem_init.c",
+    "kern/x86/pc/phys_lmm_init.c",
+    "kern/x86/pc/phys_lmm_add.c",
+    "kern/x86/pc/phys_mem_min.c",
+    "kern/x86/pc/phys_mem_max.c",
+    "knit/c/malloc_lmm_init2.c",
+  } with flags kern;
+}
+
+bundletype OtherLMM_T = 
+{ add_free,
+  add_region,
+  remove_free,
+  alloc,
+  alloc_aligned,
+  alloc_gen,
+  alloc_page,
+  avail,
+  find_free,
+  free,         // ToDo: is conflict with malloc/free bad?
+  free_page,
+  stats,
+  dump,
+}
+
+// mk_unit -n malloc_lmm lmm.o
+unit malloc_lmm = {  
+  imports[ lmm : LMM_T, malloc_lmm : { malloc_lmm } ];
+  exports[ out : OtherLMM_T ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+  flatten;
+  files{ "knit/c/lmm.c" } with flags libc;
+  rename{ out with prefix out_};
+}
+
+// mk_unit -n lmm_guard lmm_guard.o
+unit lmm_guard = {  
+  imports[ in  : OtherLMM_T, size : { guard_size }, panic : Panic_T ];
+  exports[ out : OtherLMM_T ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+  flatten;
+  files{ "knit/c/lmm_guard.c" } with flags libc;
+  rename{ in  with prefix in_};
+  rename{ out with prefix out_};
+}
+
+// mk_unit -n lmm_lock lmm_lock.o
+unit lmm_lock = {  
+  imports[ in  : OtherLMM_T, mem_lock : MemLock_T ];
+  exports[ out : OtherLMM_T ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+  flatten;
+  files{ "knit/c/lmm_lock.c" } with flags libc;
+  rename{ in  with prefix in_};
+  rename{ out with prefix out_};
+}
+
+// mk_unit -n lmm_morecore lmm_morecore.o
+unit lmm_morecore = {  
+  imports[ in  : OtherLMM_T, morecore : Morecore_T ];
+  exports[ out : OtherLMM_T ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+  flatten;
+  files{ "knit/c/lmm_morecore.c" } with flags libc;
+  rename{ in  with prefix in_};
+  rename{ out with prefix out_};
+}
+
+// mk_unit -n lmm_print lmm_print.o
+unit lmm_print = {  
+  imports[ in  : OtherLMM_T, stdout : Stdout_T, prefix : { prefix } ];
+  exports[ out : OtherLMM_T ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+  flatten;
+  files{ "knit/c/lmm_print.c" } with flags libc;
+  rename{ in  with prefix in_};
+  rename{ out with prefix out_};
+}
+
+bundletype Malloc_TFlags =
+{ free_flags,
+  malloc_flags,
+  memalign_flags,
+  sfree_flags,
+  smalloc_flags,
+  smemalign_flags,
+}
+
+// mk_unit -n malloc knit/c/malloc.o knit/c/smalloc.o libc/malloc/calloc.o libc/malloc/mustcalloc.o libc/malloc/mustmalloc.o
+unit malloc = {
+  imports[ in  : Malloc_TFlags, panic : Panic_T, memcpy : { memcpy, memset } ];
+  exports[ out : Malloc_T ];
+  depends{ exports + inits + finis needs imports };
+//  flatten;
+  files{ 
+    "knit/c/malloc.c",
+    "knit/c/smalloc.c",
+    "libc/malloc/calloc.c",     // should these be here?
+    "libc/malloc/mustcalloc.c", // should these be here?
+    "libc/malloc/mustmalloc.c", // should these be here?
+  } with flags { flags libc, "-I${OSKITDIR}/knit/c" };
+}
+
+// mk_unit -n malloc_flags knit/c/mallocf.o knit/c/smallocf.o
+unit malloc_flags = {
+  imports[ in  : OtherLMM_T ];
+  exports[ out : Malloc_TFlags ];
+  constraints{ zone (exports + inits + finis) <= zone imports };
+  constraints{ zone (exports) = zone (inits + finis) };
+  depends{ exports + inits + finis needs imports };
+//  flatten;
+  files{
+    "knit/c/mallocf.c",
+    "knit/c/smallocf.c",
+  } with flags { flags libc, "-I${OSKITDIR}/knit/c" };
+  rename{ in  with prefix in_};
+}
+
+// mk_unit -n lmm_to_osenv_mem knit/c/mem.o     
+unit lmm_to_osenv_mem = {
+  imports[ malloc   : Malloc_TFlags,
+           vm       : VM_T,
+           phys_lmm : PhysLMM_T,
+         ];
+  exports[ out : OSEnvMem_T ];
+  depends{ exports + inits + finis needs imports };
+//  flatten;
+  files{
+    "knit/c/mem.c",
+  } with flags libc;
+}
+
+// ToDo: try flattening to check it works well
+// ToDo: cache
+
+
+/****************************************************************/
+// Bits of netdisk/netboot
+/****************************************************************/
+
+/*#
+Supports \b and ^U (kill line)
+#*/
+// mk_unit -n getline boot/net/getline.o 
+unit getline = {
+  imports[ console : Console_T ];
+  exports[ out : { getline } ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/getline.c",
+  } with flags boot_net;
+}
+
+/*#
+A simple 'clock' which counts ticks from the osenv_timer.
+#*/
+// mk_unit -n tick boot/net/timer.o
+unit tick = {
+  imports[ timer : OSEnvTimer_T ];
+  exports[ clock : {ticks} ];
+  initializer init for exports;
+  finalizer   fini for exports;
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/timer.c",
+  } with flags boot_net;
+}
+
+/*#
+An alternative wrapper for htonl.
+#*/
+
+// mk_unit -n convert_ipaddr boot/net/convert_ipaddr.o 
+unit convert_ipaddr = {
+  imports[ net : Net_T ];
+  exports[ out : { convert_ipaddr } ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/convert_ipaddr.c",
+  } with flags boot_net;
+}
+
+/*#
+A variant of printf which understands %I (internet address).
+#*/
+
+// mk_unit -n netprintf boot/net/netprintf.o
+unit netprintf = {
+  imports[ string  : String_T,
+           putchar : PutChar_T,
+         ];
+  exports[ out : { netprintf, netsprintf, } ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/netprintf.c",
+  } with flags boot_net;
+}
+
+
+// mk_unit -n bootp_init knit/c/bootp_init.o
+unit bootp_init = {
+  imports[ flags  : { required_flags },  // what we want from bootp
+           bootp  : BootP_T,
+           malloc : Malloc_T, // free to match dev_lookup
+           getline: {getline},
+           string : String_T,
+           iids   : { oskit_etherdev_iid },
+           stdout : Stdout_T,  // error messages
+           device : OSEnvDevice_T,
+         ];
+  exports[ out : { bootp_info, ether_dev } ];
+  initializer init for exports;
+  finalizer   fini for exports;
+  depends{ exports + inits + finis needs (imports - device) };
+  depends{ exports + inits + finis needs {device.osenv_device_lookup_etherdev} };
+  files{
+    "knit/c/bootp_init.c",
+  } with flags boot_net;
+}
+
+/*#
+A simple arptable with entries statically allocated for 
+client, server, gateway, ns, rootserver and swapserver.
+
+Used in polling_ether, NFS_Read and other units salvaged from netdisk.
+#*/
+// mk_unit -n simple_arp boot/net/ether.o
+unit simple_arp = {
+  imports[ dev    : { bootp_info, ether_dev },
+           stdout : Stdout_T,
+           panic  : Panic_T,
+           malloc : Malloc_T,
+           string : String_T,
+         ];
+  exports[ out : { _dumparptable,
+                   arptable,
+                   netmask,
+                   hostname, hostnamelen,
+                   ether_bcast,
+                 },
+           flags : {required_flags}, // feed this back into bootp_init
+         ];
+  initializer init for (exports - flags);
+  finalizer   fini for (exports - flags);
+  depends{ (exports - flags) + inits + finis needs imports };
+  depends{ flags needs {} };
+  files{
+    "boot/net/ether.c",
+    "knit/c/simple_arp.c",
+  } with flags boot_net;
+}
+
+/*# 
+Implements a polling ethernet driver.
+
+Note that the packet is statically allocated and that the packetlen
+and packet are transmitted through global variables.  This forces a copy...
+
+Can be configured to do bootp as well but we prefer to have that
+as a separate unit.
+#*/
+
+// (ie last part of net_init)
+// mk_unit -n polling_ether boot/net/driver.o 
+unit polling_ether = {
+  imports[ bufio  : BufIO_T,
+           netio  : NetIO_T,
+           panic  : Panic_T,
+           stdout : Stdout_T,
+           clock  : {ticks},
+           dev    : {ether_dev},
+           arp    : {arptable},
+           queue  : COMQueue_T,
+         ];
+  exports[ out : { eth_transmit,
+                   eth_poll,
+                   packet,    // statically allocated!!
+                   packetlen,
+                   packetsdropped,
+                 }
+         ];
+  initializer init for exports;
+  finalizer   fini for exports;
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/driver.c",
+  } with flags boot_net;
+}
+
+bundletype NFSRead_T = 
+{ nfs_lookup,
+  nfs_mount,
+  nfs_read,
+  nfs_strerror,
+}
+
+bundletype RPC_T =
+{ rpc_id,
+  rpc_init,
+  rpc_lookup,
+  rpc_strerror,
+}
+
+/*#
+A simple NFS read-only client.
+(Contains an RPC client too - this could be made a separate unit.)
+#*/
+
+// note that udp.o is more or less just fake_udp and ip.o is just checksum code
+// simple rpc/nfs code (from freebsd 2.1)
+// mk_unit -n NFS boot/net/rpc.o boot/net/udp.o boot/net/await.o boot/net/ip.o 
+unit NFS_Read = {
+  imports[ driver  : { eth_transmit,
+                       eth_poll,
+                       packet,
+                       packetlen,
+                     },
+           netprintf : { netprintf,
+                         netsprintf,
+                       },
+           iface   : { arptable, 
+                       netmask,
+                       hostname,    // must be padded with 0's
+                       hostnamelen, // must be word aligned
+                     },
+           stdout  : Stdout_T,
+           convert : {convert_ipaddr}, // htonl in a wrapper
+	   sprintf : Sprintf_T,
+           string  : String_T,
+           clock   : {ticks},
+         ];
+  exports[ nfs_read : NFSRead_T, rpc : RPC_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/rpc.c",
+    "boot/net/udp.c",
+    "boot/net/await.c",
+    "boot/net/ip.c",
+    "boot/net/ether.c",
+  } with flags boot_net;
+}
+
+bundletype ZLib_T =
+{ inflate,
+  inflateInit_,
+}
+
+// omits gzio.o
+// mk_unit -n zlib adler32.o compress.o crc32.o deflate.o infblock.o infcodes.o inffast.o inflate.o inftrees.o infutil.o trees.o uncompr.o zutil.o
+
+unit zlib = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+         ];
+  exports[ zlib : ZLib_T ];
+  depends{ exports + inits + finis needs imports };
+  files "${OSKITDIR}/zlib/src" {
+    "adler32.o",        
+    "compress.o",       
+    "crc32.o",          
+    "deflate.o",        
+//    "gzio.o",           
+    "infblock.o",       
+    "infcodes.o",       
+    "inffast.o",  
+    "inflate.o",  
+    "inftrees.o", 
+    "infutil.o",  
+    "trees.o",    
+    "uncompr.o",  
+    "zutil.o",    
+  }
+}
+
+// mk_unit -n netdisk boot/disk/main.o boot/disk/misc.o boot/disk/getkernel_net.o
+unit netdisk = {
+  imports[ partition : DiskPartition_T,
+           ide     : { oskit_linux_block_open },
+           zlib    : ZLib_T,
+           version : Version_T,
+           clock   : { ticks },
+           string  : String_T,
+           rpc     : RPC_T,
+           nfs     : NFSRead_T,
+           panic   : Panic_T,
+           stdout  : Stdout_T,
+           netprint: {netprintf},
+           getline : {getline},
+           getenv  : GetEnv_T,
+           exit    : Exit_T,
+           net     : Net_T,
+           iface   : {arptable},
+           build   : { build_info, version },
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "boot/net/main.c",
+    "boot/net/misc.c",
+    "boot/net/getkernel_net.c",
+  } with flags { 
+    flags boot_net, 
+    "-DNETDISK", 
+    "-I${OSKITDIR}/zlib/src" 
+  };
+}
+
+unit NetDisk = {
+  imports[ ld_symbols : PlainLDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  depends{ something needs console_obj };
+  glue{ 
+    netdisk, diskpart, zlib, tick, NFS_Read, netprintf, polling_ether, 
+     bootp, bootp_init, simple_arp, convert_ipaddr, queue,
+    version,
+    Console,
+    base_critical, set_irq_handler, // Interrupts
+    null_threads,                   // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap, package Pure,    
+  };
+  defaults{ ld_symbols, _exit, eth, drivers, ide, build };
+  link{
+    [build] <- %{ const char version[] = "ADRs version"; 
+                  const char build_info[] = "Made in Scotland, from girders";
+               %};
+
+    [linux_dev]   <- linux_dev           <- {...};
+    [eth,drivers] <- linux_ether_support <- {dev=linux_dev,...};
+    [tulip]       <- tulip               <- {dev=linux_dev, eth, ...};
+    [ide]         <- linux_ide           <- {dev=linux_dev,...};
+
+    out = find { multiboot_main_wrapped, boot_info }
+        + find Stack_T
+        + find Version_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+
+    something   = find OSEnvISA_T;
+    console_obj = find DefaultConsole_T;
+  }
+}
+
+
+
+// the netboot return address hack...
+// mk_unit -n clone_multiboot boot/net/base_multiboot_main.o boot/net/reboot.o
+// mk_unit -n relocate_kernel_and_enter boot/net/loadkernel.o boot/net/do_boot.o
+// mk_unit -n copy_gdt boot/net/gdt.o
+
+// TODO TODO TODO: write alternative boot sequence which uses the
+// code from the end of netboot main as finalisers and whose reset
+// function is "loadkernel"
+// mk_unit -n netboot boot/net/main.o boot/net/getkernel_net.o 

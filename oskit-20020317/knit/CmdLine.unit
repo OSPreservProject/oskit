@@ -1,0 +1,197 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Command line arguments (including environment variables)
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+/*#
+ToDo: we might want to split this interface up into 2 or 3 separate
+things so that we can see that someone needs boot parameters but not
+program parameters.  Or this might be just pointless meddling.
+#*/
+bundletype CmdLine_T = 
+{ environ               // environment   eg DISPLAY=host:0
+, boot_argc, boot_argv  // kernel args   eg -d(ebug) -f(ast serial line)
+, prog_argc, prog_argv  // program args  eg echo hello world
+}
+
+bundletype GetEnv_T =
+{ include "${OSKITDIR}/oskit/c/stdlib.h",
+  getenv,
+} with flags libc
+
+bundletype Main_T =
+{ main
+}
+
+/*#
+Just like main except there's no command line: 
+
+  int simplemain(void);
+#*/
+bundletype SimpleMain_T =
+{ simplemain
+}
+
+bundletype InvokeMain_T =
+{ invoke_main
+}
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+/*#
+Parser for kernel command lines.
+
+Quote from the original code:
+
+The command-line comes to us as a string and contains booting-options,
+environment-variable settings, and arguments to main().
+The format is like this:
+
+     progname [<booting-options and foo=bar> --] <args to main>
+
+For example
+
+     kernel DISPLAY=host:0 -d -- -rf foo bar
+
+which would be converted into
+
+     environ = {"DISPLAY=host:0", 0}
+
+     oskit_bootargv = {"-d", 0}
+
+     oskit_argv = {"kernel", "-rf", "foo", "bar", 0}
+
+If there is no "--" in the command line, then the entire thing is parsed
+into argv, no environment vars or booting options are set.
+#*/
+
+// mk_unit -o -n cmdline libc/environ.o kern/base_multiboot_init_cmdline.o 
+unit cmdline = {
+  imports[ boot_info : { boot_info },
+           lmm       : LMM_T,     // lmm_alloc
+           phys_lmm  : PhysLMM_T, // malloc_lmm
+           panic     : Panic_T,
+           vm        : VM_T,
+           string    : String_T,  // strchr, strtok
+         ];
+  exports[ out : CmdLine_T ];
+  initializer init for out;
+  depends{ inits needs imports };
+  files{ "libc/stdlib/environ.c",
+         "kern/x86/pc/base_multiboot_init_cmdline.c",
+         "knit/c/cmdline_init.c",
+  } with flags kern;
+  rename{ out.boot_argc to oskit_bootargc };  
+  rename{ out.boot_argv to oskit_bootargv };  
+  rename{ out.prog_argc to oskit_argc };      
+  rename{ out.prog_argv to oskit_argv };     
+}
+
+// mk_unit -o -n libc_env libc/environ.o libc/getenv.o
+unit libc_env = {
+  imports[ string  : String_T,
+           cmdline : CmdLine_T,
+         ];
+  exports[ getenv : GetEnv_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdlib/getenv.c" } with flags libc;
+}
+
+
+// unit wrap_main = {
+//   imports[ ld_symbols: OskitSymbols_T,
+//            atexit    : AtExit_T,
+//            env       : { environ },
+//            main      : Main_T,
+//            exit      : Exit_T,
+//          ];
+//   exports[ { wrap_main } : { wrap_main } ];
+//   depends{ exports + inits + finis needs imports };
+//   files{ "knit/c/wrap_main.c" } with flags kern;
+// }
+
+/*#
+multiboot_main is the first piece of C code that gets executed
+#*/
+
+unit multiboot_main2 = {
+  imports[ string : String_T,
+           vm     : VM_T,
+         ];
+  exports[ multiboot : { multiboot_main_wrapped, boot_info } ];
+  depends{ exports + inits + finis needs imports };
+//  depends{ {multiboot.multiboot_main_wrapped} < {multiboot.boot_info} };
+  files { "knit/c/my_multiboot.c" } with flags kern
+  rename{ multiboot.multiboot_main_wrapped to multiboot_main };
+}
+
+
+// mk_unit -o -n multiboot knit/c/multiboot_main.o
+unit multiboot_main = {
+  imports[ string : String_T,
+           vm     : VM_T,
+	   cpu    : CPU_T, // base_cpu_init, base_cpu_load
+         ];
+  exports[ multiboot : { multiboot_main_wrapped, boot_info } ];
+  depends{ exports + inits + finis needs imports };
+  depends{ {multiboot.multiboot_main_wrapped} < {multiboot.boot_info} };
+  files{ "knit/c/multiboot_main.c" } with flags kern;
+  rename{ multiboot.multiboot_main_wrapped to multiboot_main };
+}
+
+/*#
+Note that main is required to have just 2 arguments.
+Don't go expecting the environment in a third argument.
+#*/
+unit invoke_main = {
+  imports[ main    : Main_T,
+           cmdline : CmdLine_T,
+           ld_symbols: OskitSymbols_T,
+           exit    : Exit_T,
+           atexit  : AtExit_T,
+         ];
+  exports[ out : InvokeMain_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/invoke_main.c" } with flags libc;
+}
+
+unit invoke_simplemain = {
+  imports[ main    : SimpleMain_T,
+           ld_symbols: OskitSymbols_T,
+           exit    : Exit_T,
+           atexit  : AtExit_T,
+         ];
+  exports[ out : InvokeMain_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/invoke_simplemain.c" } with flags libc;
+}
+
+unit fromenv = {
+  imports[ in : { var }, getenv : GetEnv_T ];
+  exports[ out : { str } ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/fromenv.c" } with flags libc;
+}
+
+/************************************************************/
+// End
+/************************************************************/

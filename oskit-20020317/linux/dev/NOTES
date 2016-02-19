@@ -1,0 +1,28 @@
+TODO:
+
+* Separate the network, scsi, and ide drivers into separate driver sets.
+
+* Build the hardware tree properly.
+
+* Clean up the device naming code and move it into libfdev.
+
+* Create a standardized method of linking in only _one_ driver,
+  e.g., to allow creation of standalone user-mode driver executables.
+
+* Get rid of 'fdev_default_xxx' dependencies
+
+* Don't use block/genhd.c at all; just get rid of it completely.
+
+* Get rid of the 'linux_event_block()' bogosity.
+
+* Get rid of OSENV_PHYS_WIRED
+
+* What's the immediate_bh() business?
+
+* Figure out what to do with include/linux/autoconf.h
+
+* What's the deal with the net_debug stuff?
+
+* What's the unplug_device routine for,
+  and what's the XXX in blk_dev_init() about it?
+

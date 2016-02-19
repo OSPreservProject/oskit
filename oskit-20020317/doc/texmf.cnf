@@ -1,0 +1,45 @@
+%
+% Copyright (c) 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% This is the TeX configuration file for processing the OSKit document.
+% 
+
+% To produce the WWW version of the OSKit documentation with TeX4ht, we need a
+% ``big'' TeX with a lot of memory.  (As of this writing, the DVI/PS version
+% of the OSKit document can be produced with a normal-sized TeX.  But it
+% doesn't hurt to use a big TeX for both.)
+%
+% With Kpathsea-enabled versions of TeX (e.g., teTeX), we can get a big TeX by
+% creating our own `texmf.cnf' file, specifying the TeX size values we need,
+% and then telling Kpathsea where to find our `texmf.cnf'.  The search path for
+% configuration files is specified by the environment variable `TEXMFCNF'.
+% Note that Kpathsea loads *all* the `texmf.cnf' files in the search path;
+% definitions in earlier files override those in later files.  So, we only need
+% to specify TeX memory size values here.
+%
+% Some of the following values are probably more generous than they need to be;
+% I didn't tune them carefully.  (They started as the values specified for
+% Context in the teTeX-1.0 distribution `texmf.cnf' file.  I had to increase
+% some of the values later on, to produce the WWW document with an index.)
+%
+
+extra_mem_top = 40000 % extra high memory for chars, tokens, etc.
+% extra_mem_bot = 0   % extra low memory for boxes, glue, breakpoints, etc.
+
+hash_extra = 25000
+pool_size = 750000
+string_vacancies = 45000
+max_strings = 55000
+pool_free = 47500
+save_size = 9000
+
+%% End of file.
+

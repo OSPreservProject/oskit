@@ -1,0 +1,16 @@
+
+Directories: oskit/boot/net/
+Target: netboot
+Documentation: doc/netboot.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Also contains code from the FreeBSD v2.1.7.1
+	netboot eprom code written by Martin Renters
+	(sys/i386/boot/netboot.)
+Description:  
+	Netboot is a kernel that when booted prompts 
+	for the ftp-style URL of a kernel to boot over
+	itself.  It gets the new kernel via NFS.
+
+	Also, make sure to include only the drivers you need in
+	oskit/dev/linux_ethernet.h.

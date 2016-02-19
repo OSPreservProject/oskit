@@ -1,0 +1,9 @@
+
+Directories: oskit/oskit/exec
+Target: Part of liboskit_exec.a
+Documentation: 
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Headers for the executable loading library,
+	liboskit_exec.a
+

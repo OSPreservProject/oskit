@@ -1,0 +1,60 @@
+#
+# Copyright (c) 1995-1998 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_freebsd_libm_makerules_
+_oskit_freebsd_libm_makerules_ = yes
+
+TARGET	= liboskit_freebsd_m.a
+
+OS = 3.x
+
+# This is to remove `unused rcstag' warnings
+OSKIT_CFLAGS += -Dlint -DOSKIT
+
+SRCDIRS	+= $(addprefix $(OSKIT_SRCDIR)/freebsd/,	\
+		libm					\
+		$(OS)/src/lib/msun/src			\
+		$(OS)/src/lib/msun/i387)
+
+INCDIRS +=	$(OSKIT_SRCDIR)/freebsd/libc/include	\
+		$(OSKIT_SRCDIR)/freebsd/$(OS)/src/sys	\
+		$(OSKIT_SRCDIR)/freebsd/$(OS)/src/include	\
+		objinclude
+
+### Include other appropriate make rules files ###
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+# Turn off warnings on legacy code
+WARNFLAGS += $(WARNFLAGS-$(patsubst $(OSKIT_SRCDIR)/freebsd/3.x/src/%,legacy,$<))
+WARNFLAGS-legacy += -Wno-uninitialized
+WARNFLAGS-legacy += -Wno-implicit
+OSKIT_CFLAGS += $(WARNFLAGS)
+
+# Create the objinclude/machine symlink.
+# We have to kludge a little to get it to work right,
+# because OSKIT_SRCDIR might be either an absolute or a relative path
+# and it will only work reliably if interpreted from _this_ directory.
+$(OBJFILES): objinclude/machine
+CLEAN_FILES += objinclude objinclude_machine
+objinclude/machine:
+	-mkdir -p objinclude
+	ln -s ../objinclude_machine objinclude/machine
+	ln -s $(OSKIT_SRCDIR)/freebsd/libc/include/i386 objinclude_machine
+
+prepare:: objinclude/machine
+
+endif

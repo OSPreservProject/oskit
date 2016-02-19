@@ -1,0 +1,10 @@
+# /boot/grub/menu.lst file for GRUB to boot oskit netboot metakernel.
+
+title=		netboot from floppy, serial console at 115200
+kernel=		/netboot.gz -h -f --
+
+title=		netboot from floppy, serial console at 9600
+kernel=		/netboot.gz -h --
+
+title=		netboot from floppy, PC console
+kernel=		/netboot.gz

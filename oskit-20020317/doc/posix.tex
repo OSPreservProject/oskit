@@ -1,0 +1,260 @@
+%
+% Copyright (c) 1997-2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{posix-lib}
+\label{extended-posix-api}
+
+\section{Introduction}
+
+The \posix{} library adds support for what a \posix{} conformant system
+would typically implement as system calls. These \posix{} operations are
+mapped to the corresponding \oskit{} COM interfaces. Both the minimal C
+library (Section~\ref{libc}) and the \freebsd{} C library
+(Section~\ref{freebsd-libc})
+rely on the \posix{} library to provide the necessary
+system level operations. For example, \texttt{fopen} in the C library will
+chain to \texttt{open} in the \posix{} library, which in turn will chain to
+the appropriate {\tt oskit_dir} and {\tt oskit_file} COM operations. All of
+the pathname operations, file descriptor bookkeeping, locking, and other
+details normally carried out in a ``kernel'' implementation of a system
+call interface, are handled by the \posix{} library. Alternatively, the
+\posix{} library bridges differences between the COM interfaces and the
+functions as defined by \posix{}. 
+
+Since almost all of the functions and definitions provided by the \posix{}
+library implement well-known, well-defined ANSI and POSIX C library
+interfaces which are amply documented elsewhere, we do not attempt to
+describe the purpose and behavior of each function in this chapter.
+Instead, only specfic peculiarities, such as implementation
+interdependencies and side effects, are described here.
+
+The following set of functions are implemented, and correspond to
+their POSIX.1 equivalents: accept, access, bind, chdir, chmod, chown,
+chroot, close, connect, creat, dup, dup2, fchdir, fchmod, fchown,
+fcntl, fpathconf, fstat, fsync, ftruncate, getpagesize, getpeername,
+getsockname, getsockopt, gettimeofday, getumask, ioctl, lchown, link,
+listen, lseek, lstat, mkdir, mkfifo, mknod, mq_close, mq_getattr,
+mq_notify, mq_open, mq_receive, mq_send, mq_setattr, mq_unlink, open,
+pathconf, pipe, read, readlink, readv, recv, recvfrom, rename, rmdir,
+select, sem_close, sem_destroy, sem_getvalue, sem_init, sem_open,
+sem_post, sem_trywait, sem_unlink, sem_wait, send, sendto, setitimer,
+setsockopt, shutdown, sigaction, socket, socketpair, stat, symlink,
+truncate, umask, unlink, uname, utime, utimes, write, and writev.
+
+\section{Modified Functions}
+
+These functions are not fully implemented, and return an error condition if
+called: adjtime, getdirentries, sbrk, and flock.
+
+These functions are trivially implemented, and are primarily intended to
+satisfy linktime dependencies (for example, getuid always returns zero):
+geteuid, getuid, seteuid, setuid, getgid, and setgid.
+
+A small number of functions have default implementations that call panic if
+they are executed. They are provided in order to saitisfy linktime
+dependencies, but should not actually be called. This is sometimes useful
+when converting Unix applications into \oskit{} kernels. They are execve,
+fork, vfork, wait4, and waitpid.
+
+\subsection{getdtablesize: get descriptor table size}
+
+The \texttt{getdtablesize} function returns a constant value, even though
+there is no limit on the number of open file descriptors. This function is
+provided for backwards comptability with older BSD system call interfaces.
+
+\subsection{mmap, munmap, mprotect: map files into memory}
+The default \texttt{mmap} implementation is extremely limited in its
+capabilities. Anonymous memory requests are satisfied using malloc. The
+combination of \texttt{MAP_PRIVATE} and \texttt{PROT_WRITE} is not
+supported. Beyond that, the underlying file or device must provide the
+\texttt{oskit_openfile} COM interface. A secondary \texttt{mmap}
+implementation is provided when the Simple Virtual Memory module is linked
+in. Anonymous memory requests are satisfied with \texttt{svm_alloc} and
+\texttt{mprotect} chains to \texttt{svm_protect}. See Section~\ref{svm} for
+more details.
+
+\subsection{getpid: get process id}
+\texttt{getpid} always returns zero since there is no concept of
+``process'' in a standalone \oskit{} application.
+
+\subsection{gettimeofday: get current time}
+Timing functions such as \texttt{gettimeofday} are mapped to the (currently
+undocumented) \texttt{oskit_clock} COM interface. In essence, this
+interface is a very natural adaptation of the \posix{}.1 real-time
+extensions.
+
+\apisec{\textnormal{\posix{}} Message Queue and Semaphore}
+\begin{apisyn}
+  \cinclude{oskit/c/mqueue.h}
+
+  \funcproto mqd_t mq_open(const~char *name, int oflag, ... \unskip);\\
+  \funcproto int mq_send(mqd_t mqdes, const~char *msg_ptr,
+                         oskit_size_t msg_len, unsigned~int msg_prio);\\
+  \funcproto int mq_receive(mqd_t mqdes, char *msg_ptr, oskit_size_t msg_len, unsigned~int *msg_prio);\\
+  \funcproto int mq_close(mqd_t mqdes);\\
+  \funcproto int mq_unlink(const~char *name);\\
+  \funcproto int mq_setattr(mqd_t mqdes, const~struct~mq_attr *mqstat, struct~mq_attr *omqstat);\\
+  \funcproto int mq_getattr(mqd_t mqdes, struct~mq_attr *mqstat);\\
+  \funcproto int mq_notify(mqd_t mqdes, const~struct~sigevent *notification);
+\end{apisyn}
+
+\begin{apidesc}
+  The implementation of \posix{} message queue depends on
+  the pthread library and cannot be used in single threaded environment.
+
+  The message queue name space is dependent of file system name space
+  and semaphore name space.  Message queue descriptors are not related
+  with file descriptors.  
+
+  The mq_send() and mq_receive() are cancellation point.
+
+  mq_open()'s 3rd argument (mode_t) is ignored.
+
+\end{apidesc}
+
+\begin{apisyn}
+  \cinclude{oskit/c/semaphore.h}
+
+  \funcproto int sem_init(sem_t *sem, int pshared, unsigned~int value);\\
+  \funcproto int sem_destroy(sem_t *sem);\\
+  \funcproto sem_t *sem_open(const~char *name, int oflag, ... \unskip);\\
+  \funcproto int sem_close(sem_t *sem);\\
+  \funcproto int sem_unlink(const char *name);\\
+  \funcproto int sem_getvalue(sem_t *sem, int *sval);\\
+  \funcproto int sem_wait(sem_t *sem);\\
+  \funcproto int sem_trywait(sem_t *sem);\\
+  \funcproto int sem_post(sem_t *sem);
+\end{apisyn}
+
+\begin{apidesc}
+  The implementation of \posix{} semaphore depends on
+  the pthread library and cannot be used in single threaded environment.
+
+  The semaphore name space is dependent of file system name
+  space and message queue name space.
+\end{apidesc}
+
+\section{\textnormal{\posix{}} Signals}
+\label{posix-signals}
+
+The \posix{} signal interface has been implemented as best as possible,
+given the limitations of the \oskit{} environment. In fact, the multi
+threaded version of the \posix/\freebsd{} library provides much better
+functionality than the single threaded version. As described in
+Section~\ref{freebsd-signals}, application programs can make use of some of the
+signal handling mechanisms contained in POSIX.1 specification. The
+functions that are implemented are \texttt{signal}, \texttt{sigaction},
+\texttt{sigprocmask}, \texttt{raise}, \texttt{kill} (which just calls
+raise), as well as the compatibilty functions \texttt{sigblock} and
+\texttt{sigsetmask}. Additionally, the multi threaded version of the
+library implements \texttt{sigwait}, \texttt{sigwaitinfo}, and
+\texttt{sigtimedwait}. The pthread specific functions \texttt{pthread_kill}
+and \texttt{pthread_sigmask} are implemented in the pthreads library (see
+Section~\ref{pthread}).
+
+\apisec{Client Operating System Dependencies}
+
+The \posix{} library (and by extension the C library) derive a number of
+its external interfaces from the client OS (see Section~\ref{clientos}).
+Rather than relying on linktime dependencies for these interfaces, the
+\posix{} library uses a services database (see Section~\ref{oskit-services})
+that was provided to the C library when it was
+initialized. This services database is pre-loaded (by the client OS when
+the kernel boots) with certain COM objects that make the \posix{} library
+functional. One such interface object is the \texttt{oskit_libcenv_t} COM
+interface, which provides hooks that are very specific to the \posix{} and C
+libraries. This, and other interfaces, are looked up in the database as
+required. For example, the \emph{filesytem namespace} object is
+provided by the \texttt{oskit_libcenv_t} COM object. The first file access
+will result in a lookup in the services database for the
+\texttt{oskit_libcenv_t} object, and then a call to
+\texttt{oskit_libcenv_getfsnamespace} to get the filesystem namespace
+COM object (see Section~\ref{fsnamespace}). If the kernel has been
+constructed with a filesystem, and the appropriate
+client OS initialization done, the call to \texttt{getfsnamespace} will
+return sucessfully. Otherwise, \texttt{getfsnamespace} will fail and all
+subsequent file operations will fail.
+
+The intent of this ``indirection'' is to reduce (eventually to zero) the
+number of linktime dependencies between the C/Posix library and the rest of
+the \oskit{} libraries. Not only does this simplify the process of
+constructing an oskit kernel, but also makes it possible to do other
+interesting things such dynamic composition of services.
+
+The \posix{} library depends on the client OS for a number of interfaces.
+They are:
+
+\subsection{_exit}
+\label{oskit-libc-exit}
+The \texttt{_exit} call, which terminates the calling process in Unix,
+indirects through the \texttt{oskit_libcenv_t} COM object to the client OS
+defined reboot mechansim. While the exit status code is passed along, it is
+generally ignored. 
+
+\subsection{Console Stream}
+The console stream satisfies reads and writes (among others) to and from
+the three lowest numbered file descriptors, which are typically the
+application's stdin, stdout, and stderr descriptors. The client OS needs to
+provide a console stream COM object in order for the application to
+interact with the console.
+
+\subsection{Filesystem Namespace}
+As described above, access to the filesystem namespace is is provided by
+the client OS\@. The \posix{} library uses the namespace COM object to
+translate multi component pathnames (paths with '/' in them) into
+\texttt{oskit_file} and \texttt{oskit_dir} references.  The namespace
+object also provides symbolic link translation and mountpoint traversal
+(see Section~\ref{fsnamespace}).
+
+\subsection{System Clock}
+The ``system clock'' is an \texttt{oskit_clock} COM object that provides
+time of day functions and periodic timer support, such as required by
+\texttt{gettimeofday}, \texttt{setitimer} and \texttt{select}.
+
+\subsection{Socket Factory}
+The \texttt{socket} and \texttt{socketpair} calls require the
+\texttt{oskit_socket_factory_t} COM interface to create sockets and
+socketpairs. The socketfactory is created when the clientos initializes the
+network stack during system initialization.
+
+\apisec{Extended API functions}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%	fs_mount
+%
+\api{fs_mount, fs_unmount}{Compose file system name spaces}
+\label{fs-mount}
+\label{fs-unmount}
+\begin{apisyn}
+        \cinclude{oskit/c/fs.h}
+
+        \funcproto oskit_error_t 
+		fs_mount(const~char *path, oskit_file_t *subtree); \\
+	\funcproto oskit_error_t fs_unmount(const~char *path);
+\end{apisyn}
+\begin{apidesc}
+	BSD-like mount and unmount functions which the client can use
+	to build its file system namespace out of multiple file systems.
+	
+	Note that the underlying \texttt{oskit_dir} COM interface 
+	doesn't support mount points, so crossing mount points while
+	traversing the file system space is implemented in the filesystem
+	namespace COM object (see Section~\ref{fsnamespace}).
+\end{apidesc}
+\begin{apiparm}
+	\item[path] A valid pathname in the current file system space
+		where the file system should be added or removed.
+	\item[subtree] The root of the file system to be added.
+		A reference to \emph{subtree} is acquired.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, or an appropriate error code.
+\end{apiret}

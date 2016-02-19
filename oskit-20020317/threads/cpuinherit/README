@@ -1,0 +1,22 @@
+
+Directories: oskit/threads/cpuinherit
+Documentation: doc/pthread.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+Description:  
+	This directory contains an implementation of CPU Inheritance
+	Scheduling; the idea was presented in the Utah OSDI'96 paper
+	[FordSusarla].  To compile the threads directory with CPUI
+	instead of the standard POSIX scheduler, define CPU_INHERIT in
+	the threads GNUmakerules file.
+
+	This version of the code is somewhat buggy. At times
+	scheduling operations will be missed and the program will hang
+	because a thread wakeup did not happen. The next version will
+	be much better.
+
+	There are four schedulers.  First is a standard POSIX
+	scheduler, which is used as the root scheduler, but can also
+	be instantiated as a FIFO/RR scheduler anywhere else in a
+	hierarchy. Also included are very simple implementations of
+	RateMono, Lotto, and Stride schedulers.

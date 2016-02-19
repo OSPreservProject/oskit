@@ -1,0 +1,21 @@
+
+Directories: oskit/boot/bsd
+Target: bsdboot.o mkbsdimage
+Documentation: some in doc/intro.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory implements a MultiBoot->BSD boot-adaptor.
+	It allows the user to create a BSD-bootable image from a
+	MultiBoot-compliant kernel plus any arbitrary boot-modules.
+
+	mkbsdimage is a script for linking a kernel image
+	and arbitrary boot-modules
+	with bsdboot.o to create an image loadable by the 
+	BSD boot loader.
+
+	bsdboot.o is the icky magic needed to interface with
+	the BSD boot loader.
+	It takes the info given to it by the BSD boot loader (boothowto, etc),
+	as well as the boot-module info added by mkbsdimage,
+	and creates a multiboot_info struct to pass to the booted
+	kernel.

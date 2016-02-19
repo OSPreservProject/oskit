@@ -1,0 +1,19 @@
+Directories: oskit/fsnamespace
+Targeta: liboskit_fsnamespace.a
+	 liboskit_fsnamespace_r.a
+Documentation: doc/fsnamespace.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+Description:
+	The filesystem namespace component provides ``namei'' style
+	translation (typically for C/POSIX library), as well as high
+	level mount and unmount capibilities. Multi component names
+	(those with "slashes") are translated into oskit_file and
+	oskit_dir COM objects. Namei style caching is also supported
+	to reduce the overhead of calling into the device driver
+	framework. 
+
+        Both single and multithreaded versions of the fsnamespace
+        component are provided. Both of these libraries can be found
+        in the lib directory as oskit_fsnamespace.a and
+        oskit_fsnamespace_r.a.

@@ -1,0 +1,51 @@
+Directories: oskit/boot/linux
+Target: mklinuximage linuxboot.bin
+Documentation: some in doc/intro.tex
+Original Code Source:
+	C source code copied or derived from the Linux project
+	(which in turn was adapted from gzip-1.0.3);
+	Makefiles and mods by the Flux Research Group, University of Utah.
+Description:  
+
+This directory implements a MultiBoot->Linux boot-adaptor.
+It allows the user to create a Linux-bootable image from a
+MultiBoot-compliant kernel plus any arbitrary boot-modules.
+
+mklinuximage is a script for linking a kernel image and arbitrary
+boot-modules with linuxboot.bin to create an image loadable by LILO.
+
+NOTE 1: the size of the linuxboot.bin code+data+bss cannot exceed 64K.
+If it does, it will not work.  (To check the size, "make linuxboot"
+and run "size".)  In general, you must build with the assert's compiled
+out to get the size down, in this directory and in all libraries it uses
+(at least exec kern c lmm).  This can be accomplished by configuring with
+--disable-asserts and without --enable-debug.
+
+NOTE 2: See the BUGS.details file: the most recent tool chain versions on
+Linux fail to correctly build linuxboot.bin.  Therefore we've provided a
+binary linuxboot.bin.good in the source distribution (though it hasn't
+been well tested).  It's also available from our Web site if you clobber it.
+
+NOTE 3: Another option for booting on Linux is GRUB, a powerful
+multiboot-compliant boot loader that can boot off a floppy, available
+from http://www.uruk.org/grub/ (a slow link), or from our OSKit ftp site,
+ftp://ftp.flux.cs.utah.edu/flux/others/grub-0.5.tar.gz.
+
+---
+Some of the files in this directory are taken verbatim from the Linux
+kernel source distribution.  These files are listed in the
+Update-from-Linux shell script, and should be kept in sync with and
+unmodified from the standard Linux distribution if at all possible.  If any
+modifications are needed, maybe they could be integrated into the standard
+Linux distribution instead of making the oskit versions diverge.  In any
+case be sure to keep the Update-from-Linux script up-to-date.  
+
+----
+All of the Linux-derived files are covered by the GNU General Public
+License, as is the rest of the code here.  Please see the file COPYING
+for details on the GNU General Public License (GPL) and distribution
+requirements.  As stipulated in the GPL, any code linked against this
+source is also covered under GPL and must be distributed according to
+its terms.  Therefore, any boot images built with the 'mklinuximage'
+script will contain code from this directory, and therefore the ENTIRE
+resulting boot image will fall under the GPL.

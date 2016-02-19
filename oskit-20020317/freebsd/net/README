@@ -1,0 +1,13 @@
+
+Directories: oskit/freebsd/net/, oskit/freebsd/net/include/*
+Target: liboskit_freebsd_net.a
+Documentation: doc/net.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	FreeBSD v2.1.7.1, FreeBSD Project
+Description:  
+	Glue code for wrapping the FreeBSD network
+	stacks, plus various utilities.
+
+	include/ contains header file overrides to make
+	the FreeBSD source compile in the OSKit environment.

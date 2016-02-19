@@ -1,0 +1,19 @@
+
+Directories: oskit/kern/arm32, oskit/kern/arm32/shark, and
+	oskit/kern/arm32/ofw
+Target: liboskit_kern.a
+Documentation: doc/kern.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Mach Project, Carnegie Mellon University
+	NetBSD Project, The NetBSD Foundation.
+Description:  
+	A set of functions and definitions useful primarily in
+	OS kernels.
+
+	arm32 contians most of the real code.
+	
+	arm32/shark contains DNARD (SHARK) specific code.
+
+	arm32/ofw contains OFW (OpenFirmWare) specific code.
+

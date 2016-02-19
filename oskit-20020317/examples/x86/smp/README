@@ -1,0 +1,9 @@
+
+Directories: oskit/examples/x86/smp
+Targets: smp
+Documentation: See the headers of each .c
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory serves to build certain of the example kernels
+	which require SMP support.
+

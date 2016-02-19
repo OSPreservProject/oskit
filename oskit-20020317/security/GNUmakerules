@@ -1,0 +1,80 @@
+#
+# Copyright (c) 1994,1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_security_makerules_
+_oskit_security_makerules_ = yes
+
+TARGET	= liboskit_security.a
+
+SRCDIRS += $(OSKIT_SRCDIR)/security
+
+# Include the makefile containing the generic rules.
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+OBJFILES = ebitmap.o hashtab.o symtab.o sidtab.o avtab.o policydb.o mls.o services.o init.o 
+
+CFLAGS += -include $(OSKIT_SRCDIR)/security/global.h -D__KERNEL__ -Wall
+
+CLEAN_FILES +=	checkpolicy policy.conf policy $(CP_OBJECTS) y.tab.c y.tab.h lex.yy.c 
+
+CP_OBJECTS =  ebitmap.cp.o queue.cp.o hashtab.cp.o symtab.cp.o sidtab.cp.o avtab.cp.o context.cp.o policydb.cp.o mls.cp.o services.cp.o y.tab.cp.o lex.yy.cp.o checkpolicy.cp.o
+
+POLICYFILES = $(addprefix $(OSKIT_SRCDIR)/flask/,security_classes initial_sids access_vectors) \
+              $(addprefix $(OSKIT_SRCDIR)/security/policydb/,mls te rbac \
+		constraints users initial_sid_contexts fs_contexts net_contexts)
+
+all:  $(_LIBS) # policy checkpolicy
+
+install: $(addprefix $(INSTALL_LIBDIR)/,$(_LIBS)) # $(INSTALL_LIBDIR)/boot/policy $(INSTALL_BINDIR)/checkpolicy
+
+$(INSTALL_LIBDIR)/boot/%: %
+	-mkdir -p $(@D)
+	$(INSTALL_DATA) $< $@
+
+policy:  policy.conf checkpolicy
+	$(OBJDIR)/security/checkpolicy -o policy policy.conf
+
+policy.conf: $(POLICYFILES)
+	$(M4) $(M4FLAGS) $^ > policy.conf
+
+checkpolicy: $(CP_OBJECTS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Compiling $@"
+	$(CC) -o checkpolicy $(CP_OBJECTS) -lfl
+
+#
+# .o files built for the native OS "checkpolicy" program
+#
+%.cp.o: %.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Compiling $@"
+	$(CC) -g -c -o $@ -I. -I$(OSKIT_SRCDIR)/security -I- -I.. -I$(OSKIT_SRCDIR) -include $(OSKIT_SRCDIR)/security/global.h $<
+
+
+# Using a pattern rule here tells GNU make that both targets
+# are made by running the commands just once.  That lets
+# it to do the right thing when parallelism is enabled (-j).
+%.tab.c %.tab.h: $(OSKIT_SRCDIR)/security/policy_parse.%
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(YACC) -d $<
+
+lex.yy.c: $(OSKIT_SRCDIR)/security/policy_scan.l
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	$(LEX) $<
+
+endif

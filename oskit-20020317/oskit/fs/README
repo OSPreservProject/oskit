@@ -1,0 +1,8 @@
+
+Directories: oskit/oskit/fs
+Target: OSKit File System Framework
+Documentation: doc/fs.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Header files defining the COM intefaces to the OSKit 
+	file system framework. 

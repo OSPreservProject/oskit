@@ -1,0 +1,134 @@
+#
+# Copyright (c) 1995-2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_freebsd_libc_makerules_
+_oskit_freebsd_libc_makerules_ = yes
+
+TARGET	= liboskit_freebsd_c_r.a
+
+all: $(TARGET)
+
+SRCDIRS	+=	$(OSKIT_SRCDIR)/freebsd/libc/gmon			\
+		$(OSKIT_SRCDIR)/freebsd/libc/glue			\
+		$(OSKIT_SRCDIR)/freebsd/libc/malloc			\
+		$(OSKIT_SRCDIR)/freebsd/libc/x86/glue			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/db/btree	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/db/db		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/db/hash	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/db/mpool	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/db/recno	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386/net	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386/gen	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386/stdlib	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386/string	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/net		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/nls		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/quad		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/regex		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/stdio		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/stdlib		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/stdtime	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/locale		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/string		\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/compat-43
+
+#
+# There are many oddballs in the gen directory which I do not want
+# to deal with yet. Just build some of it.
+#
+MOSTLY_SRCDIRS := \
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/gen
+
+OBJFILES +=	_rand48.o alarm.o assert.o drand48.o \
+		erand48.o err.o fnmatch.o fts.o isatty.o jrand48.o \
+		lcong48.o lrand48.o mrand48.o nrand48.o seed48.o \
+		signal.o srand48.o termios.o tcgetattr.o time.o \
+		getcwd.o exec.o ctermid.o fstab.o getgrent.o getpwent.o \
+		getpass.o valloc.o arc4random.o
+
+
+INCDIRS +=	$(OSKIT_SRCDIR)/freebsd/libc/include			\
+		$(OSKIT_SRCDIR)/freebsd/libc_r/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/sys			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/include	\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386		\
+		objinclude
+
+DEFINES +=	-DOSKIT -DTHREAD_SAFE -DNOPOLL -DNO__GETCWD \
+		-D__DBINTERFACE_PRIVATE -D__MPOOLINTERFACE_PRIVATE
+
+#
+# Override the build environment compiler setting of FreeBSD
+#
+OSKIT_CPPFLAGS += \
+		-include $(OSKIT_SRCDIR)/freebsd/3.x/shared/freebsd_version.h
+
+# This file isn't meant to be compiled by itself.
+OSKIT_EXCLUDE := $(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/regex/engine.c
+
+# This is superceded by the version in the glue dirrectory.
+OSKIT_EXCLUDE += $(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/string/strerror.c
+
+### Include other appropriate make rules files ###
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+# Remove the -I- from the CPPFLAGS option string,
+# because the db code needs the traditional C compiler behavior
+# of searching for headers first in the source file's directory.
+OSKIT_CPPFLAGS := $(filter-out -I-,$(OSKIT_CPPFLAGS))
+
+# Turn off warnings on legacy code
+WARNFLAGS += $(WARNFLAGS-$(patsubst $(OSKIT_SRCDIR)/freebsd/3.x/src/%,legacy,$<))
+WARNFLAGS-legacy += -Wno-unused
+WARNFLAGS-legacy += -Wno-uninitialized
+WARNFLAGS-legacy += -Wno-implicit
+WARNFLAGS-legacy += -Wno-parentheses
+WARNFLAGS-legacy += -Wno-format
+OSKIT_CFLAGS += $(WARNFLAGS)
+
+# Create the objinclude/machine symlink.
+# We have to kludge a little to get it to work right,
+# because OSKIT_SRCDIR might be either an absolute or a relative path
+# and it will only work reliably if interpreted from _this_ directory.
+$(OBJFILES): objinclude/machine
+CLEAN_FILES += objinclude objinclude_machine
+objinclude/machine:
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	-mkdir -p objinclude
+	ln -s ../objinclude_machine objinclude/machine
+	ln -s $(OSKIT_SRCDIR)/freebsd/libc/include/i386 objinclude_machine
+
+prepare:: objinclude/machine
+
+mcount.po: $(OSKIT_SRCDIR)/freebsd/libc/gmon/mcount.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Compiling $@"
+	$(filter-out -pg, $(CC)) -c $(OSKIT_CFLAGS) $(CFLAGS) -DGPROF $(DEFINES)  \
+		$< -o mcount.po
+
+$(TARGET): $(OBJDIR)/lib/liboskit_posix_r.a $(OBJFILES)
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating library $@"
+	cp $(OBJDIR)/lib/liboskit_posix_r.a $@
+	$(AR) $(ARFLAGS) $@ $(OBJFILES)
+	$(RANLIB) $@
+
+$(PTARGET): $(OBJDIR)/lib/liboskit_posix_r_p.a $(POBJFILES)
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating library $@"
+	cp $(OBJDIR)/lib/liboskit_posix_r_p.a $@
+	$(AR) $(ARFLAGS) $@ $(POBJFILES)
+	$(RANLIB) $@
+endif

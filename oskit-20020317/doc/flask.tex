@@ -1,0 +1,1316 @@
+%
+% Copyright (c) 1999,2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% Contributed by the Computer Security Research division,
+% INFOSEC Research and Technology Office, NSA.
+% 
+%
+\label{oskit-flask}
+
+Flask is an operating system security architecture that
+provides flexible support for security policies.  This chapter defines
+the Flask-related COM interfaces that are defined by header files in
+the \texttt{oskit/flask} directory.  The sections of this chapter are:
+\begin{itemize}
+\item[\ref{oskit-flask-types-h}] {\tt flask_types.h}:
+	The basic Flask types and constants.
+\item[\ref{oskit-security}] {\tt oskit_security}:
+	The security server interface.  This interface is used to
+        obtain security decisions.
+\item[\ref{oskit-avc}] {\tt oskit_avc}:
+	The interface provided by an access vector cache (AVC) component to
+	object managers.  This interface is used by object managers
+	to perform permission checks, to notify the AVC of completed
+	operations, and to register callbacks for policy changes.
+\item[\ref{oskit-avc-ss}] {\tt oskit_avc_ss}:
+	The interface provided by an AVC component to the security
+	server.  This interface is used by the security server
+	to notify the AVC component of policy changes.
+\end{itemize}
+
+An example implementation of an AVC component is available in {\tt
+com/avc.c}.  An example implementation of a
+security server component is available in {\tt security}.  An
+example implementation of file access control wrappers that use these
+interfaces is available in {\tt com/sfs*.c}.
+
+\apiintf{flask_types.h}{basic Flask types and constants}
+\label{oskit-flask-types-h}
+
+	This header file defines the basic types and constants
+used by the Flask-related COM interfaces.
+The architecture defines two policy-independent types for the set of
+security attributes associated with each subject and object controlled
+by the security policy.  The \emph{security context} type 
+(\texttt{oskit_security_context_t}) is defined
+as a variable-length string that can be interpreted by any application
+or user with an understanding of the security policy.  A security
+context might consist of several attributes, such as a user identity,
+a role, a type and a classification level.
+
+To permit most object manager interactions to remain independent of
+both the format and the content of the security context, the security
+server defines a \emph{security identifier} (SID) for each active
+security context. The SID type (\texttt{oskit_security_id_t}) 
+is defined as a fixed-sized value that
+is mapped by the security server to a security context.  The SID
+mapping cannot be assumed to be consistent either across executions
+(reboots) of the security server or across security servers on
+different nodes.  Hence, SIDs may be lightweight; in the
+implementation, they are simply 32-bit integers.
+
+The null (or zero-valued) SID is never a
+valid SID, but it may be used in extended object manager calls 
+when no particular SID is specified.  A wildcard SID, 
+\texttt{OSKIT_SECSID_WILD}, is defined that matches any other 
+SID when used for certain AVC operations.  Certain SIDs (specified
+in \texttt{flask/initial_sids}) are predefined for system
+initialization.  The corresponding constants are defined in
+the automatically generated header file \texttt{flask/flask.h}.
+
+The security server computes access decisions based on a pair of SIDs.
+Typically, the SID pair consists of the SID of a subject invoking an
+operation and the SID of the object on which the operation was
+invoked.  Rather than providing access decisions individually, the
+security server groups related access decisions into a bitmap referred
+to as an \emph{access vector}. For example, a single access vector
+expresses the set of file permissions granted for a given SID pair.
+
+The access vector type (\texttt{oskit_access_vector_t}) is defined
+as an unsigned 32-bit integer value.  The bits within an access vector 
+are interpreted differently depending on the class of the object.  
+Each object class is identified by an unsigned 16-bit integer value, 
+with the \texttt{oskit_security_class_t} type.  The set of security
+classes is specified in \texttt{flask/security_classes}, with
+the corresponding constants in the automatically generated
+header file \texttt{flask/flask.h}.  The permissions for
+each class are specified in \texttt{flask/access_vectors},
+and the corresponding constants are defined in the
+automatically generated header file
+\texttt{flask/av_permissions.h}.
+
+\apiintf{oskit_security}{Security Server Interface}
+\label{oskit-security}
+
+	The {\tt oskit_security} interface specifies the methods
+provided by a security server component for obtaining security
+decisions.  The {\tt
+oskit_security} COM interface inherits from {\tt IUnknown}, and has
+the following additional methods:
+\begin{csymlist}
+\item[compute\_av]
+	Compute access vectors.
+\item[notify\_perm]
+ 	Notify of completed operations.
+\item[transition\_sid]
+	Compute a SID for a new object.
+\item[member\_sid]
+	Compute the SID of a member in a polyinstantiated object.
+\item[sid\_to\_context]
+	Obtain the security context for a given SID.
+\item[context\_to\_sid]
+	Obtain a SID for a given security context.
+\item[register\_avc]
+	Register an AVC component for policy change notifications.
+\item[unregister\_avc]
+	Unregister an AVC component.
+\item[load\_policy]
+	Load a new policy configuration.
+\item[fs\_sid]
+	Obtain the SIDs for an unlabeled file system.
+\item[port\_sid]
+	Obtain the SID of a port number.
+\item[netif\_sid]
+	Obtain the SIDs of a network interface.
+\item[node\_sid]
+	Obtain the SID of a network node.
+\end{csymlist}
+
+
+\api{compute_av}{Compute access vectors}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_compute_av(oskit_security_t *security, 
+		          oskit_security_id_t ssid,
+			  oskit_security_id_t tsid,
+                          oskit_security_class_t tclass,
+			  oskit_access_vector_t requested,
+		\outparam oskit_access_vector_t *allowed,
+		\outparam oskit_access_vector_t *decided,
+		\outparam oskit_access_vector_t *auditallow,
+		\outparam oskit_access_vector_t *auditdeny,
+		\outparam oskit_access_vector_t *notify,
+		\outparam oskit_u32_t *seqno);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_compute\_av} function computes access vectors
+based on a SID pair for the permissions in a particular class.  An 
+access vector cache (AVC) component calls this function when no valid
+entry exists for the requested permissions in the cache.  The
+first SID parameter, \emph{ssid}, is referred to as the \emph{source
+SID} and the second SID parameter, \emph{tsid}, is referred to as the
+\emph{target SID}.  The returned access vectors must contain decisions
+for every permission specified in the \emph{requested} access vector.
+
+The security server may optionally return decisions for other
+permissions in the same class.  The \emph{decided} access vector  
+contains the set of permissions for which a decision was returned. 
+The other returned access vectors may only be used for permissions in
+this set.  The security server may choose to defer computation
+of permissions until they are explicitly requested.
+
+The \emph{allowed} access vector contains the set of granted
+permissions.  The \emph{seqno} parameter contains a sequence number
+associated with the access granting.  If the sequence number provided
+by the latest policy change is greater than this value, then the
+access granting may be invalid and must be discarded.  The sequence
+number addresses the issue of an interleaving of an access granting
+and a policy change.
+
+The \emph{auditallow} and \emph{auditdeny} access vectors 
+contain the set of permissions that  
+should be audited when granted or when denied, respectively.  These 
+vectors enable the security server to precisely control the auditing  
+of permission checks.  The AVC component ensures that
+auditing is performed in accordance with these vectors.
+
+The \emph{notify} access vector
+contains the set of permissions for which the
+\emph{oskit\_security\_notify\_perm} function should be called when the
+operation associated with the permission has successfully completed.
+This vector permits the security server to request that the AVC
+component notify the security server of the successful completion of
+operations so that the security server may base its decisions on the
+history of operations in the system.  This differs from merely basing
+decisions on the history of granted permissions, since an operation
+may still fail due to other conditions even if permission is granted
+for that operation.  
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[requested]
+		The permissions to be checked.
+	\item[allowed]
+		The set of granted permissions.
+	\item[decided]
+		The set of decided permissions.
+	\item[auditallow]
+		The set of permissions to audit when granted.
+	\item[auditdeny]
+		The set of permissions to audit when denied.
+	\item[notify]
+		The set of permissions to notify when used.
+	\item[seqno]
+		The sequence number for the granting.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{notify\_perm}{Notify of completed operations}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_notify_perm(oskit_security_t *security, 
+		          oskit_security_id_t ssid,
+			  oskit_security_id_t tsid,
+                          oskit_security_class_t tclass,
+			  oskit_access_vector_t requested);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_notify\_perm} function notifies the security
+server that an operation associated with the permissions in the 
+\emph{requested} access vector has completed successfully.
+The AVC component calls this function when it is called by an object
+manager to indicate that the operation has completed successfully if
+any of the \emph{requested} permissions are in the corresponding
+\emph{notify} vector.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[requested]
+		The permissions to be checked.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{transition_sid}{Compute a SID for a new object}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_transition_sid(oskit_security_t *security, 
+		          oskit_security_id_t ssid,
+			  oskit_security_id_t tsid,
+                          oskit_security_class_t tclass,
+			\outparam oskit_security_id_t *out_sid);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_transition\_sid} function computes a SID for a new
+object based on a SID pair and a class.  The object managers
+call this function when objects are created if a SID was not specified
+for the object and there is more than one relevant SID that might be
+used as input in determining the SID of the new object.  In 
+particular, the file system code calls this function to obtain the SID
+of a new file based on the SID of the creating process and the SID of
+the parent directory, and the process management code calls this
+function to obtain the SID of a process transformed by an
+\emph{execve} based on the current SID of the process and the SID of
+the executable program.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The security class of the object to be labeled.
+	\item[out_sid]
+		The SID with which to label the object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{member_sid}{Compute a SID for a member object}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_member_sid(oskit_security_t *security, 
+		          oskit_security_id_t ssid,
+			  oskit_security_id_t tsid,
+                          oskit_security_class_t tclass,
+			\outparam oskit_security_id_t *out_sid);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{security\_member\_sid} function computes a SID to use when
+selecting a member of a polyinstantiated object based on a SID pair  
+and a class.  Certain fixed resources, such as the \emph{/tmp}
+directory or the TCP/UDP port number spaces, need be polyinstantiated
+to restrict sharing among processes.  Each instantiation is referred
+to as a \emph{member}.  The object managers call this function
+when a polyinstantiated object is accessed and then transparently
+redirect the process to the appropriate member.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The security class of the polyinstantiated object.
+	\item[out_sid]
+		The SID of the instance to be used.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{sid_to_context}{Obtain the security context for a given SID}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_sid_to_context(oskit_security_t *security, 
+		          oskit_security_id_t sid,
+			  \outparam oskit_security_context_t *scontext,
+                          \outparam oskit_u32_t *scontext_len);,
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_sid\_to\_context} function returns the security
+context associated with a particular SID\@.  The \emph{scontext} parameter is set to point to a dynamically-allocated string of the correct size.  The
+\emph{scontext\_len} parameter is set to the length of the security
+context string, including the terminating \emph{NULL} character.  
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[sid]
+		The SID.
+	\item[scontext]
+		The security context.
+	\item[scontext_len]
+		The length of the security context in bytes.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{context_to_sid}{Obtain the SID for a given security context}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_context_to_sid(oskit_security_t *security, 
+			  oskit_security_context_t scontext,
+                          oskit_u32_t scontext_len,
+			  \outparam  oskit_security_id_t *out_sid);
+
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_context\_to\_sid} function returns a SID
+associated with a particular security context.  The
+\emph{scontext\_len} parameter specifies the length of the security
+context string, including the terminating \emph{NULL} character.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[scontext]
+		The security context.
+	\item[scontext_len]
+		The length of the security context in bytes.
+	\item[out_sid]
+		The SID.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{register_avc}{Register an AVC component for policy change notifications}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_register_avc(oskit_security_t *security, 
+			  oskit_security_class_t *classes,
+			  oskit_u32_t nclasses,
+			  oskit_avc_ss_t *avc);
+
+\end{apisyn}
+\begin{apidesc}
+
+	This method registers an AVC component for policy change
+	notifications.  
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[classes]
+		The array of security classes relevant to the AVC.
+	\item[nclasses]
+		The number of security classes.
+	\item[avc]
+		The AVC component.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{unregister_avc}{Unregister an AVC component}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_unregister_avc(oskit_security_t *security, 
+	  			  oskit_avc_ss_t *avc);
+
+\end{apisyn}
+\begin{apidesc}
+	This method unregisters an AVC component.
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[avc]
+		The AVC component.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{load_policy}{Load a new policy configuration}
+\begin{apisyn}
+	\cinclude{oskit/flask/security.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_security_load_policy(oskit_security_t *security, 
+	  			  oskit_openfile_t *openfile);
+
+\end{apisyn}
+\begin{apidesc}
+
+	This method loads a new policy configuration from
+	{\tt openfile}.  The security server notifies	
+	any registered AVC components of any policy changes
+	caused by the new configuration. 
+
+\end{apidesc}
+\begin{apiparm}
+	\item[security]
+		The security server.
+	\item[openfile]
+		The open file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{fs_sid}{Obtain SIDs for an unlabeled file system}
+\begin{apisyn}
+        \cinclude{oskit/flask/security.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_security_fs_sid(oskit_security_t *security,
+			 	char *name,
+				\outparam oskit_security_id_t *fs_sid,
+				\outparam oskit_security_id_t *file_sid);
+ 
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_fs\_sid} function returns SIDs to use for an
+unlabeled file system mounted from the device specified by \emph{dev}.
+The file system code calls this function when a process attempts to
+mount an unlabeled file system.  The value for the \emph{dev}
+parameter is a string of the form ``\emph{major}:\emph{minor}'' where
+both the major and minor number are in hexadecimal and are right
+justified in a two character field, as returned by the \emph{kdevname}
+function on the device number.  The \emph{fs\_sid} parameter is set to
+the SID to use for the file system, and the \emph{file\_sid} parameter
+is set to the SID to use for any existing files in the file system.
+
+\end{apidesc}
+\begin{apiparm}
+        \item[security]
+                The security server.
+        \item[name]
+                The name of the device.
+        \item[fs_sid]
+                The file system SID.
+        \item[file_sid]
+                The file SID.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{port_sid}{Obtain the SID for a port number}
+\begin{apisyn}            
+        \cinclude{oskit/flask/security.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_security_port_sid(oskit_security_t *security,
+                                oskit_u16_t domain,
+                                oskit_u16_t type,
+                                oskit_u8_t protocol,
+                                oskit_u16_t port,
+                                \outparam oskit_security_id_t *sid);
+\end{apisyn}    
+\begin{apidesc}
+
+The \emph{oskit\_security\_port\_sid} function returns the SID to use for the
+port number \emph{port} in the protocol specified by the triple
+(\emph{domain}, \emph{type}, \emph{protocol}).  
+
+\end{apidesc}
+\begin{apiparm} 
+        \item[security]
+                The security server.
+        \item[domain]
+                The communications domain/address family.
+        \item[type]
+                The socket type.
+	\item[protocol]
+		The protocol.
+        \item[port]
+		The port number.
+        \item[sid]
+		The SID of the port number.
+\end{apiparm}   
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{netif_sid}{Obtains SIDs for a network interface}
+\begin{apisyn}            
+        \cinclude{oskit/flask/security.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_security_netif_sid(oskit_security_t *security,
+                                char *name,
+                                \outparam oskit_security_id_t *if_sid,
+                                \outparam oskit_security_id_t *msg_sid);
+ 
+\end{apisyn}    
+\begin{apidesc}
+
+The \emph{oskit\_security\_netif\_sid} function returns SIDs to use for a
+network interface.  The value
+for the \emph{name} parameter is typically the driver name followed by
+the unit number, \emph{e.g.} the name
+\emph{eth0} would be used for the first Ethernet interface.
+The \emph{if\_sid} parameter is set to the SID to use
+for the interface, and the \emph{msg\_sid} parameter is set to the
+SID to use for any unlabeled messages received on the interface.
+
+\end{apidesc}
+\begin{apiparm} 
+        \item[security]
+                The security server.
+        \item[name]
+                The name of the interface. 
+        \item[if_sid]
+                The interface SID.
+        \item[msg_sid]
+                The default message SID.
+\end{apiparm}   
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{node_sid}{Obtains the SID for a network node}
+\begin{apisyn}
+        \cinclude{oskit/flask/security.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_security_node_sid(oskit_security_t *security,
+                                oskit_u16_t domain,
+				void *addr,
+				oskit_u32_t addrlen,
+                                \outparam oskit_security_id_t *sid);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_security\_node\_sid} function returns the SID to use for the
+node whose address is specified by \emph{addr}.  The \emph{addrlen}
+parameter specifies the length of the address in bytes, and the
+\emph{domain} parameter specifies the communications domain or address
+family in which the address should be interpreted.  
+
+\end{apidesc}
+\begin{apiparm}
+        \item[security]
+                The security server.
+        \item[domain]
+                The communications domain/address family.
+        \item[addr]  
+                The address.
+        \item[addrlen]
+                The length of the address in bytes.
+        \item[sid]
+                The SID of the port number.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+
+\apiintf{oskit_avc}{AVC Interface}
+\label{oskit-avc}
+
+The {\tt oskit_avc} interface specifies the methods provided
+by an access vector cache (AVC) component to object managers.  
+These methods are used by object managers to perform 
+permission checks, to notify the AVC component of completed 
+operations and to register callbacks for policy changes.
+
+The AVC entry reference type (\texttt{oskit_avc_entry_ref_t}) consists of a
+pointer to an entry in the AVC\@.  The AVC returns a reference to the
+entry used for a permission check. An object manager may save this
+reference with the corresponding object for subsequent use in other
+permission checks on the object.  An object manager must initialize a
+reference before its first use with the \texttt{OSKIT_AVC_ENTRY_REF_INIT}
+macro.  An object manager may copy a reference with the
+\texttt{OSKIT_AVC_ENTRY_REF_CPY} macro.  AVC entry references should
+only be dereferenced by the AVC functions.
+
+The {\tt oskit_avc} COM interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{csymlist}
+\item[has\_perm\_ref]
+	Check permissions.
+\item[notify\_perm\_ref]
+	Notify of completed operations.
+\item[add\_callback]
+	Register a callback for a policy change event.
+\item[remove\_callback]
+	Remove a previously registered callback.
+\item[log\_contents]
+	Log the contents of the AVC.
+\item[log\_stats]
+	Log the AVC usage statistics.
+\end{csymlist}
+
+\api{has_perm_ref}{Check permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_has_perm_ref(oskit_avc_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t requested,
+		  	 \inoutparam oskit_avc_entry_ref_t *aeref);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_has\_perm\_ref} inline function determines
+whether the \emph{requested} permissions are granted for the specified
+SID pair and class.  If \emph{aeref} refers to a valid AVC entry for
+this permission check, then the referenced entry is used.  Otherwise,
+this function obtains a valid entry and sets \emph{aeref} to refer to
+this entry.  To obtain a valid entry, this function first searches the
+cache.  If this fails, then this function calls the
+\emph{oskit\_security\_compute\_av} interface of the security server to
+compute the access vectors and adds a new entry to the cache.  If the
+appropriate audit access vector (\emph{auditallow} or
+\emph{auditdeny}) in the entry indicates that the permission check
+should be audited, then this function audits the permission check.
+ 
+The object managers call this function to perform permission
+checks.  Object managers may also use a variant of this
+function, \emph{avc\_has\_perm}, in order to omit the reference 
+parameter.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object class.
+	\item[requested]
+		The permissions to be checked.
+	\item[aeref]
+		The reference to an AVC entry.
+\end{apiparm}
+\begin{apiret}
+
+This function returns \texttt{0} if permission is granted.  If the
+security server returns an error upon a \emph{oskit\_security\_compute\_av}
+call, then this function returns that error.  If the security
+server returns a sequence number that is less than the latest
+policy change sequence number, then this function discards
+the security server response and returns \texttt{OSKIT_EAGAIN}.
+If permission is denied, then this function returns \texttt{OSKIT_EACCES}.
+
+\end{apiret}
+
+
+\api{notify\_perm\_ref}{Notify of completed operations}
+\begin{apisyn}
+        \cinclude{oskit/flask/avc.h}
+                         
+        \funcproto OSKIT_COMDECL
+        oskit_avc_notify_perm_ref(oskit_avc_t *avc,  
+                         oskit_security_id_t ssid,
+                         oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+                         oskit_access_vector_t requested,
+                         \inoutparam oskit_avc_entry_ref_t *aeref);
+\end{apisyn} 
+\begin{apidesc} 
+
+The \emph{oskit\_avc\_notify\_perm\_ref} inline function notifies the AVC
+component that an operation associated with the \emph{requested}
+permissions has completed successfully.  If any of the
+\emph{requested} permissions are in the \emph{notify} access vector of
+the corresponding AVC entry, then this function calls the
+\emph{oskit\_security\_notify\_perm} interface of the security
+server to notify the security server that the operation has completed
+successfully.  If \emph{aeref} refers to a valid AVC entry for the
+\emph{requested} permissions, then the referenced entry is used to
+obtain the \emph{notify} vector.  Otherwise, this function obtains a
+valid entry and sets \emph{aeref} to refer to this entry in the
+same manner as \emph{oskit\_avc\_has\_perm\_ref}.
+
+The object managers call this function to notify the AVC 
+component of operation completion. Object managers may also 
+use a variant of this function, \emph{avc\_notify\_perm}, in 
+order to omit the reference parameter.
+ 
+\end{apidesc}
+\begin{apiparm}
+        \item[avc]
+                The access vector cache.
+        \item[ssid]
+                The source SID.
+        \item[tsid]
+                The target SID.
+        \item[tclass]
+                The target object class.
+        \item[requested]
+                The permissions to be checked.
+        \item[aeref]
+                The reference to an AVC entry.
+\end{apiparm}
+\begin{apiret}
+ 
+This function returns \texttt{0} if the notification was successful.  If the
+security server returns an error upon a \emph{oskit\_security\_compute\_av}
+or a \emph{oskit\_security\_notify\_perm} call, then this function returns 
+that error.  If the security
+server returns a sequence number that is less than the latest
+policy change sequence number, then this function discards
+the security server response and returns \texttt{OSKIT_EAGAIN}.
+ 
+\end{apiret}
+
+
+\api{add_callback}{Register a callback for a policy change event}
+\begin{apisyn}
+        \cinclude{oskit/flask/avc.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_avc_add_callback(oskit_avc_t *avc,
+                         oskit_avc_callback_t *callback,
+                         oskit_u32_t events,
+                         oskit_security_id_t ssid,
+                         oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+                         oskit_access_vector_t perms);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_add\_callback} function registers an object manager
+callback function \emph{callback} with the AVC component for policy
+change notifications.  When the security server calls
+an AVC interface that corresponds to an event in the set
+\emph{events} with a SID pair, class and permissions that match
+\emph{ssid}, \emph{tsid}, \emph{tclass} and \emph{perms}, the
+AVC component calls the registered \emph{callback} function with the
+parameters provided by the security server.  The \emph{callback}
+function may then update any affected permissions that are retained in
+the state of the object manager.  The wildcard SID,
+\emph{OSKIT\_SECSID\_WILD}, may be used for the \emph{ssid} and \emph{tsid}
+parameters to match all SID values.  Permission vectors match if they
+have a non-null intersection.  The meaning of each event value is
+explained in the description of the corresponding interface in the
+next section.  
+
+\end{apidesc}
+\begin{apiparm}
+        \item[avc]
+                The access vector cache.
+        \item[callback]
+                The callback.
+        \item[events]
+                The events.
+                Legal events are:
+                \begin{icsymlist}
+                \item[OSKIT_AVC_CALLBACK_GRANT] Grant permissions.
+                \item[OSKIT_AVC_CALLBACK_TRY_REVOKE] Revoke permissions if not r
+etained.
+                \item[OSKIT_AVC_CALLBACK_REVOKE] Revoke permissions.
+                \item[OSKIT_AVC_CALLBACK_RESET] Recheck permissions.
+                \item[OSKIT_AVC_CALLBACK_AUDITALLOW_ENABLE] Enable auditing of p
+ermission grantings.
+                \item[OSKIT_AVC_CALLBACK_AUDITALLOW_DISABLE] Disable auditing of
+ permission grantings.   
+                \item[OSKIT_AVC_CALLBACK_AUDITDENY_ENABLE] Enable auditing of pe
+rmission denials.
+                \item[OSKIT_AVC_CALLBACK_AUDITDENY_DISABLE] Disable auditing of
+permission denials.      
+                \end{icsymlist} 
+        \item[ssid]
+                The source SID.
+        \item[tsid]
+                The target SID.
+        \item[tclass]
+                The target object security class.
+        \item[perms] 
+                The permissions.
+\end{apiparm}
+\begin{apiret}  
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{remove_callback}{Remove a previously registered callback}
+\begin{apisyn}
+        \cinclude{oskit/flask/avc.h}
+ 
+        \funcproto OSKIT_COMDECL
+        oskit_avc_remove_callback(oskit_avc_t *avc,
+                         oskit_avc_callback_t *callback);
+\end{apisyn}
+\begin{apidesc}
+        This method removes the specified callback.
+\end{apidesc}
+\begin{apiparm}
+        \item[avc]
+                The access vector cache.
+        \item[callback]
+                The callback.
+\end{apiparm}
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{log_contents}{Log the contents of the AVC}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_log_contents(oskit_avc_t *avc, 
+				int priority,
+				char *tag);
+\end{apisyn}
+\begin{apidesc}
+	This method logs the contents of the AVC.
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[priority]
+		The log priority.
+	\item[tag]
+		The log prefix tag.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{log_stats}{Log the AVC usage statistics}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_log_stats(oskit_avc_t *avc, 
+				int priority,
+				char *tag);
+\end{apisyn}
+\begin{apidesc}
+	This method logs the statistics of the AVC.
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[priority]
+		The log priority.
+	\item[tag]
+		The log prefix tag.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_avc_ss}{AVC Interface for the Security Server}
+\label{oskit-avc-ss}
+
+	The {\tt oskit_avc_ss} interface specifies the methods
+provided by an AVC component to the security server.  These
+methods are used by the security server to manage the cache as
+needed for policy changes.  The {\tt oskit_avc_ss} COM interface 
+inherits from {\tt IUnknown}, and has the following additional methods:	
+\begin{csymlist}
+\item[grant]
+	Grant previously denied permissions.
+\item[try\_revoke]
+	Revoke previously granted permissions if those permissions are
+	not retained in the state of the object manager.  Return any
+	retained permissions.
+\item[revoke]
+	Revoke previously granted permissions.
+\item[reset]
+	Reset the cache to its initial state and recheck all retained
+	permissions.
+\item[set\_auditallow]
+	Enable or disable the auditing of granted permissions.
+\item[set\_auditdeny]
+	Enable or disable the auditing of denied permissions.
+\item[set\_notify]
+	Enable or disable the notification of used permissions.
+\end{csymlist}
+
+\api{grant}{Grant previously denied permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_grant(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_grant} function grants previously denied
+permissions for a SID pair and class.  The wildcard SID,
+\emph{OSKIT\_SECSID\_WILD}, may be used for the
+\emph{ssid} and \emph{tsid} parameters to match all SID values.  This
+function adds the permissions in \emph{perms} to the \emph{allowed}
+vector in any matching entries in the cache.  It then calls any
+callbacks registered by an object manager for the
+\emph{OSKIT\_AVC\_CALLBACK\_GRANT} event with a matching SID pair,
+class and permissions.  Permission vectors match if they have a
+non-null intersection.  This function updates the latest policy change
+sequence number to the greater of its current value and the
+\emph{seqno} value.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{try\_revoke}{Try to revoke previously granted permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_try_revoke(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno,
+			 \outparam oskit_access_vector_t *out_retained);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_try\_revoke} function tries to revoke previously
+granted permissions for a SID pair and class, but only if they are not
+retained in the state of an object manager.  If any of the permissions
+in \emph{perms} are retained, the retained permissions are returned in
+\emph{out\_retained}.  The wildcard SID, \emph{OSKIT\_SECSID\_WILD}, may be
+used for the \emph{ssid} and \emph{tsid} parameters to match all SID
+values.  This function calls any callbacks registered by an object  
+manager for the \emph{OSKIT\_AVC\_CALLBACK\_TRY\_REVOKE} event with a  
+matching SID pair, class and permissions.  Permission vectors match if
+they have a non-null intersection.  Each callback is expected to
+identify which matching permissions are retained in the state
+of the object manager.  The set of retained permissions 
+returned by each callback is added to \emph{out\_retained}.  This
+function then removes any permissions in \emph{perms} that were not
+retained from the \emph{allowed} vector in any matching entries in the
+cache.  This function updates the latest policy change sequence number
+to the greater of its current value and the \emph{seqno} value.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change.
+	\item[out_retained]
+		The set of permissions retained.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{revoke}{Revoke previously granted permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_revoke(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_revoke} function revokes previously granted
+permissions for a SID pair and class, even if they are retained in the
+state of an object manager.  The wildcard SID, \emph{OSKIT\_SECSID\_WILD},
+may be used for the
+\emph{ssid} and \emph{tsid} parameters to match all SID values.  This
+function removes any permissions in \emph{perms} from the
+\emph{allowed} vector in any matching entries in the cache.  It then
+calls any callbacks registered by an object manager for the
+\emph{OSKIT\_AVC\_CALLBACK\_REVOKE} event with a matching SID pair, class and
+permissions.  Permission vectors match if they have a non-null
+intersection.  Each callback is expected to revoke any matching
+permissions that are retained in the state of the object manager.
+This function updates the latest policy change sequence number to the
+greater of its current value and the \emph{seqno} value.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{reset}{Reset the cache and recheck all retained permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_reset(oskit_avc_ss_t *avc, 
+			 oskit_u32_t seqno);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_reset} function flushes the cache and revalidates
+all permissions retained in the state of the object managers.  This
+function invalidates all entries in the cache.  It then calls any
+callbacks registered by an object manager for the
+\emph{OSKIT\_AVC\_CALLBACK\_RESET} event.  Each callback is expected to
+revalidate permissions that are retained in the state of
+the object manager by calling \emph{oskit\_avc\_has\_perm\_ref} or one
+of its variants.  This function updates the latest policy change
+sequence number to the greater of its current value and the
+\emph{seqno} value.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[seqno]
+		The sequence number for the policy change.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{set\_auditallow}{Enable or disable the auditing of granted permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_set_auditallow(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno,
+			 oskit_bool_t enable);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_set\_auditallow} function enables or disables
+auditing of granted permissions for a SID pair and class.  The
+wildcard SID, \emph{OSKIT\_SECSID\_WILD}, may be used for the \emph{ssid} and
+\emph{tsid} parameters to match all SID values.  The \emph{enable} 
+flag should be \texttt{1} to enable auditing and \texttt{0} to disable
+auditing.  This function adds or removes, depending on the value of
+\emph{enable}, the permissions in \emph{perms} from the
+\emph{auditallow} vector in any matching entries in the cache.  It
+then calls any callbacks registered by an object manager for the
+\emph{OSKIT\_AVC\_CALLBACK\_AUDITALLOW\_ENABLE} or
+\emph{OSKIT\_AVC\_CALLBACK\_AUDITALLOW\_DISABLE} event with a matching SID
+pair, class and permissions.  Permission vectors match if they have a
+non-null intersection.  This function updates the latest policy change
+sequence number to the greater of its current value and the
+\emph{seqno} value.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change. 
+	\item[enable]
+		The boolean flag indicating whether to enable or disable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{set\_auditdeny}{Enable or disable the auditing of denied permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_set_auditdeny(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno,
+			 oskit_bool_t enable);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_set\_auditdeny} function enables or disables
+auditing of denied permissions for a SID pair and class.  It has the
+same behavior as \emph{oskit\_avc\_ss\_set\_auditallow}, except that it 
+modifies the \emph{auditdeny} vector and it is associated with the
+\emph{OSKIT\_AVC\_CALLBACK\_AUDITDENY\_ENABLE} and
+\emph{OSKIT\_AVC\_CALLBACK\_AUDITDENY\_DISABLE} events.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change.
+	\item[enable]
+		The boolean flag indicating whether to enable or disable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{set\_notify}{Enable or disable the notification of used permissions}
+\begin{apisyn}
+	\cinclude{oskit/flask/avc_ss.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_avc_ss_set_notify(oskit_avc_ss_t *avc, 
+		         oskit_security_id_t ssid,
+			 oskit_security_id_t tsid,
+                         oskit_security_class_t tclass,
+			 oskit_access_vector_t perms,
+			 oskit_u32_t seqno,
+			 oskit_bool_t enable);
+\end{apisyn}
+\begin{apidesc}
+
+The \emph{oskit\_avc\_ss\_set\_notify} function enables or disables
+notification of completed operations for a SID pair and class.  It has
+the same behavior as \emph{oskit\_avc\_ss\_set\_auditallow}, except that it
+modifies the \emph{notify} vector and it is associated with the
+\emph{OSKIT\_AVC\_CALLBACK\_NOTIFY\_ENABLE} and
+\emph{OSKIT\_AVC\_CALLBACK\_NOTIFY\_DISABLE} events.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[avc]
+		The access vector cache.
+	\item[ssid]
+		The source SID.
+	\item[tsid]
+		The target SID.
+	\item[tclass]
+		The target object security class.
+	\item[perms]
+		The permissions.
+	\item[seqno]
+		The sequence number for the policy change.
+	\item[enable]
+		The boolean flag indicating whether to enable or disable.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+

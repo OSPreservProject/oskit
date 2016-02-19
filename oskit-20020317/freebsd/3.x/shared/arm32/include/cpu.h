@@ -1,0 +1,4 @@
+/*
+ * Stub
+ */
+extern int        bootverbose;

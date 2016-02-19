@@ -1,0 +1,1 @@
+#define NVT 0

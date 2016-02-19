@@ -1,0 +1,21 @@
+
+Directories: oskit/smp, oskit/smp/x86
+Target: liboskit_smp.a
+Documentation: doc/smp.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Linux v2.0.0, Linux Project
+Description:  
+	Symmetric MultiProcessor startup code for Intel 
+	SMP-compliant personal computers.
+	
+	Obviously, all of the code is in the x86 directory.
+
+	The majority of this code is derived from SMP code 
+	in the Linux v2.0.0 kernel.  As such it is covered 
+	by the GNU General Public License.  Please see the
+	file COPYING for details on the	GNU General Public
+	License (GPL) and distribution requirements.
+	As stipulated in the GPL, any code linked against this
+	source is also covered under GPL and must be distributed
+	according to its terms.

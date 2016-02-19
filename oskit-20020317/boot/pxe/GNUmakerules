@@ -1,0 +1,85 @@
+#
+# Copyright (c) 2000, 2001 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Boot Loader, which is free software,
+# also known as "open source;" you can redistribute it and/or modify it under
+# the terms of the GNU General Public License (GPL), version 2, as published
+# by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _boot_bsd_makerules_
+_boot_bsd_makerules_ = yes
+
+# This is where the boot program gets linked to and loaded at.
+PXE_LINK_ADDR = 0x7c00
+
+TARGETS = pxeboot pxeboot.gdb
+CLEAN_FILES += $(TARGETS)
+
+# Having DEBUG defined does bad things for some of this code.
+DEFINES := $(filter-out -DDEBUG,$(DEFINES))
+DEFINES += -DOSKIT
+
+# force pxeboot and booted kernels to use 115200-baud serial console
+DEFINES += -DFORCESERIALCONSOLE
+
+# Where to look for src files.
+SRCDIRS += $(OSKIT_SRCDIR)/boot/pxe $(OSKIT_SRCDIR)/boot 
+
+# Libraries we need to link with
+LIBS = -loskit_exec -loskit_kern -loskit_c -loskit_lmm 
+DEPENDLIBS := $(patsubst -l%,$(OBJDIR)/lib/lib%.a,$(LIBS))
+
+INCDIRS += $(OSKIT_SRCDIR)/oskit/c $(OSKIT_SRCDIR)/boot
+
+# We need this before including the generic rules so it
+# doesn't get in there twice.
+OBJFILES += version.o
+
+all: $(TARGETS)
+install: $(INSTALL_TARGETS)
+prepare:: version.c
+
+# Include the makefile containing the generic rules.
+# This must come here since it depends on SRCDIRS and sets OBJFILES.
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+# This is for version.c dependency, so it gets rebuilt
+DEPS = $(OBJDIR)/lib/multiboot.o $(OBJFILES) $(DEPENDLIBS)
+
+# Make sure the boot sector and setup header come first.
+OBJFILES :=	crt0.o \
+		$(filter-out crt0.o,$(OBJFILES))
+
+crt0.o: crt0.S 
+	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
+	$(CC) -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
+
+
+pxeboot: $(OBJFILES) $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-Ttext $(PXE_LINK_ADDR) \
+		-oformat binary -o pxeboot $(OBJFILES) $(LIBS)
+
+pxeboot.gdb: $(OBJFILES) $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-Ttext $(PXE_LINK_ADDR) -o pxeboot.gdb $(OBJFILES) $(LIBS)
+	@echo "Grepping for _end. It should be less than 0xFFFF"
+	@$(NM) pxeboot.gdb | grep " _end"
+
+version.c: $(filter-out version.o,$(DEPS))
+	echo >$@ "char version[] = \"PXE Boot Program v1.0.0\";"
+	echo >>$@ "char build_info[] = \"Built `date +\"%d-%b-%Y %H:%M:%S\"` by `id -nu`@`hostname | sed 's/\..*//'`:`pwd`\";"
+CLEAN_FILES += version.c
+
+$(INSTALL_LIBDIR)/boot/%: %
+	-mkdir -p $(@D)
+	$(INSTALL_PROGRAM) $< $@
+
+endif

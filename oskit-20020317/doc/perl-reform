@@ -1,0 +1,62 @@
+#!/usr/bin/perl
+#
+# Usage: reform [-lNUM] [-rNUM] [-iNUM] [-sNUM] [files]
+#
+# Set default values for left margin, right margin, indent
+# and paragraph spacing.
+# 
+# Based on reform from the Perl Book.  I "enhanced" it
+# with the icky "[Page Break]" hack.
+#
+
+$l = 0;
+$r = 0;
+$i = 0;
+$s = 1;
+
+# Process any switches.
+
+while ($ARGV[0] =~ /^-/) {
+    $_ = shift;
+    /^-(l|r|i|s)(\d+)/ && (eval "\$$1 = \$2", next);
+    die "Unrecognized switch: $_\n";
+}
+
+# Calculate format strings.
+
+$r = $l + 65 unless $r;
+$r -= $l;                       # make $r relative to $l
+die "Margins too close\n" if $l + $i >= $r;
+
+$LEFT = ' ' x $l;
+$INDENT = ' ' x $i;
+$RIGHT1 = '^' . '<' x ($r - 1 - $i);
+$RIGHT2 = '^' . '<' x ($r - 1);
+$SPACING = "\n" x $s;
+
+# Define a format at run time.
+
+$form = <<"End of Format Definition";
+format STDOUT =
+$LEFT$INDENT$RIGHT1
+\$_
+$LEFT$RIGHT2~~
+\$_
+$SPACING.
+End of Format Definition
+
+print $form if $debugging;
+eval $form;
+
+# Set paragraph mode on input.
+
+$/ = '';
+
+# For each paragraph...
+
+while (<>) {
+    s/\s+/ /g;                         # Canonicalize white space.
+    s/ $//;                            # Trim final space.
+    s/([a-z0-9\)][.!?][)\'\"]*) /$1  /g; # Fix sentence ends.
+    write;                             # Spit out new paragraph.
+}

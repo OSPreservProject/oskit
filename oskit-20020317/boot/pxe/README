@@ -1,0 +1,53 @@
+Directories: oskit/boot/pxe
+Target: pxeboot
+Documentation: none
+Original Code Source:
+	Flux Research Group, University of Utah.
+	Some code derived from the linux boot adaptor.
+Description:
+
+This directory implements a PXE compliant boot loader. It is intended
+to be used on machines that speak the PXE boot protocol, in
+conjunction a suitable DHCP server, and a suitable DHCP proxy server
+that tells the machine in question where to TFTP "pxeboot" from.
+
+***************************************************************************
+The PXE specification says that the boot program must be less that 32K
+in size. So, you must configure with --disable-asserts and be sure
+*not* to use --enable-debug! Otherwise, your boot program will be more
+than 35K, and it will not work!
+***************************************************************************
+
+Once loaded and running, pxeboot will send out a BOOTWHAT UDP request
+packet to a server running on the same machine as the Proxy DHCP
+server. The format is defined in oskit/oskit/boot/bootwhat.h, and
+defines a very simple protocol for telling the pxeboot kernel what to
+do next.  Either boot the default MBR, a specific partition of the
+MBR, a specific systemid of the MBR, or a multiboot image whose path
+is specified in the packet. All errors in the pxeboot program are
+resolved in the same manner; the default MBR is loaded and booted.
+
+A good tutorial on how to set up all this stuff can found at:
+
+	http://www.nilo.org/remoteboot/Remote-Boot.html
+
+In summary though:
+
+* You need a DHCP server that can provide the "dhcp-class-identifier"
+  option, as in:
+
+	option dhcp-class-identifier "PXEClient";
+
+  Version 2 of DHCP from the ISC will do nicely (www.isc.org).
+
+* You will need a Proxy DHCP server that can return the rest of the stuff
+  the PXE ROM wants. We took the Proxy from www.bpbatch.org and
+  modified it a bit for FreeBSD 3.0. Let us know if you need that.
+  The Proxy will respond with a DHCP format packet that tells the PXE
+  where to TFTP the pxeboot kernel from.
+
+* Once the pxeboot kernel is running, it will query our own little
+  bootinfo server to find out what to do next. The protocol is very
+  simple, sending a UDP packet to a port defined in bootwhat.h, which
+  returns a packet. How you implement that server is up to you, but as
+  a trivial example of how to get started, see bootinfo/bootinfo.c.

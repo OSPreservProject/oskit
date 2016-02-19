@@ -1,0 +1,33 @@
+
+Directories: oskit/freebsd
+Target: liboskit_freebsd_dev.a &
+	liboskit_freebsd_net.a &
+	liboskit_freebsd_m.a
+Documentation: doc/dev.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+	FreeBSD v3.2 & v2.1.7.1, FreeBSD Project
+Description:
+	This directory contains the FreeBSD-specific glue
+	and the FreeBSD source used for the fdev and
+	net libraries.
+
+	shared/ contains shared glue for the dev and net
+	libraries
+
+	libm/ contains glue (just makefiles, actually)
+	for compiling the FreeBSD math library
+
+	net/ contains net-specific glue
+
+	dev/ contains dev-specific glue
+
+	src/ contains lightly modified sources
+	from the FreeBSD v2.1.7.1 source.  Its not all
+	there, but what is there is FreeBSD.
+	The few oskit changes are demarked with #ifdef OSKIT.
+
+	3.x/src/ contains lightly modified sources
+	from the FreeBSD v3.2 source, same story.
+	For documentation see:
+		http://www.freebsd.org/cgi/man.cgi?manpath=FreeBSD+3.2-RELEASE

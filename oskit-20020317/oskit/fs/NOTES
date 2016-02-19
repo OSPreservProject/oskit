@@ -1,0 +1,168 @@
+Current Fluke Common Protocols
+==============================
+
+FileSystem:
+*	open
+*	link
+*	unlink
+*	rename
+*	mkdir
+*	rmdir
+*	mkfifo
+	subset
+*	chmod
+*	chown
+	utime
+*	access
+
+FileDescription:
+*	read
+*	write
+*	seek
+	write_abs
+*	map
+	set_size
+*	set_size_clear
+	create_copy
+	destroy
+*	stat
+*	chmod
+*	get_size
+*	get_file_size
+*	truncate
+*	synchronize
+
+GNU Hurd
+
+io:
+*	write
+*	read
+*	seek
+	readable
+*	set_all_openmodes
+*	get_openmodes
+*	set_some_openmodes
+*	clear_some_openmodes
+	async			SIGIO and SIGURG signal delivery
+*	mod_owner
+*	get_owner
+	get_icky_async_id	Old-style async IO (BSD 4.3 compat)
+	select
+*	stat
+	reauthenticate
+	restrict_auth
+	duplicate
+	server_version
+	<mapped I/O stuff>
+*	pathconf
+	identity
+
+file:
+	exec
+*	chown
+	chauthor
+*	chmod
+	chflags
+*	utimes
+*	set_size
+*	lock			Apply/manipulate advisory lock
+*	lock_stat		Return current lock status
+	check_access
+	notice_changes		File change notifications
+	getcontrol		???
+*	statfs
+*	sync			Sync the individual file
+	syncfs			Sync the entire filesystem
+	get_storage_info
+	getlinknode
+	getfh			Get NFS file handle
+	set_translator
+	get_translator
+	get_translator_cntl
+	get_fs_options
+
+dir:
+*	lookup
+*	readdir
+*	mkdir
+*	rmdir
+*	unlink
+*	link
+*	rename
+*	mkfile			Create a file without linking it in
+	notice_changes		Directory change notifications
+
+
+POSIX.1
+=======
+*	node	open
+*		unlink
+*		stat
+*		access
+*		chmod
+*		chown
+*		utime
+*		pathconf
+*		fcntl	(open modes)
+*	file	read
+*		write
+*		fcntl	(advisory locking)
+*		lseek
+*	dir	readdir
+*		rewinddir
+*		link	->new
+*		mkdir
+*		mkfifo
+*		rmdir
+*		rename	->new
+*	tty	tcgetattr
+*		tcsetattr
+*		tcsendbreak
+*		tcdrain
+*		tcflush
+*		tcflow
+*		tcgetpgrp	???
+*		tcsetpgrp	???
+
+UNIX CAE Specification
+======================
+*	node	statvfs
+*		fsync
+		ioctl		(STREAMS)
+*		isatty
+		isastream	(STREAMS)
+		poll
+		select
+*		utimes
+*	file	truncate
+		getmsg		(STREAMS)
+		getpmsg		(STREAMS)
+*		lockf		???
+*		mmap
+		mprotect	???
+		msync		???
+*		munmap
+		putmsg		(STREAMS)
+*		readv
+*		writev
+*	tty	ttyname
+*		tcgetsid
+	pty	grantpt
+		ptsname
+		unlockpt
+	dir	fattach		(STREAMS)
+		fdetach		(STREAMS)
+		ftok		(IPC)
+*		lchown
+*		lstat
+*		mknod
+*		readlink
+*		seekdir
+*		symlink
+*		telldir
+
+Additional
+==========
+*		mount
+
+

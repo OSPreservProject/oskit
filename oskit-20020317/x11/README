@@ -1,0 +1,24 @@
+
+Directories: oskit/x11
+Target: liboskit_x11video.a
+Documentation:
+Original Code Source: 
+	Flux Research Group, University of Utah
+	X11R6.3; X Consortium
+	XFree86 Project
+	CSRG; University of California, Berkeley
+Description:  
+	This directory contains the OSKit glue
+	and X11R6.3/XFree86 3.3.1 source used for the x11video
+	library, along with a library containing extra code to	
+	fill in the gaps when linking with X client code.
+
+	client/ contains simple functions to add some missing 
+	functionality that the X client code relies on
+
+	video/ contains glue code for x11video
+
+	src/ contains lightly modified sources from the 
+	XFree86 3.3.1 source, consisting of the s3 video driver 
+	code.  The few oskit changes are demarked with #ifdef OSKIT.
+

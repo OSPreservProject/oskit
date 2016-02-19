@@ -1,0 +1,780 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Networks
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype NetIO_T =
+{ include "${OSKITDIR}/oskit/io/netio.h",
+  oskit_netio_create,
+  oskit_netio_create_cleanup,
+} with flags com
+
+bundletype Net_T =
+{ include "${BUILDDIR}/oskit/machine/endian.h",
+  include "${OSKITDIR}/oskit/c/arpa/inet.h",
+  htonl,
+  htons,
+  ntohl,
+  ntohs,
+  inet_addr,
+  inet_aton,
+  inet_ntoa,
+  __inet_aton,
+} with flags libc
+
+bundletype FakeARP_T = 
+{ include "${OSKITDIR}/oskit/fudp.h",
+  farp_add,
+  farp_lookup,
+  farp_remove,
+} with flags libc
+
+bundletype FakeUDP_T =
+{ include "${OSKITDIR}/oskit/fudp.h",
+  fudp_init
+} with flags libc
+
+bundletype SocketFactory_T = 
+{ include "${OSKITDIR}/oskit/fudp.h",
+  oskit_socket_factory 
+} with flags libc
+
+bundletype HPFQ_T =
+{ include "${OSKITDIR}/oskit/hpfq.h",
+  pfq_dump_stats,
+  pfq_leaf_create,
+  pfq_reset_path,
+  pfq_sff_create,
+  pfq_sff_create_root,
+  pfq_ssf_create,
+  pfq_ssf_create_root,
+  pfq_stats,
+} with flags libc
+
+// This list looks a little excessive to me.
+// Then again, some of the code is probably useful for other
+// purposes besides bootp (eg ipchksum, udp_bradcast, etc).
+bundletype BootP_T =
+{ include "${OSKITDIR}/oskit/net/bootp.h",
+  bootp,
+  bootp_currticks,
+  bootp_decode_packet,
+  bootp_default_netmask,
+  bootp_dump,
+  bootp_eth_transmit,
+  bootp_free,
+  bootp_gen,
+  bootp_ipchksum,
+  bootp_reply,
+  bootp_test,
+  bootp_try,
+  bootp_udp_broadcast,
+} with flags libc
+
+bundletype FreeBSDNet_T = 
+{ include "${OSKITDIR}/oskit/net/freebsd.h",
+  //  oskit_freebsd_net_open_first_ether_if, // deliberate omission
+  oskit_freebsd_net_open_ether_if,
+  oskit_freebsd_net_close_ether_if,
+  oskit_freebsd_net_prepare_ether_if,
+  oskit_freebsd_net_ifconfig,
+  oskit_freebsd_net_add_default_route,
+
+  oskit_freebsd_net_init2 // very, very nearly an initializer
+} with flags libc
+
+// should probably extend PosixFD_T
+bundletype PosixSocket_T =
+{ include "${OSKITDIR}/oskit/c/sys/socket.h",
+  accept,
+  bind,
+  connect,
+  getpeername,
+  getsockname,
+  getsockopt,
+  listen,
+  recv,
+  recvfrom,
+  send,
+  sendto,
+  setsockopt,
+  shutdown,
+  socket,
+  socketpair,
+} with flags libc
+
+// Operations within an `oskit_mib_ip_ops': see <oskit/mib/ip.h>.
+bundletype MIB_IP_T =
+{
+  // XXX --- include "",
+  get_ipstats,
+  get_ip_forwarding, set_ip_forwarding,
+  get_ip_default_ttl, set_ip_default_ttl
+  get_ipaddr_table,
+  get_ipnettomedia_table,
+  get_ipforward_table, set_ipforward_table
+}
+
+// Operations within an `oskit_mib_icmp_ops': see <oskit/mib/icmp.h>.
+bundletype MIB_ICMP_T =
+{
+  // XXX --- include "",
+  get_icmpstats
+}
+
+// Operations within an `oskit_mib_tcp_ops': see <oskit/mib/tcp.h>.
+bundletype MIB_TCP_T =
+{
+  // XXX --- include "",
+  get_tcpstats,
+  get_tcpconn_table, set_tcpconn_table
+}
+
+// Operations within an `oskit_mib_udp_ops': see <oskit/mib/udp.h>.
+bundletype MIB_UDP_T =
+{
+  // XXX --- include "",
+  get_udpstats,
+  get_udpentry_table
+}
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+/*# Factory for NetIO COM objects.
+#*/
+// mk_unit -o -n net_io com/net_io.o 
+unit net_io = {
+  imports[ malloc : Malloc_T, 
+           iids   : { oskit_iunknown_iid,
+                      oskit_netio_iid,
+                    },
+           panic  : Panic_T
+         ];
+  exports[ out : NetIO_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/net_io.c"
+  } with flags com;
+}
+
+/*# Simple IP address manipulation routines.  (Should be renamed ip_address
+    or something more informative.  So should the signature.)
+#*/
+
+// gcc -r -nostdlib libc/inet*.o libc/ntoh.o  -o /tmp/foo.o && imports /tmp/foo.o
+unit libc_net = {
+  imports[ sprintf : Sprintf_T // only inet_ntoa uses this
+  	 ];
+  exports[ out : Net_T ];
+  depends{ exports + inits + finis needs imports };
+  files { 
+    "libc/net/inet_addr.c",
+    "libc/net/inet_aton.c",
+    "libc/net/inet_ntoa.c",
+  } with flags libc;
+  files { 
+    "libc/x86/ntoh.S" 
+  } with flags { flags libc, flags asm };
+  	
+}
+
+/*# A fixed size (10 entry) ARP table.
+#*/
+// mk_unit -o -n fake_arp fudp/arp.o 
+unit fake_arp = {
+  imports[];
+  exports[ out : FakeARP_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "fudp/arp.c",
+  } with flags fudp;
+}
+
+/*# "Fake UDP" - outgoing packets only.
+    Probably has some overlap with the misnamed bootp library.
+    It might be worthwhile splitting this into smaller parts yet.
+    and reusing the bits in a Click-like system.
+#*/
+
+// mk_unit -o -n fake_udp fudp/eth.o fudp/ip.o fudp/socket.o
+unit fake_udp = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+           net    : Net_T,
+           bufio  : BufIO_T,
+           farp   : { farp_lookup }, // FakeARP_T
+           iids   : {
+               oskit_iunknown_iid,
+               oskit_socket_factory_iid,
+               oskit_socket_iid,
+           },
+           panic  : Panic_T,
+         ];
+  exports[ out : FakeUDP_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "fudp/eth.c",
+    "fudp/ip.c",
+    "fudp/socket.c",
+  } with flags fudp;
+}
+
+
+/*# Hierarchial Priority Fair Queueing (HPFQ) lets you build trees of
+    "schedulers" which share out network bandwidth between a bunch of
+    clients.
+#*/
+
+// mk_unit -o -n hpfq hpfq/hpfq.o hpfq/leaf.o hpfq/stats.o
+unit hpfq = {
+  imports[ malloc : Malloc_T,
+           intr   : OSEnvIntr_T,
+           queue  : COMQueue_T,
+           pqueue : PQueue_T,
+           iids   : {
+               oskit_iunknown_iid,
+               oskit_netio_iid,
+               pfq_leaf_iid,
+               pfq_sched_iid,
+           },
+           panic  : Panic_T,
+           stdout : Stdout_T,
+         ];
+  exports[ out : HPFQ_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "hpfq/hpfq.c",
+    "hpfq/leaf.c",
+    "hpfq/stats.c",
+  } with flags hpfq;
+}
+
+
+// mk_unit -o -n bootp bootp/bootp.o   bootp/dump.o bootp/driver.o  bootp/netmask.o bootp/udp.o
+// bootp/test.o 
+
+/*# 
+A grab-bag of useful IP-processing functions including all the bits
+you need to implement bootp.  Seeing as how it's so useful, it ought
+to be split into smaller parts and renamed to deemphasise bootp.
+#*/
+unit bootp = {
+  imports[ string   : String_T,
+           malloc   : Malloc_T,
+           net      : Net_T,
+           panic    : Panic_T,
+           stdout   : Stdout_T,
+           sprintf  : Sprintf_T,
+           timer    : OSEnvTimer_T,
+           log      : OSEnvLog_T,
+           bufio    : BufIO_T,
+           netio    : NetIO_T,
+         ];
+  exports[ out : BootP_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "bootp/bootp.c",
+    "bootp/dump.c",
+//    "bootp/test.c",
+    "bootp/driver.c",
+    "bootp/netmask.c",
+    "bootp/udp.c",
+  } with flags bootp;
+}
+
+
+// ToDo: factor out files which are shared with other parts of freebsd.
+
+// XXX --- The following `mk_unit' command is out of date w.r.t. the FreeBSD
+// networking component source files.  The actual `freebsd_net' unit
+// description should be up to date, though --- it was updated y hand.
+//
+// mk_unit -o -nfreebsd_net freebsd/net/accept.o freebsd/net/kern_timeout.o freebsd/net/bcd.o freebsd/net/kvtop.o freebsd/net/bind.o freebsd/net/linker_set.o freebsd/net/bpf.o freebsd/net/linker_sets.o freebsd/net/bpf_filter.o freebsd/net/mbuf_buf_io.o freebsd/net/bsdnet_add_default_route.o freebsd/net/md5c.o freebsd/net/bsdnet_driver.o freebsd/net/net_receive.o freebsd/net/bsdnet_init.o freebsd/net/clock.o freebsd/net/param.o freebsd/net/clock_init.o freebsd/net/pmap.o freebsd/net/connect.o freebsd/net/qdivrem.o freebsd/net/defaults.o freebsd/net/radix.o freebsd/net/error.o freebsd/net/random.o freebsd/net/generic_bcopy.o freebsd/net/raw_cb.o freebsd/net/glue.o freebsd/net/raw_ip.o freebsd/net/if.o freebsd/net/raw_usrreq.o freebsd/net/read.o freebsd/net/if_ether.o freebsd/net/recvfrom.o freebsd/net/if_ethersubr.o freebsd/net/route.o freebsd/net/if_fddisubr.o freebsd/net/rtsock.o freebsd/net/if_loop.o freebsd/net/scanc.o freebsd/net/if_ppp.o freebsd/net/select.o freebsd/net/if_sl.o freebsd/net/sendto.o freebsd/net/setsockopt.o freebsd/net/if_tun.o freebsd/net/shutdown.o freebsd/net/ifconfig.o freebsd/net/slcompress.o freebsd/net/igmp.o freebsd/net/socketcomio.o freebsd/net/in.o freebsd/net/sockname.o freebsd/net/in_cksum.o freebsd/net/start_first_if.o freebsd/net/in_pcb.o freebsd/net/start_if.o freebsd/net/in_proto.o freebsd/net/subr_scanf.o freebsd/net/in_rmx.o freebsd/net/subr_xxx.o freebsd/net/inet_ntoa.o freebsd/net/support.o freebsd/net/init_main.o freebsd/net/swi.o freebsd/net/ip_divert.o freebsd/net/tcp_debug.o freebsd/net/ip_flow.o freebsd/net/tcp_input.o freebsd/net/ip_fw.o freebsd/net/tcp_output.o freebsd/net/ip_icmp.o freebsd/net/tcp_subr.o freebsd/net/ip_input.o freebsd/net/tcp_timer.o freebsd/net/ip_mroute.o freebsd/net/tcp_usrreq.o freebsd/net/ip_output.o freebsd/net/tty.o freebsd/net/ipl_funcs.o freebsd/net/tty_conf.o freebsd/net/kern_clock.o freebsd/net/tty_subr.o freebsd/net/kern_conf.o freebsd/net/udivdi3.o freebsd/net/kern_descrip.o freebsd/net/udp_usrreq.o freebsd/net/kern_environment.o freebsd/net/uipc_domain.o freebsd/net/uipc_mbuf.o freebsd/net/kern_malloc.o freebsd/net/uipc_socket.o freebsd/net/kern_sig.o freebsd/net/uipc_socket2.o freebsd/net/kern_subr.o freebsd/net/umoddi3.o freebsd/net/kern_synch.o freebsd/net/vm_kern.o freebsd/net/kern_sysctl.o freebsd/net/vm_zone.o freebsd/net/kern_time.o freebsd/net/write.o freebsd/net/panic.o
+
+// dead code?
+// freebsd/net/kern_intr.o 
+// freebsd/net/if_spppsubr.o 
+// freebsd/net/if_disc.o 
+// "freebsd/3.x/shared/osenv.c",
+
+// ToDo: I'm inclined to omit oskit_freebsd_net_open_first_ether_if
+// since it's the only thing that uses osenv_device_lookup
+
+unit freebsd_net = {
+  imports[ string : String_T,
+           stdout : Stdout_T,
+           sprintf: Sprintf_T,
+           getenv : GetEnv_T,
+           intr   : OSEnvIntr_T,
+           softirq: OSEnvSoftIRQ_T,
+           log    : OSEnvLog_T,
+           mem    : OSEnvMem_T,
+           panic  : OSEnvPanic_T,  // Needs 2 panics!
+           panic2 : Panic_T,      // Needs 2 panics!
+           rtc    : OSEnvRTC_T,
+           sleep  : OSEnvSleep_T,
+           timer  : OSEnvTimer_T,
+           bufio  : BufIO_T,
+           netio  : NetIO_T,
+           listener_mgr : ListenerMgr_T,
+           net    : Net_T,
+           iids   : {
+               oskit_asyncio_iid,
+               oskit_bufio_iid,
+               oskit_bufio_stream_iid,
+               oskit_bufiovec_iid,
+               oskit_etherdev_iid,
+               oskit_iunknown_iid,
+	       oskit_mib_icmp_iid,
+	       oskit_mib_ip_iid,
+	       oskit_mib_tcp_iid,
+	       oskit_mib_udp_iid,
+               oskit_posixio_iid,
+               oskit_socket_factory_iid,
+               oskit_socket_iid,
+               oskit_stream_iid,
+             },
+         ];
+  exports[ out : FreeBSDNet_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/net/accept.c",
+         "freebsd/net/bind.c",
+         "freebsd/net/bsdnet_add_default_route.c",
+	 "freebsd/net/bsdnet_com.c",
+         "freebsd/net/bsdnet_driver.c",
+         "freebsd/net/bsdnet_init.c",
+         "freebsd/net/bsdnet_mib_icmp.c",
+         "freebsd/net/bsdnet_mib_ip.c",
+         "freebsd/net/bsdnet_mib_tcp.c",
+         "freebsd/net/bsdnet_mib_udp.c",
+         "freebsd/net/bsdnet_socket_factory.c",
+         "freebsd/net/bsdnet_socket_factory_secure.c",
+         "freebsd/net/connect.c",
+         "freebsd/net/ifconfig.c",
+         "freebsd/net/mbuf_buf_io.c",
+         "freebsd/net/net_receive.c",
+         "freebsd/net/read.c",
+         "freebsd/net/recvfrom.c",
+         "freebsd/net/sendto.c",
+         "freebsd/net/setsockopt.c",
+         "freebsd/net/socketcomio.c",
+         "freebsd/net/sockname.c",
+         "freebsd/net/start_first_if.c",
+         "freebsd/net/start_if.c",
+         "freebsd/net/write.c",
+
+         "freebsd/3.x/src/sys/net/bpf.c",
+         "freebsd/3.x/src/sys/net/bpf_filter.c",
+         "freebsd/3.x/src/sys/net/if.c",
+         "freebsd/3.x/src/sys/net/if_ethersubr.c",
+         "freebsd/3.x/src/sys/net/if_fddisubr.c",
+         "freebsd/3.x/src/sys/net/if_loop.c",
+         "freebsd/3.x/src/sys/net/if_ppp.c",
+         "freebsd/3.x/src/sys/net/if_sl.c",
+         "freebsd/3.x/src/sys/net/if_tun.c",
+         "freebsd/3.x/src/sys/net/radix.c",
+         "freebsd/3.x/src/sys/net/raw_cb.c",
+         "freebsd/3.x/src/sys/net/raw_usrreq.c",
+         "freebsd/3.x/src/sys/net/route.c",
+         "freebsd/3.x/src/sys/net/rtsock.c",
+         "freebsd/3.x/src/sys/net/slcompress.c",
+
+         "freebsd/3.x/src/sys/netinet/if_ether.c",
+         "freebsd/3.x/src/sys/netinet/igmp.c",
+         "freebsd/3.x/src/sys/netinet/in.c",
+         "freebsd/3.x/src/sys/netinet/in_cksum.c",
+         "freebsd/3.x/src/sys/netinet/in_pcb.c",
+         "freebsd/3.x/src/sys/netinet/in_proto.c",
+         "freebsd/3.x/src/sys/netinet/in_rmx.c",
+         "freebsd/3.x/src/sys/netinet/ip_divert.c",
+         "freebsd/3.x/src/sys/netinet/ip_flow.c",
+         "freebsd/3.x/src/sys/netinet/ip_fw.c",
+         "freebsd/3.x/src/sys/netinet/ip_icmp.c",
+         "freebsd/3.x/src/sys/netinet/ip_input.c",
+         "freebsd/3.x/src/sys/netinet/ip_mroute.c",
+         "freebsd/3.x/src/sys/netinet/ip_output.c",
+         "freebsd/3.x/src/sys/netinet/raw_ip.c",
+         "freebsd/3.x/src/sys/netinet/tcp_debug.c",
+         "freebsd/3.x/src/sys/netinet/tcp_input.c",
+         "freebsd/3.x/src/sys/netinet/tcp_output.c",
+         "freebsd/3.x/src/sys/netinet/tcp_subr.c",
+         "freebsd/3.x/src/sys/netinet/tcp_timer.c",
+         "freebsd/3.x/src/sys/netinet/tcp_usrreq.c",
+         "freebsd/3.x/src/sys/netinet/udp_usrreq.c",
+
+         "freebsd/3.x/shared/generic_bcopy.c",
+         "freebsd/3.x/shared/clock_init.c",
+         "freebsd/3.x/shared/defaults.c",
+         "freebsd/3.x/shared/error.c",
+         "freebsd/3.x/shared/glue.c",
+         "freebsd/3.x/shared/init_main.c",
+         "freebsd/3.x/shared/kern_clock.c",
+         "freebsd/3.x/shared/kern_descrip.c",
+         "freebsd/3.x/shared/kern_environment.c",
+         "freebsd/3.x/shared/kern_sig.c",
+         "freebsd/3.x/shared/kern_synch.c",
+         "freebsd/3.x/shared/kern_sysctl.c",
+         "freebsd/3.x/shared/kern_time.c",
+         "freebsd/3.x/shared/linker_set.c",
+         "freebsd/3.x/shared/linker_sets.c",
+         "freebsd/3.x/shared/param.c",
+         "freebsd/3.x/shared/pmap.c",
+         "freebsd/3.x/shared/qdivrem.c",
+         "freebsd/3.x/shared/select.c",
+         "freebsd/3.x/shared/shutdown.c",
+         "freebsd/3.x/shared/swi.c",
+         "freebsd/3.x/shared/udivdi3.c",
+         "freebsd/3.x/shared/umoddi3.c",
+         "freebsd/3.x/shared/vm_kern.c",
+         "freebsd/3.x/shared/vm_zone.c",
+
+         "freebsd/3.x/shared/x86/clock.c",
+         "freebsd/3.x/shared/x86/ipl_funcs.c",
+         "freebsd/3.x/shared/x86/kvtop.c",
+         "freebsd/3.x/shared/x86/support.S",
+
+         "freebsd/3.x/src/sys/libkern/bcd.c",
+         "freebsd/3.x/src/sys/libkern/inet_ntoa.c",
+         "freebsd/3.x/src/sys/libkern/random.c",
+         "freebsd/3.x/src/sys/libkern/scanc.c",
+
+         "freebsd/3.x/src/sys/kern/kern_conf.c",
+         "freebsd/3.x/src/sys/kern/kern_malloc.c",
+         "freebsd/3.x/src/sys/kern/kern_subr.c",
+         "freebsd/3.x/src/sys/kern/kern_timeout.c",
+         "freebsd/3.x/src/sys/kern/md5c.c",
+         "freebsd/3.x/src/sys/kern/subr_scanf.c",
+         "freebsd/3.x/src/sys/kern/subr_xxx.c",
+         "freebsd/3.x/src/sys/kern/tty.c",
+         "freebsd/3.x/src/sys/kern/tty_conf.c",
+         "freebsd/3.x/src/sys/kern/tty_subr.c",
+         "freebsd/3.x/src/sys/kern/uipc_domain.c",
+         "freebsd/3.x/src/sys/kern/uipc_mbuf.c",
+         "freebsd/3.x/src/sys/kern/uipc_socket.c",
+         "freebsd/3.x/src/sys/kern/uipc_socket2.c",
+  } with flags freebsd_net;
+
+  // freebsd/3.x/shared/defaults.c contains its own definition of memcmp
+  // this looks bizarre/unnecessary but I don't feel like fighting with it
+  // just now.  The right thing to do is to change the signature of 
+  // the 'string' import to exclude memcmp - but Knit doesn't support it
+  // at the moment so we'll hack round it by 'hiding' the imported name.
+  // ToDo: hack, hack
+  rename{ string.memcmp to unused_memcmp };
+}
+
+// mk_unit -o -n posixfiles posix/sys/accept.o posix/sys/bind.o posix/sys/connect.o posix/sys/getpeername.o posix/sys/getsockname.o posix/sys/getsockopt.o posix/sys/listen.o posix/sys/recv.o posix/sys/recvfrom.o posix/sys/send.o posix/sys/sendto.o posix/sys/setsockopt.o posix/sys/shutdown.o posix/sys/socket.o posix/sys/socketpair.o
+
+// mk_unit -o -n posixfiles posix/sys_r/accept.o posix/sys_r/bind.o posix/sys_r/connect.o posix/sys_r/getpeername.o posix/sys_r/getsockname.o posix/sys_r/getsockopt.o posix/sys_r/listen.o posix/sys_r/recv.o posix/sys_r/recvfrom.o posix/sys_r/send.o posix/sys_r/sendto.o posix/sys_r/setsockopt.o posix/sys_r/shutdown.o posix/sys_r/socket.o posix/sys_r/socketpair.o
+
+// ToDo: make threading/locking stuff a separate layer or a plug-inable part
+// and use constraint system to detect when you put the wrong layer in.
+unit posix_sockets = {
+  imports[ errno   : Errno_T,
+           fds     : PosixFD_T,
+           factory : SocketFactory_T,
+           iids    : { oskit_socket_iid },
+//           pthread : { sched_yield }, // PThread_T, // threaded version only
+         ];
+  exports[ out : PosixSocket_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "posix/sys/accept.c",
+    "posix/sys/bind.c",
+    "posix/sys/connect.c",
+    "posix/sys/getpeername.c",
+    "posix/sys/getsockname.c",
+    "posix/sys/getsockopt.c",
+    "posix/sys/listen.c",
+    "posix/sys/recv.c",
+    "posix/sys/recvfrom.c",
+    "posix/sys/send.c",
+    "posix/sys/sendto.c",
+    "posix/sys/setsockopt.c",
+    "posix/sys/shutdown.c",
+    "posix/sys/socket.c",
+    "posix/sys/socketpair.c",
+//  } with flags { flags posix, "-DTHREAD_SAFE" };
+  } with flags { flags posix };
+}
+
+/*# Create a socket factory using a tcp/ip factory and an initial
+    ethernet interface.  I think we can add more interfaces later.
+    Note: we assume that the factory isn't going to do much good until you
+    configure it so we require you to provide the initial configuration
+    info right away.
+#*/
+unit bsd_socket_factory = {
+  imports[ tcpip : FreeBSDNet_T,
+           ether_if : { ether_if },
+           ipinfo : { ipaddr, gateway, netmask },
+         ];
+  exports[ out : SocketFactory_T ];
+  initializer init for exports;
+  finalizer   fini for exports;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/bsd_socket_factory.c" 
+  } with flags examples;
+}
+
+/*# Provides the first ethernet device found in the device registry.
+#*/
+unit first_etherdev = {
+  imports[ device : OSEnvDevice_T,
+           iids   : { oskit_etherdev_iid },
+           malloc : Malloc_T,
+         ];
+  exports[ out : { etherdev, ethaddr } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits needs (imports - device) };
+  depends{ exports + inits needs {device.osenv_device_lookup_etherdev} };
+  depends{ finis needs {} }; // ToDo: is this right?
+  files{ "knit/c/first_etherdev.c" 
+  } with flags examples;
+}
+
+/*# Use this to wire a hostname into your system.  Typical usage:
+    gethostname = hostname(string,%{ const char* name = "bellies"; %});
+#*/
+unit hostname = {
+  imports[ string : String_T, name : { name } ];
+  exports[ out : { gethostname } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/gethostname.c" } with flags examples;
+}
+
+/*# Wraps a push function up as a netio COM object.
+#*/
+unit netio_obj = {
+  imports[ recv  : { push, push_data },
+           netio : NetIO_T,  // factory
+         ];
+  exports[ out : { nio } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/netio_obj.c" 
+  } with flags examples;
+}
+
+/*# Creates an instance of an ethernet device with COM interfaces.
+#*/
+unit open_etherdev = {
+  imports[ recv  : { recv_nio },
+           flags : { flags },
+           ether : { etherdev },
+         ];
+  exports[ out : { send_nio } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/open_etherdev.c" 
+  } with flags examples;
+}
+
+/*# Uses undocumented OSKIT_SO_NETIO interface to register a netio object
+    to receive packets.  It looks like fudp is the only socket implementation
+    that supports this so I'm wiring it all together in one thing.
+#*/
+unit fudp_obj = {
+  imports[ fudp  : FakeUDP_T,
+           src   : { ip_address, port },
+           send  : { send_nio },
+           net   : Net_T,
+         ];
+  exports[ out : { socket } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports needs imports - src };
+  depends{ inits   needs imports };
+  depends{ finis   needs {} }; // ToDo: Is this right?
+  files{ "knit/c/fudp_obj.c" 
+  } with flags examples;
+}
+
+/*# Discards any packets it receives.
+#*/
+unit pkt_discard = {
+  imports[];
+  exports[ out : { push, push_data } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/packet_discard.c"
+  } with flags examples;
+}
+
+/*# COM/netio version of pkt_discard.
+#*/
+unit packet_discard = {
+  imports[ netio : NetIO_T ];
+  exports[ nio : { nio } ];
+  link{
+    [nio] <- netio_obj <- [discard,netio];
+    [discard] <- pkt_discard <- [];
+  }
+}
+
+/*# Demo program: sends some kind of message to socket.
+#*/
+unit send_message_one_char_at_a_time = {
+  imports[ socket : { socket },
+           dst    : { ip_address, port },
+           net    : Net_T,
+           stdout : Stdout_T,
+         ];
+  exports[ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/example_fudp.c"
+  } with flags examples;
+}
+
+/*# Demo kernel equivalent to the fudp example.
+#*/
+unit example_fudp = {
+  imports[ src    : { ip_address, port },
+           dst    : { ip_address, port },
+           device : OSEnvDevice_T,
+           fudp   : FakeUDP_T,
+           netio  : NetIO_T,
+           net    : Net_T,
+           iids   : { oskit_etherdev_iid },
+           malloc : Malloc_T,
+           stdout : Stdout_T,
+         ];
+  exports[ main : Main_T ];
+  link{
+    [eth0]   <- first_etherdev <- [device,iids,malloc];
+    [recv]   <- packet_discard <- [netio];
+    [send]   <- open_etherdev  <- [{recv_nio=recv.nio},flags,eth0];
+    [flags]  <- %{ unsigned flags = 0; %};
+    [socket] <- fudp_obj       <- [fudp,src,send,net];
+    [main]   <- send_message_one_char_at_a_time <- [socket,dst,net,stdout];
+  }
+}
+
+/*# Initialise ARP table with entries for local machines (wolf, shaky, bellies).
+#*/
+unit arp_table = {
+  imports[ net : Net_T,
+           farp : FakeARP_T,
+         ];
+  exports[ dummy : { dummy } ];
+  initializer init for {farp.farp_lookup};
+  depends{ inits needs {farp.farp_add} + net };
+  files{ "knit/c/arp_table.c"
+  } with flags examples;
+}
+
+// mk_unit -o -n examples_socket_com examples/x86/socket_com.o
+/*# Socket demo using COM: Implements two simple servers.
+#*/
+unit examples_socket_com = {
+  imports[ exit   : Exit_T,
+           net    : Net_T,
+           panic  : Panic_T,
+           stdout : Stdout_T,
+           sprintf: Sprintf_T,
+           iids   : {
+                    oskit_etherdev_iid,
+                    oskit_stream_iid,
+                    },
+           string : String_T,
+           device : OSEnvDevice_T,
+           tcpip  : FreeBSDNet_T,
+           rtc    : OSEnvRTC_T,
+           clock  : OSEnvClock_T,
+           listener : CreateListener_T,
+           error  : Error_T,
+           ipinfo : { get_ipinfo },
+         ];
+  exports[ out : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/socket_com.c",
+  } with flags examples;
+}
+
+// mk_unit -o -n examples_socket_bsd examples/x86/socket_bsd.o
+/*# Socket demo using BSD interfaces: Implements two simple servers.
+#*/
+unit examples_socket_bsd = {
+  imports[ exit     : Exit_T,
+           net      : Net_T,
+           stdout   : Stdout_T,
+           sprintf  : Sprintf_T,
+           string   : String_T,
+           error    : Error_T,
+           fds      : PosixFD_T,
+           sockets  : PosixSocket_T,
+           time     : PosixTime_T,  // gettimeofday
+           sometime : SomeTime_T, 
+           gethostname : { gethostname },
+           signal   : { signal },
+           timer    : PosixTimer_T,
+         ];
+  exports[ out : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "examples/x86/socket_bsd.c",
+  } with flags examples;
+}
+
+/*# Generate a TCP/IP/ETH interface from an ethernet device.
+#*/
+unit ether_if = {
+  imports[ tcpip  : FreeBSDNet_T,
+           ether  : { etherdev },
+         ];
+  exports[ out : { ether_if } ];
+  initializer init for out;
+  finalizer   fini for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/ether_if.c"
+  } with flags examples;
+}
+
+/*# Use TCP/IP/ETH stack to implement bootp protocol.
+#*/
+unit do_bootp = {
+  imports[ tcpip  : FreeBSDNet_T,
+           ipinfo : { get_ipinfo },
+           ether  : { etherdev },
+         ];
+  exports[ out : { ipaddr, gateway, netmask }
+         ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/tcp_plus.c" 
+  } with flags examples;
+}
+
+// Or wire in the information by writing this instead.
+// (A version that read it from environment variables would also be cool.)
+//  tcp_info   = unit{
+//                 imports[];
+//                 exports[ out : { ipaddr, gateway, netmask } ];
+//                 depends{ {init},out : tcpip, ipinfo, ether };
+//                 %{
+//                   char ipaddr[20]  = "155.99.214.69";
+//                   char gateway[20] = "155.99.214.61";
+//                   char netmask[20] = "255.255.255.0";
+//                 %};
+//               };
+
+/************************************************************/
+// End
+/************************************************************/

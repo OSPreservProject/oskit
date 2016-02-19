@@ -1,0 +1,15 @@
+
+Directories: oskit/netbsd, and ALL subdirectories
+Target: liboskit_netbsd_fs.a
+Documentation: doc/fs.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+	NetBSD v1.2, NetBSD Project
+Description:  
+	This directory contains the NetBSD-specific glue
+	and the NetBSD source used for the NetBSD fs library.
+
+	fs/ contains the glue code for the NetBSD fs library.
+	
+	src/ contains a lightly modified subset of the 
+	NetBSD source tree.

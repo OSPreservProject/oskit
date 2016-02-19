@@ -1,0 +1,18 @@
+
+Directories: oskit/x11/video
+Target: liboskit_x11video.a
+Documentation: 
+Original Code Source: 
+	Flux Research Group, University of Utah
+	XFree86 Project
+Description:  
+	s3 video driver taken from XFree86 3.3.1
+
+	To use this driver, you'll have to include an XF86Config file
+	for it.  There is a sample one in this directory.  You'll
+	need to make sure that it's installed as /etc/XF86Config.
+	
+	This file is actually a subset of a standard XF86Config file.
+	It can only contain a Monitor, Device and Screen section.  The
+	easist way to make one is to take your standard XF86Config
+	file and remove everything except for those three sections.

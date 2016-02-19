@@ -1,0 +1,11 @@
+
+Directories: oskit/linux/src/, and ALL subdirectories
+Target: liboskit_linux_{dev,fs}.a
+Documentation: 
+Original Code Source: 
+	Linux v2.2.12, Linux Project
+Description:  
+	This directory contains lightly modified 
+	source from the Linux v2.2.12 kernel.
+	All of this code is covered by the
+	GNU General Public License.

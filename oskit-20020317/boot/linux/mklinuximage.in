@@ -1,0 +1,144 @@
+#!/bin/sh
+#
+# Copyright (c) 1994-1999,2001 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Boot Loader, which is free software,
+# also known as "open source;" you can redistribute it and/or modify it under
+# the terms of the GNU General Public License (GPL), version 2, as published
+# by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# This little script uses GNU ld to build a Linux 16-bit compressed boot image
+# from a set of boot modules.
+
+#
+# Usage: mklinuximage [options] [files ...]
+#
+# Options:
+#   -o filename
+#      Specify the output <filename> of the resulting Linux image. The
+#      default is "zImage" in the current directory.
+#   -stdin
+#      Take file specifications from stdin, in addition to those on the
+#      command line. This is useful when using another script to build
+#      a list of file specifications which can then be piped into this
+#      script.
+#   -save-temps
+#      Debugging option to save temporary files instead of deleting them
+#      after the image is built.
+#   [files ...]
+#      A list of file specifications in the format pathname1:pathname2,
+#      where pathname1 is the name of a local module which is placed in the
+#      boot image. If :pathname2 is provided, it specifies the name to give
+#      the module in the image. If :pathname2 is omitted, it defaults to
+#      pathname1.
+#
+#   The first file specification is typically the name of the Oskit kernel.
+#
+
+bootdir=${BOOTDIR-@prefix@/lib/boot}
+cc=${CC-@CC@}
+ld=${LD-@LD@}
+awk=${AWK-@AWK@}
+
+modules=
+outfile=zImage
+savetemps=
+
+# Parse the command-line options.
+until [ $# -eq 0 ]
+do
+	case "$1" in
+		-o ) outfile="$2"; shift; shift;;
+		-stdin) fromstdin="yes"; shift;;
+		-save-temps) savetemps="$1"; shift;;
+		* ) modules="$modules $1"; shift;;
+	esac
+done
+
+#
+# Read the rest of the modules from stdin.
+#
+if [ "X${fromstdin}" != "X" ]; then
+	read mod
+	while [ "X${mod}" != "X" ];
+	do
+		modules="$modules $mod"
+		read mod
+	done
+fi
+
+# Wrap each of the input files in a .o file.
+# At the same time, build an assembly language module
+# containing a table describing the boot modules.
+echo >$outfile.mods.S ".text; .long 0xf00baabb"
+files=
+for module in $modules; do
+	# Split out the associated string, if any.
+	file=`echo $module | sed -e 's,:.*$,,'`
+	string=`echo $module | sed -e 's,^[^:]*:,,'`
+	if test -z "$string"; then string=$file; fi
+
+	# Add this file to the list of files to be included,
+	# but only if it hasn't already been seen before
+	# (e.g., with a different attached string).
+	alreadythere=
+	for afile in $files; do
+		if [ $file = $afile ]; then alreadythere=yes; fi
+	done
+	if [ -z $alreadythere ]; then files="$files $file"; fi
+
+	# Convert all non-alphanumeric chars to underscores.
+	# The BFD binary input format will do the same thing
+	# to produce the symbol names that it "wraps around" the input files.
+	sym_name=`echo $module | sed -e 's,[^a-zA-Z0-9],_,g'`
+	echo >>$outfile.mods.S ".long _binary_$sym_name""_start"
+	echo >>$outfile.mods.S ".long _binary_$sym_name""_end"
+	echo >>$outfile.mods.S ".long cmdline_$sym_name"
+	echo >>$outfile.mods.S ".data"
+	echo >>$outfile.mods.S "cmdline_$sym_name: .ascii \"$string\\0\""
+	echo >>$outfile.mods.S ".text"
+done
+echo >>$outfile.mods.S ".long 0; .data; .align 4"
+
+# Assemble the module vector file.
+$cc -c -o $outfile.mods.o $outfile.mods.S || exit 1
+
+# Link the module vector file with the boot module files.
+# Use the binary bfd backend for both the input bmod files and the output file.
+# There is no meaning to "entry point address" in the binary backend,
+# but the linker doesn't know that, so it looks for _start and warns
+# when it doesn't find it (and falls back to zero).  To stifle the warning
+# we can define the `_start' symbol on the command line; I think this
+# works with all GNU ld versions.
+$ld -Ttext 0 -defsym _start=0 -oformat binary -o $outfile.tmp \
+	$outfile.mods.o -format binary $files -format default \
+	|| exit 1
+
+# Compress the whole output file as one big glob.
+gzip -9 <$outfile.tmp >$outfile.tmp.gz
+
+# Create the final boot image by tacking that onto the end of 'linuxboot.bin'.
+cat $bootdir/linuxboot.bin $outfile.tmp.gz >$outfile
+
+# Check size. We don't support large binary format yet.
+sizeoffile=`wc $outfile | $awk '{ print $3 }'`
+if test -n "$sizeoffile"; then
+    if test "$sizeoffile" -gt "500000"; then
+	echo "$0 WARNING: "
+	echo "   LILO cannot load large boot images like yours."
+	echo "   Use a multi-boot compliant loader like GRUB and mkmbimage."
+    fi
+fi
+
+if test -z "$savetemps"; then
+	rm -f $outfile.mods.S $outfile.mods.o $outfile.tmp $outfile.tmp.gz
+fi
+
+exit 0

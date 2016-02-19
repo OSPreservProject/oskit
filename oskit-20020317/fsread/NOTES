@@ -1,0 +1,22 @@
+To provide real POSIX semantics, need components for:
+
+- class to provide per-open interface from inode interface
+
+- security attribute registration/checking mechanism
+
+- file lock management
+
+- special file node management (fifo, dev, etc.)
+
+- stat information: timestamps, device/inode numbers, nlink
+
+
+Caveats on the FS readers:
+
+- absolute symbolic links are interpreted relative to the root of the FS,
+  since the FS readers have no notion of a "global root".
+
+- (ext2) the "sb" option is not supported, the super block is assumed to be
+  at block 1.
+
+- (minix) untested

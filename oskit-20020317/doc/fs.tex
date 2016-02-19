@@ -1,0 +1,1037 @@
+%
+% Copyright (c) 1997-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% -*- LaTeX -*-
+
+\label{fs}
+
+\section{Introduction}
+
+	The \oskit{} file system framework has parallel goals to the \oskit{}
+device driver framework; the framework provides a file system
+interface specification designed to allow existing filesystem
+implementations to be borrowed from well-established operating systems
+in source form and used mostly unchanged to provide file system
+support in new operating systems.  The framework is also designed to
+allow file systems to be implemented in diverse ways and then composed
+together.
+
+	The \oskit{} file system framework encompasses a collection of COM
+interfaces used by the client operating system to invoke the file
+system libraries, and a collection of interfaces used by the file
+system libraries to request services from the client operating system.
+The individual file system libraries supply additional interfaces to
+the client operating system for initialization, and may supply
+additional interfaces for supporting extended features unique to
+particular file system implementations.
+
+	The \oskit{} File,
+Directory and Open File COM interfaces inherit from several general COM
+interfaces, such as Stream, Absolute IO and POSIX IO\@.  The inheritance
+relationships among these COM interfaces are shown in Figure~\ref{fig-fs-hier}.
+Refer to Section~\ref{com} for more details on COM interfaces.
+
+\psfigure{fs-hier}{%
+Interface hierarchy.
+Solid lines indicate that the child
+interface directly inherits the methods of the parent interface.
+Dashed lines indicate that the child interface may optionally support
+the parent interface; this may be determined by querying the object.}
+
+\apiintf{oskit_principal}{Principal Interface}
+
+	The {\tt oskit_principal} COM interface defines an interface for
+obtaining identity information about a principal (aka subject or
+client).  The filesystem libraries obtain an {\tt oskit_principal} object for
+the current client by invoking {\tt oskit_get_call_context} on
+{\tt oskit_principal_iid}.
+
+	The {\tt oskit_principal} COM interface inherits from {\tt IUnknown},
+and has one additional method:
+\begin{icsymlist}
+\item[getid]
+	Obtain identity attributes of principal.
+\end{icsymlist}
+
+\api{getid}{Get the identity attributes of this principal}
+\begin{apisyn}
+	\cinclude{oskit/principal.h}
+
+	\funcproto oskit_error_t
+	oskit_principal_getid(oskit_principal_t *p,
+			     \outparam oskit_identity_t *out_id);
+\end{apisyn}
+\fstoos
+\begin{apidesc}
+	This method returns the identity attributes of this principal.
+	{\tt out_id} is a pointer to an {\tt oskit_identity_t} structure defined
+	as follows:
+	\cstruct{oskit_identity}{
+	    	oskit_uid_t uid;		/* effective user id */
+		oskit_gid_t gid;		/* effective group id */
+		oskit_u32_t ngroups;		/* number of groups */
+		oskit_u32_t *groups;		/* supplemental groups */
+	};
+\end{apidesc}
+\begin{apiparm}
+	\item[p]
+		The principal whose identity is desired.
+	\item[out_id]
+		The identity attributes of this principal.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_filesystem}{File System Interface}
+
+The {\tt oskit_filesystem} COM interface defines an interface for
+operating on a filesystem, which is a logical collection of files and
+a tree-structured namespace with a single root.  The filesystem
+itself exists independent of any given namespace,
+for there is no notion of mounts in this interface.
+That functionality must be implemented at a higher level.
+
+The {\tt oskit_filesystem} COM interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{icsymlist}
+\item[statfs]
+	Get attributes of this filesystem
+\item[sync]	
+	Write this filesystem's data to permanent storage
+\item[getroot]
+	Get this filesystem's root directory
+\item[remount]
+	Update this filesystem's mount flags 
+\item[unmount]
+	Forcibly unmount this filesystem
+\item[lookupi]
+	Lookup a file by inode number
+\end{icsymlist}
+
+\api{statfs}{Get attributes of this filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_statfs(oskit_filesystem_t *f, 
+			       \outparam oskit_statfs_t *out_stats);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method returns the attributes of this filesystem.
+	{\tt out_stats} is a pointer to an {\tt oskit_statfs_t} structure 
+	defined	as follows:
+	\cstruct{oskit_statfs}{
+	    oskit_u32_t bsize;   /* file system block size */
+	    oskit_u32_t frsize;  /* fundamental file system block size */
+	    oskit_u32_t blocks;  /* total blocks in fs in units of frsize */
+	    oskit_u32_t bfree;   /* free blocks in fs */
+	    oskit_u32_t bavail;  /* free blocks avail to non-superuser */
+	    oskit_u32_t files;   /* total file nodes in file system */
+	    oskit_u32_t ffree;   /* free file nodes in fs */
+	    oskit_u32_t favail;  /* free file nodes avail to non-superuser */
+	    oskit_u32_t fsid;    /* file system id */
+	    oskit_u32_t flag;    /* mount flags */	
+	    oskit_u32_t namemax; /* max bytes in a file name */
+	};
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem whose attributes are desired.
+	\item[out_stats]
+		The attributes of the specified filesystem.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{sync}{Synchronize in-core filesystem data with permanent storage}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_sync(oskit_filesystem_t *f, 
+			      oskit_bool_t wait); 	
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method writes all of this filesystem's data back to permanent
+	storage.  If {\tt wait} is {\tt TRUE}, then the call does not return
+	until all pending data has been completely written.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem to sync.
+	\item[wait]
+		{\tt TRUE} if the call should wait for completion.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getroot}{Return a reference to the root directory of this filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_getroot(oskit_filesystem_t *f, 
+			       \outparam oskit_dir_t **out_dir);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method returns a reference to the root directory of
+	this filesystem.  {\tt out_dir} is a pointer to the
+	{\tt oskit_dir} COM interface for the root directory.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem whose root directory is desired.
+	\item[out_dir]
+		The {\tt oskit_dir} COM interface for the root directory.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{remount}{Update the mount flags of this filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_remount(oskit_filesystem_t *f, 
+				 oskit_u32_t flags);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method changes the mount flags associated
+	with this filesystem.  For example,
+	this method might be used to change a filesystem
+	from read-only to read-write, or vice versa.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem whose flags are to be changed.
+	\item[flags]
+		The new mount flags value.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{unmount}{Forcibly unmount this filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_unmount(oskit_filesystem_t *f); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method forcibly unmounts this
+	filesystem.  Ordinarily, a filesystem is
+	unmounted when the last reference to it is
+	released; in contrast, this method forces
+	an unmount regardless of external references
+	to the filesystem, and is consequently unsafe.
+	Subsequent attempts to use references to the
+	filesystem or to use references to files within
+	the filesystem may yield undefined results.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem to be forcibly unmounted.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{lookupi}{Lookup a file by inode number}
+\begin{apisyn}
+	\cinclude{oskit/fs/filesystem.h}
+
+	\funcproto oskit_error_t
+	oskit_filesystem_lookupi(oskit_filesystem_t *f, oskit_ino_t ino,
+				\outparam oskit_file_t **out_file);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method looks up a file given its inode number.
+	If the inode number is invalid,
+	the behavior is undefined.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The filesystem to find the inode in.
+
+	\item[ino]
+		The inode number of the file to find.
+
+	\item[out_file]
+		Upon success, will point to a oskit_file_t for the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_file}{File Interface}
+\label{oskit-file-intf}
+
+	The {\tt oskit_file} COM interface defines an interface for operating
+on a file.  The interface does not imply any per-open state; per-open
+methods are defined by the {\tt oskit_openfile} COM interface.
+
+	The {\tt oskit_file} COM interface inherits from the {\tt oskit_posixio} 
+COM interface, and has the following additional methods:
+\begin{icsymlist}
+\item[sync]
+	Write this file's data and metadata to permanent storage.
+\item[datasync]
+	Write this file's data to permanent storage.
+\item[access]
+	Check accessibility of this file.
+\item[readlink]
+	Read the contents of this symbolic link.
+\item[open]
+	Create an open instance of this file.
+\item[getfs]
+	Get the filesystem in which this file resides.
+\end{icsymlist}
+
+	Additionally, an {\tt oskit_file} object may export a {\tt
+oskit_absio} COM interface; this may be determined by querying the
+object.
+
+\api{sync}{Write this file's data and metadata to permanent storage}
+\begin{apisyn}
+	\cinclude{oskit/fs/file.h}
+
+	\funcproto oskit_error_t
+	oskit_file_sync(oskit_file_t *f, oskit_bool_t wait); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method synchronizes the in-core copy of this
+	file's data and metadata with the on-disk copy.
+	If {\tt wait} is {\tt TRUE}, then the call does not return
+	until all pending data has been completely written.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The file to sync.
+	\item[wait]
+		{\tt TRUE} if the call should wait for completion.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{datasync}{Write this file's data to permanent storage}
+\begin{apisyn}
+	\cinclude{oskit/fs/file.h}
+
+	\funcproto oskit_error_t
+	oskit_file_datasync(oskit_file_t *f, oskit_bool_t wait); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method synchronizes the in-core copy of this
+	file's data with the on-disk copy.  The file
+	metadata need not be sychronized by this method.
+	If {\tt wait} is {\tt TRUE}, then the call does not return
+	until all pending data has been completely written.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The file to sync.
+	\item[wait]
+		{\tt TRUE} if the call should wait for completion.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{access}{Check accessibility of this file}
+\begin{apisyn}
+	\cinclude{oskit/fs/file.h}
+
+	\funcproto oskit_error_t
+	oskit_file_access(oskit_file_t *f, oskit_amode_t mask); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method checks whether the form of access
+	specified by {\tt mask} would be granted. 	
+	{\tt mask} may be any combination of {\tt OSKIT_R_OK} (read access),
+	{\tt OSKIT_W_OK} (write access), or {\tt OSKIT_X_OK} (execute access).
+	If the access would not be granted, then this method will return
+	the error that would be returned if the	actual access were attempted.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The file whose accessibility is to be checked.
+	\item[mask]
+		The access mask.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{readlink}{Read the contents of this symbolic link}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_file_readlink(oskit_file_t *f, char *buf, oskit_u32_t len,
+			  \outparam oskit_u32_t *out_actual);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	If this file is a symbolic link, then this method
+	reads the contents of the symbolic link into {\tt buf}.	
+	No more than {\tt len} bytes will be read.  {\tt out_actual} 
+	will be set to the actual number of bytes read.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The symbolic link file.
+	\item[buf]
+		The buffer into which the contents are to be copied.
+	\item[len]
+		The maximum number of bytes to read.
+	\item[out_actual]
+		The actual bytes read from the symlink.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+
+	If the file is not a symbolic link, then {\tt OSKIT_E_NOTIMPL}
+	is returned.
+\end{apiret}
+
+
+\api{open}{Create an open instance of this file}
+\label{fs-file-open}
+\begin{apisyn}
+	\cinclude{oskit/fs/file.h}
+	\\
+	\cinclude{oskit/fs/openfile.h}
+
+	\funcproto oskit_error_t
+	oskit_file_open(oskit_file_t *f, 
+	               oskit_oflags_t flags,
+		       \outparam oskit_openfile_t **out_openfile);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method returns an {\tt oskit_openfile} COM interface
+	for an open instance of this file.
+	{\tt flags } specifies the file open flags, as
+	defined in {\tt <oskit/fs/file.h>}.  If {\tt OSKIT_O_TRUNC}
+	is specified, then the file will be truncated
+	to zero length. 
+
+	This method may only be used on regular 	
+	files and directories.   Directories
+	may not be opened with {\tt OSKIT_O_WRONLY},
+	{\tt OSKIT_O_RDWR} or {\tt OSKIT_O_TRUNC}.
+
+	This method may return success but set
+	{\tt *out_openfile} to {\tt NULL}, indicating that
+	the requested operation is allowed but the
+	filesystem does not support per-open state;
+	the client operating system must provide this
+	functionality.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The file to open.
+	\item[flags]
+		The open flags.
+	\item[out_openfile]	
+		The {\tt oskit_openfile} COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getfs}{Get the filesystem in which this file resides}
+\begin{apisyn}
+	\cinclude{oskit/fs/file.h}
+
+	\funcproto oskit_error_t
+	oskit_file_getfs(oskit_file_t *f, 
+	                \outparam oskit_filesystem_t **out_fs);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	Returns the {\tt oskit_filesystem} COM interface for
+	the filesystem in which this file resides.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The file whose filesystem is desired.
+	\item[out_fs]
+		The filesystem in which the file resides.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_dir}{Directory Interface}
+
+	The {\tt oskit_dir} COM interface defines an interface for operating
+on a directory.  The interface does not imply any per-open state; per-open
+methods are defined by the {\tt oskit_openfile} COM interface.
+
+	The {\tt oskit_dir} COM interface inherits from the {\tt oskit_file} COM
+interface, and has the following additional methods:
+\begin{csymlist}
+\item[lookup]
+	Lookup a file in this directory.
+\item[create]
+	Create a regular file in this directory.
+\item[link]
+	Link a file into this directory.
+\item[unlink]
+	Unlink a file from this directory.
+\item[rename]
+	Rename a file from this directory.
+\item[mkdir]
+	Create a directory in this directory.
+\item[rmdir]
+	Remove a directory from this directory.
+\item[getdirentries]
+	Read entries from this directory.
+\item[mknod]
+	Create a special file in this directory.
+\item[symlink]
+	Create a symlink in this directory.
+\item[reparent]
+	Create a virtual directory from this directory.
+\end{csymlist}
+
+	Additionally, an {\tt oskit_dir} object may export a {\tt
+oskit_absio} COM interface; this may be determined by querying the
+object.
+
+	All name parameters to directory methods must be a single
+component, ie an entry in one of the specified directories.  With the
+exception of {\tt rename}, name parameters always refer to entries in
+the target directory itself.
+
+\api{lookup}{Look up a file in this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_lookup(oskit_dir_t *d, const~char *name, 
+			\outparam oskit_file_t **out_file); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method returns the {\tt oskit_file} COM interface
+	for the file named by {\tt name} in this directory.
+	The {\tt name} may only be a single component;
+	multi-component lookups are not supported.
+	If the file is a symbolic link, then {\tt out_file}
+	will reference the symbolic link itself.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory to search.
+	\item[name]
+		The name of the file.
+	\item[out_file]
+		The {\tt oskit_file} COM interface for the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{create}{Create a regular file in this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_create(oskit_dir_t *d, const~char *name, 
+			oskit_bool_t excl, oskit_mode_t mode,
+			\outparam oskit_file_t **out_file); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method is the same as {\tt oskit_dir_lookup}, except
+	that if the file does not exist, then a regular file
+	will be created with the specified {\tt name} and
+	{\tt mode}.
+
+	If a file with {\tt name} already exists, and 	
+	{\tt excl} is {\tt TRUE}, then {\tt OSKIT_EEXIST} will be
+	returned.
+
+	The {\tt name} may only be a single component;
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory to search.
+	\item[name]
+		The name of the file.
+	\item[excl]
+		{\tt TRUE} if an error should be returned if the file exists
+	\item[mode]
+		The file mode to use if creating a new file.
+	\item[out_file]
+		The {\tt oskit_file} COM interface for the file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{link}{Link a file into this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_link(oskit_dir_t *d, const~char *name, 
+	              oskit_file_t *file); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method adds an entry for {\tt file} into this directory,
+	using {\tt name} for the new directory entry.
+	Typically, this is only supported if {\tt file}
+	resides in the same filesystem as {\tt d}.
+
+	{\tt file} may not be a symbolic link.  
+
+	The {\tt name} may only be a single component;
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory to search.
+	\item[name]
+		The name for the new link.
+	\item[file]
+		The file to be linked.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{unlink}{Unlink a file from this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_unlink(oskit_dir_t *d, const~char *name); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method removes the directory entry for {\tt name}
+	from {\tt d}.
+
+	The {\tt name} may only be a single component;
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory to search.
+	\item[name]
+		The name of the file to be unlinked.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{rename}{Rename a file from this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_rename(oskit_dir_t *old_dir, const~char *old_name,
+			 oskit_dir_t *new_dir, const~char *new_name); 
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method atomically links the file named by {\tt old_name} in 
+	{\tt old_dir} into {\tt new_dir}, using {\tt new_name} for the
+	new directory entry, and unlinks {\tt old_name} from {\tt old_dir}. 
+
+	If a file named {\tt new_name} already exists in {\tt new_dir}, 
+	then it is first removed.  In this case, the source and target files
+	must either both be directories or both be non-directories,
+	and if the target file is a directory, it must be empty.
+
+	Typically, this is only supported if {\tt new_dir}
+	resides in the same filesystem as {\tt old_dir}.
+
+	The {\tt old_name} and {\tt new_name} may each only be 
+	a single component; multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[old_dir]
+		This directory.
+	\item[old_name]
+		The name of the file to be renamed.
+	\item[new_dir]
+		The target directory.
+	\item[new_name]
+		The name for the new directory entry.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{mkdir}{Create a subdirectory in this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_mkdir(oskit_dir_t *d, const~char *name,	
+		       oskit_mode_t mode);	
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method creates a new subdirectory in this directory,
+	with the specified {\tt name} and {\tt mode}.
+
+	The {\tt name} may only be a single component; 
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[dir]
+		The directory in which to create the subdirectory.
+	\item[name]
+		The name of the new subdirectory.
+	\item[mode]
+		The mode for the new subdirectory.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{rmdir}{Remove a subdirectory from this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_rmdir(oskit_dir_t *d, const~char *name);	
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method removes the subdirectory named {\tt name} 
+	from this directory.  Typically, this is only
+	supported if the subdirectory is empty.
+
+	The {\tt name} may only be a single component; 
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[dir]
+		The directory in which the subdirectory resides.
+	\item[name]
+		The name of the subdirectory.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getdirentries}{Read one or more entries from this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+	\cinclude{oskit/fs/dirents.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_getdirentries(oskit_dir_t *d, 
+				oskit_u32_t *inout_ofs,
+				oskit_u32_t nentries,
+				\outparam oskit_dirents_t **out_dirents);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method reads one or more entries from this
+	directory.  On entry, {\tt inout_ofs} contains the	
+	offset of the first entry to be read.  Before
+	returning, this method updates the value at 
+	{\tt inout_ofs} to contain the offset of the
+	next entry after the last entry	returned in
+	{\tt out_dirents}.  The returned value of 
+	{\tt inout_ofs} is opaque; it should only be used 
+	in subsequent calls to this method.
+
+	This method will return at least {\tt nentries}
+	entries if there are at least that many entries
+	remaining in the directory; however, this method
+	may return more entries.
+
+	The return value {\tt out_dirents} will contain a pointer to
+	an {\tt oskit_dirents_t} COM object, which holds the individual
+	directory entries. The number of actual entries returned can be
+	determined with the {\tt oskit_dirents_getcount} method. Each
+	successive directory entry is accessed using the
+	{\tt oskit_dirents_getnext} method. Once all the entries have
+	been read, the dirents COM object should be released with the
+	{\tt oskit_dirents_release} method.
+
+	The data structure to retrieve the individual entries is:
+	\cstruct{oskit_dirent}{
+		oskit_size_t namelen;		/* name length */
+		oskit_ino_t ino;		/* entry inode */
+		char name[0];			/* entry name */
+	};
+
+	The {\tt namelen} field should be initialized to the amount of
+	storage available for the name. Upon return from the getnext
+	method, {\tt namelen} will be set to the actual length of the
+	name. The pointer that is passed should obviously be large
+	enough to hold the size of the structure above, plus the
+	additional size of the character array.
+
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory to read.
+	\item[inout_ofs]
+		On entry, the offset of the first entry to read.
+		On exit, the offset of the next entry to read.
+	\item[nentries]
+		The minimum desired number of entries.
+	\item[out_dirents]
+		The directory entries oskit_dirents_t COM object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{mknod}{Create a special file node in this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_mknod(oskit_dir_t *d, const~char *name,	
+		       oskit_mode_t mode, oskit_dev_t dev);	
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method creates a device special file in this directory,
+	with the specified {\tt name} and file {\tt mode}, 
+	and with the specified device number {\tt dev}.  The
+	device number is opaque to the filesystem library.
+
+	The {\tt name} may only be a single component; 
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory in which to create the node
+	\item[name]
+		The name of the new node.
+	\item[mode]
+		The mode for the new node.
+	\item[dev]
+		The device number for the new node.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{symlink}{Create a symbolic link in this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_symlink(oskit_dir_t *d, const~char *link_name,	
+		         char *dest_name);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method creates a symbolic link in this directory,
+	named {\tt link_name}, with contents {\tt dest_name}.
+
+	The {\tt link_name} may only be a single component; 
+	multi-component lookups are not supported.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory in which to create the symlink.
+	\item[link_name]
+		The name of the new symlink.
+	\item[dest_name]
+		The contents of the new symlink.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{reparent}{Create a virtual directory from this directory}
+\begin{apisyn}
+	\cinclude{oskit/fs/dir.h}
+
+	\funcproto oskit_error_t
+	oskit_dir_reparent(oskit_dir_t *d, oskit_dir_t *parent,
+			  \outparam oskit_dir_t **out_dir);
+
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method creates a virtual directory {\tt out_dir}
+	which refers to the same underlying directory as {\tt d}, 
+	but whose logical parent directory is {\tt parent}.
+	If {\tt parent} is {\tt NULL}, then the logical parent
+	directory of {\tt out_dir} will be itself.
+
+	Lookups of the parent directory entry ('..') in the virtual
+	directory will return a reference to the logical parent
+	directory.
+
+	This method may be used to provide equivalent
+	functionality to the Unix {\tt chroot} operation.
+\end{apidesc}
+\begin{apiparm}
+	\item[d]
+		The directory 
+	\item[parent]
+		The logical parent directory
+	\item[out_dir]
+		The {\tt oskit_dir} COM interface for the virtual directory
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_openfile}{Open File Interface}
+
+	The {\tt oskit_openfile} COM interface defines an interface for
+operating on an open instance of a file.
+
+	The {\tt oskit_openfile} COM interface inherits from the {\tt
+oskit_stream} COM interface, and has the following additional method:
+\begin{icsymlist}
+\item[getfile]
+	Get the underlying file object to which this open file refers.
+\end{icsymlist}
+
+	Additionally, an {\tt oskit_openfile} object may export a {\tt
+oskit_absio} COM interface; this may be determined by querying the
+object.
+
+\api{getfile}{Get the underlying file object to which this open file refers}
+\begin{apisyn}
+	\cinclude{oskit/fs/openfile.h}
+
+	\funcproto oskit_error_t
+	oskit_openfile_getfile(oskit_openfile_t *f,
+			      \outparam oskit_file_t **out_file);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This method returns the {\tt oskit_file} COM interface for
+	the underlying file object to which this open file refers.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The open file whose underlying file is desired.
+	\item[out_file]
+		The {\tt oskit_file} COM interface for the underlying file.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apisec{Dependencies on the Client Operating System}
+
+	This section describes the interfaces which must be provided
+by the client operating system to the filesystem library.
+
+	These interfaces consist of:
+\begin{icsymlist}
+\item[oskit_get_call_context]
+	Obtain information about client context.
+\end{icsymlist}
+
+\api{oskit_get_call_context}{Get the caller's context}
+\begin{apisyn}
+	\cinclude{oskit/com.h}
+
+	\funcproto oskit_error_t
+	oskit_get_call_context(oskit_guid_t *iid,
+			      \outparam void **out_if);	
+\end{apisyn}
+\fstoos
+\begin{apidesc}
+	This function returns the requested COM interface
+	for the current caller.
+
+	Typically, this is used to obtain the {\tt oskit_principal}
+	object for the current client of the filesystem library.	
+\end{apidesc}
+\begin{apiparm}
+	\item[iid]
+		The desired COM interface identifier.
+	\item[out_if]
+		The COM interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+

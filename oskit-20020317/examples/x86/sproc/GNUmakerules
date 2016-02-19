@@ -1,0 +1,115 @@
+#
+# Copyright (c) 2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_examples_x86_sproc_makerules_
+_oskit_examples_x86_sproc_makerules__ = yes
+
+USER_PROGS = usermain_testsproc usermain_hello usermain_malloc
+BMODS = kernel swapfile $(USER_PROGS)
+TARGETS = Image
+
+all: $(TARGETS)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/x86/sproc
+
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/c
+
+CLEAN_FILES +=	$(TARGETS) $(BMODS) *.gdb
+OSKIT_CFLAGS += -DOSKIT
+
+#
+# The C library is made up of several pieces. The core library, the
+# POSIX interface that converts syscalls to COM, and the actual COM 
+# interfaces. Note that the C library is built with the COM library.
+#
+CLIB   = -loskit_c
+#CLIB_P = -loskit_c_p -loskit_gprof -loskit_c_p -loskit_kern_p
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+THRDLIBS   = -loskit_threads -loskit_netbsd_uvm 
+THRDLIBS_P   = -loskit_threads_p -loskit_netbsd_uvm_p
+CLIB   = -loskit_freebsd_c_r -loskit_com -loskit_threads
+CLIB_P = -loskit_freebsd_c_r_p -loskit_com_p -loskit_threads_p -loskit_gprof \
+	-loskit_freebsd_c_r_p -loskit_kern_p
+
+kernel: $(OBJDIR)/lib/multiboot.o kernel.o kern_syscall.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_fsnamespace \
+		-loskit_memfs -loskit_sproc \
+		-loskit_netbsd_uvm -loskit_exec -loskit_memfs \
+		$(THRDLIBS) -loskit_clientos \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+kernel_p.gdb: $(OBJDIR)/lib/multiboot.o kernel.po kern_syscall.po $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
+	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup_p -loskit_fsnamespace_p \
+		-loskit_memfs_p -loskit_sproc_p \
+		-loskit_netbsd_uvm_p -loskit_exec_p -loskit_memfs_p \
+		$(THRDLIBS_P) -loskit_clientos_p \
+		-loskit_realtime_p -loskit_kern_p -loskit_lmm_p \
+		$(CLIB_P) \
+		$(OBJDIR)/lib/crtn.o
+
+kernel_p: kernel_p.gdb
+	cp kernel_p.gdb kernel_p
+	strip kernel_p
+
+#
+# Build user mode programs
+# 
+USER_CRT  = user_crt.o
+USER_OBJS = user_syscall.o user_mem.o user_morecore.o
+
+usermain_testsproc: $(USER_CRT) usermain_testsproc.o $(USER_OBJS)
+	$(CC) -nostdlib -static $(USER_CRT) usermain_testsproc.o $(USER_OBJS) \
+		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
+		-L../../../lib -loskit_c -loskit_lmm
+
+usermain_hello: $(USER_CRT) usermain_hello.o $(USER_OBJS)
+	$(CC) -nostdlib -static $(USER_CRT) usermain_hello.o $(USER_OBJS) \
+		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
+		-L../../../lib -loskit_c -loskit_lmm
+
+usermain_malloc: $(USER_CRT) usermain_malloc.o $(USER_OBJS)
+	$(CC) -nostdlib -static $(USER_CRT) usermain_malloc.o $(USER_OBJS) \
+		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
+		-L../../../lib -loskit_c -loskit_lmm
+
+#
+# Small swapfile (1MB)
+#
+swapfile:
+	dd if=/dev/zero of=$@ count=2048
+
+#
+# Bind all together!
+#
+Image: $(BMODS)
+	echo "use 'mkmb2 $(BMODS)' to build the bmod"
+
+Image_p: kernel_p kernel_p.gdb swapfile $(USER_PROGS)
+	echo "use 'mkmb2 -o $@ kernel_p kernel_p.gdb:a.out swapfile $(USER_PROGS)' to build a bmod"
+
+endif

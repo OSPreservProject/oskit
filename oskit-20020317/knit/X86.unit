@@ -1,0 +1,212 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// X86 specific code
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+// mk_unit -o -n libc_longjmp libc/setjmp.o
+unit libc_longjmp = {
+  imports[];
+  exports[ out : LongJmp_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/x86/setjmp.S" } with flags { flags libc, flags asm };   
+}
+
+// mk_unit -o -n base_reset kern/reset.o kern/kb_command.o
+unit base_reset = {
+  imports[ vm : VM_T ];
+  exports[ out : Reset_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/reset.c",
+         "kern/x86/pc/kb_command.c",
+  } with flags kern;
+}
+
+/************************************************************/
+// 80x86 CPU support
+/************************************************************/
+
+bundletype CPU_T =
+{ include "${BUILDDIR}/oskit/machine/base_cpu.h",
+  base_cpu_load,
+  base_cpu_init,
+  base_cpuid,
+  cpu_setup,
+} with flags kern
+
+// Task State Segment
+bundletype TSS_T =
+{ include "${BUILDDIR}/oskit/machine/base_tss.h",
+  base_tss,
+  base_tss_init,  // initialise base_tss
+  base_tss_load,  // load base_tss into processor
+  tss_dump,
+} with flags kern
+
+bundletype Gate_T =
+{ include "${BUILDDIR}/oskit/machine/gate_init.h",
+  gate_init      // initialiser?
+} with flags kern
+
+// Global Descriptor Table - controls segmentation
+bundletype GDT_T =
+{ include "${BUILDDIR}/oskit/machine/base_gdt.h",
+  base_gdt
+// , initializer base_gdt_init  // fills in base_gdt
+, base_gdt_init
+, base_gdt_load              // loads base_gdt into the GDTR
+} with flags kern
+
+// 16 bit version of GDT_T
+// ToDo: merge with GDT_T
+bundletype GDT16_T =
+{ include "${BUILDDIR}/oskit/machine/base_gdt.h",
+  i16_base_gdt_load
+// , initializer i16_base_gdt_init
+} with flags kern
+
+unit x86 = {
+  imports[ segments   : Segments_T,
+           anno       : Anno_T, // anno_find_lower, anno_intr, anno_find_exact, anno_trap
+           panic      : Panic_T,
+           stdout     : Stdout_T,
+           string     : String_T, // memset
+           softint    : SoftInt_T,
+         ];
+  exports[ cpu  : CPU_T,
+           gate : Gate_T,
+           pic  : PIC_T,
+           idt  : IDT_T,
+           trap : Trap_T,
+           tss  : TSS_T,
+           gdt  : GDT_T,
+           irq  : IRQ_T,
+         ];
+  initializer cpu.cpu_setup for exports + cpuid;
+  link{
+    [cpu]  <- base_cpu  <- [string, gdt, idt, tss, trap, irq, cpuid];
+    [cpuid] <- cpuid    <- [string];
+    [gate] <- gate      <- [];
+    [pic]  <- base_pic  <- [panic];
+    [idt]  <- base_idt  <- [segments];
+    [irq]  <- base_irq  <- [anno,idt,gate,pic,panic,stdout,softint];
+    [trap] <- base_trap <- [anno,idt,gate,panic,stdout];
+    [tss]  <- base_tss  <- [gdt,stdout];
+    [gdt]  <- base_gdt  <- [tss,segments]
+  }
+}
+
+// mk_unit -o -n base_cpu kern/base_cpu_init.o kern/base_cpu_load.o
+unit base_cpu = {
+  imports[ string : String_T, // memset   (unused????)
+           gdt    : { base_gdt_load, base_gdt_init },
+           idt    : { base_idt_load },
+           tss    : { base_tss_load, base_tss_init },
+           trap   : { base_trap_init },
+           irq    : { base_irq_init },
+           cpuid  : { cpuid },
+         ];
+  exports[ cpu : CPU_T ];
+  depends{ {cpu.base_cpu_init,cpu.base_cpuid} needs {gdt.base_gdt_init,irq.base_irq_init,trap.base_trap_init,tss.base_tss_init, cpuid.cpuid} };
+  depends{ {cpu.base_cpu_load} needs {gdt.base_gdt_load,idt.base_idt_load,tss.base_tss_load} };
+  files{ 
+    "kern/x86/base_cpu_init.c", 
+    "kern/x86/base_cpu_load.c",
+    "kern/x86/base_fpu_init.c",
+    "knit/c/cpu_setup.c",
+  } with flags kern
+}
+
+// mk_unit -o -n cpuid kern/cpuid.o
+unit cpuid = {
+  imports[ string : String_T ];
+  exports[ out : { cpuid } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/cpuid.c" }
+   with flags kern
+}
+
+// mk_unit -o -n base_tss kern/base_tss.o kern/base_tss_load.o kern/base_tss_init.o kern/tss_dump.o
+unit base_tss = {
+  imports[ gdt    : { base_gdt }
+          , stdout : Stdout_T
+         ];
+  exports[ tss : TSS_T ];
+//  initializer base_tss_init for { base_tss}
+  depends{ {tss.base_tss}      needs {} };
+  depends{ {tss.base_tss_init} needs {tss.base_tss} };
+  depends{ {tss.tss_dump}      needs stdout };    
+  depends{ {tss.base_tss_load} <  {gdt.base_gdt} };  // writes into base_gdt
+  files{ "kern/x86/base_tss.c",
+         "kern/x86/base_tss_load.c",
+         "kern/x86/base_tss_init.c",
+         "kern/x86/tss_dump.c",
+  } with flags kern
+}
+
+// mk_unit -o -n gate kern/gate_init.o
+unit gate = {
+  imports[];
+  exports[ out : Gate_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/gate_init.c" }
+   with flags kern;
+}
+
+
+// mk_unit -o -n gdt kern/base_gdt.o kern/base_gdt_load.o kern/base_gdt_init.o
+unit base_gdt = {
+  imports[ tss      : TSS_T,  // base_tss
+           segments : Segments_T,
+         ];
+  exports[ gdt : GDT_T ];
+//  initializer base_gdt_init for {base_gdt_load};
+  depends{ {gdt.base_gdt}      needs {} };
+  depends{ {gdt.base_gdt_load} needs {gdt.base_gdt} + segments };
+  depends{ {gdt.base_gdt_init} needs {gdt.base_gdt,tss.base_tss} + segments };
+  files{ "kern/x86/base_gdt.c",
+         "kern/x86/base_gdt_load.c",
+         "kern/x86/base_gdt_init.c",
+  } with flags kern;
+}
+
+/*#
+A minimal Task State Segment because the x86 requires you to have one.
+
+o No I/O bitmap.
+
+o Stack Segment 0 = KERNEL_DS
+
+o Stack Pointer 0 = current stack pointer (remember to change it later)
+
+Alternative (richer) versions exist.
+#*/
+unit null_segments = {
+  imports[];
+  exports[ out : { base_tss
+                 , base_tss_init
+                 , extends Segments_T
+                 }
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/base_tss.c",
+         "kern/x86/base_tss_init.c",
+         "kern/x86/linear_base_va.c",
+  } with flags kern;
+}
+

@@ -1,0 +1,199 @@
+%
+% Copyright (c) 1997-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% -*- LaTeX -*-
+
+\label{freebsd-dev}
+
+\section{Introduction}
+
+{\bf This chapter is woefully incomplete. }
+The \oskit{} \freebsd{} device library provides an infrastructure for using
+unmodified \freebsd{} 2.1.7 device drivers.
+
+\section{Supported Devices}
+\label{freebsd-dev-sup}
+
+The \freebsd{} device library currently supports only the system console and
+a few ISA-based serial port interfaces all exporting the {\tt oskit_ttystream}
+interface.
+Only the system console and PS/2 mouse have been tested.
+
+Following is a list of supported drivers.
+The tag is the name used by the device library to refer to the devices
+(see Section~\ref{fdev-naming} for details on device naming).
+\begin{itemize}
+\item[sc]
+	PC system console.
+\item[sio]
+	PC serial port.
+\item[cx]
+	ISA bus Cronyx-Sigma serial port adapter.
+\item[cy]
+	ISA bus Cyclades Cyclom-Y serial board.
+\item[rc]
+	ISA bus RISCom/8 serial board.
+\item[si]
+	ISA bus Specialix serial line multiplexor.
+\item[mse]
+	Bus mouse.
+\item[psm]
+	PS/2 mouse.
+\end{itemize}
+
+\apisec{Header Files}
+
+\api{freebsd.h}{common device driver framework definitions}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+\end{apisyn}
+\begin{apidesc}
+	Contains common definitions and function prototypes for
+	the \oskit's \freebsd{} device interfaces described in the next section.
+\end{apidesc}
+
+\apisec{Interfaces}
+
+\api{oskit_freebsd_init}{Initialize and \freebsd{} device driver support package}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto void oskit_freebsd_init(void);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Initializes the support code for \freebsd{} device drivers.
+
+	Currently the {\tt oskit_freebsd_init_\emph{driver}} routines
+	take care of invoking any required freebsd device initialization
+	functions, including this one.  This may change	in the future.
+% 	{\tt oskit_freebsd_init} should be called before any other
+%	{\tt oskit_freebsd_*} interface.
+
+\end{apidesc}
+
+\api{oskit_freebsd_init_devs}{Initialize and register all \freebsd{} device drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto void oskit_freebsd_init_devs(void);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Initialize and register all available \freebsd{} device drivers.
+
+	Warning messages will be printed with {\tt osenv_log} for drivers
+	which cannot be initialized but the initialization process will
+	continue.
+\end{apidesc}
+\begin{apirel}
+	{\tt osenv_log}
+\end{apirel}
+
+\api{oskit_freebsd_init_isa}{Initialize and register all \freebsd{} ISA bus device drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto void oskit_freebsd_init_isa(void);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Initialize and register all available \freebsd{} ISA bus device drivers.
+	See {\tt <oskit/dev/freebsd_isa.h>} for the currently available
+	devices.
+
+	Warning messages will be printed with {\tt osenv_log} for drivers
+	which cannot be initialized but the initialization process will
+	continue.
+
+	Currently the {\tt oskit_freebsd_init_\emph{driver}} routines
+	take care of invoking any required freebsd device initialization
+	functions, including this one.  This may change	in the future.
+\end{apidesc}
+\begin{apirel}
+	{\tt osenv_log}
+\end{apirel}
+
+\api{oskit_freebsd_init_\emph{driver}}{Initialize and register a single \freebsd{} device driver}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto oskit_error_t oskit_freebsd_init_\emph{driver}(void);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Initialize a single \freebsd{} device driver.
+	Possible values for \emph{driver} are listed in
+	Section~\ref{freebsd-dev-sup}.
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success,
+	an error code specified in {\tt <oskit/dev/error.h>} on error.
+\end{apiret}
+
+\apisec{``Back door'' Interfaces}
+
+``Back door'' interfaces are intended for users which have some builtin
+knowledge of \freebsd{} internals and want to convert that knowledge to
+interface-level equivalents.
+
+\api{oskit_freebsd_chardev_open}{Open a character device using a \freebsd{} major/minor device value}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto oskit_error_t oskit_freebsd_chardev_open(int major, int minor,
+				int flags,
+				\outparam oskit_ttystream_t **tty_stream);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Opens a character device given a
+	\freebsd{} major and minor device value.
+	Returns a pointer to an {\tt oskit_ttystream_t} interface as though
+	{\tt oskit_ttydev_open} was called on an \oskit{} {\tt oskit_ttydev_t} interface.
+\end{apidesc}
+\begin{apiparm}
+	\item[major]
+		Major device number.
+		In \freebsd, this is the index of the device
+		in the character device switch.
+	\item[minor]
+		Minor device number.
+		In \freebsd, the interpretation of the minor device number
+		is device specific.
+	\item[flags]
+		\posix{} {\tt open} flags.
+	\item[tty_stream]
+		Returned {\tt oskit_ttystream_t} interface.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success,
+	an error from {\tt <oskit/dev/error.h>} otherwise.
+\end{apiret}
+
+\api{oskit_freebsd_xlate_errno}{Translate a \freebsd{} error number}
+\begin{apisyn}
+	\cinclude{oskit/dev/freebsd.h}
+
+	\funcproto oskit_error_t oskit_freebsd_xlate_errno(int freebsd_error);
+\end{apisyn}
+\ostodrv
+\begin{apidesc}
+	Translates a \freebsd{} error number into an \oskit{} error number.
+\end{apidesc}
+\begin{apiparm}
+	\item[freebsd_error]
+		The \freebsd{} error code to be translated.
+\end{apiparm}
+\begin{apiret}
+	Returns an equivalent error value from {\tt <oskit/dev/error.h>},
+	or {\tt OSKIT_E_UNEXPECTED} if there is no suitable translation.
+\end{apiret}

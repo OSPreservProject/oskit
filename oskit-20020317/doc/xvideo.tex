@@ -1,0 +1,74 @@
+%
+% Copyright (c) 1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+
+\section{X11 S3 Video Library}
+\label{xvideo}
+
+The x11video library contains a video driver supporting S3 video
+cards.  This includes all video hardware supported by the XF86_S3
+server (see \htmladdnormallink{http://www.xfree86.org}{http://www.xfree86.org}
+for more information). 
+
+\subsection{So how do I use this?}
+
+The driver currently requires a configuration (XF86Config) file.  A
+sample file is included in the x11/video directory.  You'll need to
+make sure that it's readable as /etc/XF86Config.  This can either be
+done through the BMOD (section~\ref{bmod-fs}) filesystem,
+or by using the FreeBSD or Linux filesystem components.
+	
+This file is a subset of a standard XF86Config file and can only
+contain the Monitor, Device and Screen sections.  The easiest way to
+get things running is when you already have an XF86Config file for that
+computer/monitor configuration.  In that case you can just strip out
+everything from it but the sections listed above.  Otherwise you'll
+need to make one from scratch, or from a sample config file from an
+XFree86 distribution.
+
+Currently the x11video driver only uses the default (first) entry in
+the Screen section.  Unlike XFree86, there is no way to change or
+specify color depths or resolution at runtime.
+
+\subsection{Dependencies}
+
+x11video depends on {\tt oskit_startup, oskit_unsupp, oskit_dev,
+oskit_kern, oskit_freebsd_m, oskit_c}, and {\tt oskit_lmm}.
+
+\subsection{API reference}
+
+\api{s3_init_framebuffer}{Initializes the s3 video code}
+\begin{apisyn}
+	\cinclude{oskit/video/s3.h}
+
+	\funcproto oskit_fb_t *s3_init_framebuffer(void);
+\end{apisyn}
+
+\api{s3_cmap_write}{Write a colormap entry}
+\begin{apisyn}
+	\cinclude{oskit/video/s3.h}
+	
+	\funcproto int s3_cmap_write(oskit_cmap_entry_t *c);
+\end{apisyn}
+
+\api{s3_cmap_read}{Read a colormap entry}
+\begin{apisyn}
+	\cinclude{oskit/video/s3.h}
+	
+	\funcproto int s3_cmap_read(oskit_cmap_entry_t *c);
+\end{apisyn}
+
+\api{s3_cmap_fg_index}{Return the colormap index for the foreground color}
+\begin{apisyn}
+	\cinclude{oskit/video/s3.h}
+	
+	\funcproto int s3_cmap_fg_index(void);
+\end{apisyn}

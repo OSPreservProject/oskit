@@ -1,0 +1,12 @@
+
+Directories: oskit/diskpart
+Target: liboskit_diskpart.a
+Documentation: doc/diskpart.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+	Mach Project, Carnegie Mellon University (find_*.c)
+Description:  
+	Grok various disk partioning schemes, including
+	BSD disklabels, DOS partitions (including logical
+	partitions), and (untested) support for Mach VTOC
+	and DEC and OMRON labels.

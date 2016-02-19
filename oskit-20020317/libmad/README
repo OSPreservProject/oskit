@@ -1,0 +1,21 @@
+
+Directories: oskit/libmad
+Target: liboskit_libmad.a
+Documentation: none
+Original Code Source:
+	Flux Research Group, University of Utah (Makefiles)
+	MAD 0.12.3b libmad (http://www.mars.org/home/rob/proj/mpeg/)
+Description:
+	This directory contains the infrastructure necessary to build
+	a version of the libmad MPEG audio decoder library as an OSKit
+	library.  This has been tested only with the MAD 0.12.3b version
+	of libmad.
+
+	To build the library, download zlib via:
+	ftp://ftp.mars.org/pub/mpeg/archive/mad-0.12.3b.tar.gz
+	untar it and rename the resulting "mad-0.12.3b" to be "src".
+
+	Add libmad to the appropriate "modules" file (modules.x86.pc
+	or modules.arm32.shark) in the main OSKit directory.
+	Configure and build the OSKit as normal!
+

@@ -1,0 +1,39 @@
+%
+% Copyright (c) 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% This is the TEX file that pulls the whole book together.
+% Use this root file to produce WWW versions of the doc.
+%
+\documentclass{book}
+
+\input{conf}
+\wwwtrue
+\input{defs}
+
+\usepackage{makeidx}
+\makeindex
+
+\begin{document}
+\maketitle
+\tableofcontents
+\input{book}
+
+\bibliographystyle{capsabbrv}
+%% This leads to *two* references to the Bibliography in the top HTML file.
+%% \addcontentsline{toc}{chapter}{\bibname}
+\bibliography{sys}
+
+\printindex
+
+\end{document}
+
+%% End of file.
+

@@ -1,0 +1,960 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Linux Device Drivers
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+/*#
+Signature of Linux IDE driver
+
+ToDo: make it less Linux specific
+#*/
+bundletype IDE_T = {
+  include "${OSKITDIR}/oskit/dev/linux.h",
+  oskit_linux_block_open,     
+  oskit_linux_block_open_kdev,
+  oskit_linux_block_register,   // possibly not exported
+} with flags libc
+
+/*#
+This is an internal signature - it's not expected that there'll be
+more than one implementation of this puppy.
+
+This signature is completely unstructured - there doesn't seem to
+be much payoff in trying to comprehend its internal structure.
+
+Note: if you have to upgrade to a new version of Linux drivers,
+rerun the appropriate mk_unit command below then cut, paste
+and edit.
+#*/
+bundletype LinuxDeviceSupport_T =
+{ EISA_bus
+, __const_udelay
+, __delay
+, __udelay
+, add_blkdev_randomness
+, add_timer
+, bh_active
+, bh_base
+, bh_mask
+, bh_mask_count
+, block_fsync
+, check_region
+, del_timer
+, dev_get_info
+, disable_irq
+, disable_irq_nosync
+, dispatch_scsi_info_ptr
+, do_bottom_half
+, do_gettimeofday
+, drive_info
+, enable_irq
+, free_irq
+, immediate_bh
+, iounmap
+, kstat
+, linux_intr_init
+, linux_timer_intr
+, linux_to_oskit_error
+, local_bh_count
+, local_irq_count
+, mod_timer
+, pci_devices
+, pci_find_class
+, pci_find_device
+, pci_find_slot
+, pci_init
+, pci_read_bases
+, pci_read_config_byte
+, pci_read_config_dword
+, pci_read_config_word
+, pci_root
+, pci_scan_bus
+, pci_scan_peer_bridge
+, pci_set_master
+, pci_setup
+, pci_write_config_byte
+, pci_write_config_dword
+, pci_write_config_word
+, pcibios_find_class
+, pcibios_find_device
+, pcibios_fixup
+, pcibios_fixup_bus
+, pcibios_init
+, pcibios_present
+, pcibios_read_config_dword
+, pcibios_read_config_word
+, pcibios_setup
+, pcibios_strerror
+, pcibios_write_config_byte
+, pcibios_write_config_dword
+, pcibios_write_config_word
+, phys_to_virt
+, probe_irq_off
+, probe_irq_on
+, proc_net
+, proc_net_inode_operations
+, proc_register
+, proc_scsi
+, proc_scsi_inode_operations
+, proc_unregister
+, release_region
+, request_irq
+, request_region
+, timer_active
+, timer_bh
+, timer_table
+, tq_immediate
+, tq_timer
+, tqueue_bh
+, virt_to_phys
+, BIOS_START
+, __down
+, __get_free_pages
+, __up
+, __wait_on_buffer
+, __wake_up
+, _ctype
+, boot_cpu_data
+, current
+, free_pages
+, free_dma
+, high_memory
+, interruptible_sleep_on
+, jiffies
+, kdevname
+, kfree
+, kfree_s
+, kmalloc
+, kmem_cache_alloc
+, kmem_cache_create
+, kmem_cache_free
+, linux_cli
+, linux_restore_flags
+, linux_save_flags
+, linux_save_flags_cli
+, linux_sti
+, loops_per_sec
+, oskit_linux_init
+, oskit_linux_mem_alloc
+, oskit_linux_mem_free
+, linux_panic
+, printk
+, schedule
+, semaphore_wake_lock
+, simple_strtoul
+, sleep_on
+, sprintf
+, unlock_buffer
+, verify_area
+, vmalloc
+, vsprintf
+, oskit_linux_driver_ops
+, oskit_linux_driver_register
+, pcibios_read_config_byte
+, __down_failed
+, __up_wakeup
+, __get_user_1
+, __get_user_2
+, __get_user_4
+, __put_user_1
+, __put_user_2
+, __put_user_4
+}
+
+flags wrap_flags = { 
+  flags defines, 
+  flags defincs, 
+  "-Dpre=osenv_process_lock", 
+  "-Dpost=osenv_process_unlock" 
+}
+
+/*#
+Support for Linux device drivers.
+#*/
+
+// mk_unit -o -n linux_dev linux/dev/s_kmem.o linux/dev/s_sched.o linux/dev/printf.o linux/dev/s_intr.o linux/dev/s_misc.o linux/dev/s_init.o linux/dev/misc.o linux/dev/timer.o linux/dev/panic.o linux/dev/vsprintf.o linux/dev/ctype.o linux/dev/sched.o linux/dev/softintr.o linux/dev/pci.o linux/dev/bios32.o linux/dev/irq.o linux/dev/port.o linux/dev/driver.o linux/dev/init.o  linux/dev/putuser.o linux/dev/getuser.o linux/dev/semaphore.o linux/dev/dma.o
+
+// we now omit this guy: linux/dev/osenv.o linux/dev/init_osenv.o 
+
+unit linux_dev = {
+  imports[ log    : OSEnvLog_T,
+           osenv_sleep : OSEnvSleep_T,
+           isa    : OSEnvISA_T,
+           intr   : OSEnvIntr_T,
+           irq    : OSEnvIRQ_T,
+           softirq: OSEnvSoftIRQ_T,
+           pci    : OSEnvPCI_T,
+           mem    : OSEnvMem_T,
+           driver : OSEnvDriver_T,
+           ioport : OSEnvIOPort_T,
+           timer  : OSEnvTimer_T,
+           panic  : OSEnvPanic_T,
+           cpu    : CPU_T,
+           iids   : { oskit_driver_iid,
+                      oskit_isa_driver_iid,
+                      oskit_iunknown_iid,
+                    },
+           string : String_T,
+         ];
+  exports[ dev : LinuxDeviceSupport_T ];
+  constraints{ 
+    context log    >= NoContext;
+    context mem    >= NoContext;  // e.g., __kfree_skb is called in packet transmit interrupt
+    context intr   >= NoContext; 
+    context irq    >= NoContext;
+    context timer  >= NoContext;
+    context panic  >= NoContext;
+  };
+  initializer init for dev;
+  depends{ exports + inits + finis needs imports - isa };
+  files{ "knit/c/wrap_init.c"
+  } with flags { flags wrap_flags, "-Dinit_in=oskit_linux_dev_init" };
+  files{ "linux/shared/s_kmem.c",
+         "linux/shared/s_sched.c",
+         "linux/shared/x86/s_intr.c",
+         "linux/shared/s_misc.c",
+         "linux/shared/s_init.c",
+         
+         "linux/shared/libc/vsprintf.c",
+         "linux/shared/libc/printf.c",
+         "linux/shared/libc/panic.c",
+         
+         "linux/dev/init.c",
+         "linux/dev/dma.c",
+         "linux/dev/driver.c",
+         "linux/dev/sched.c",
+         "linux/dev/irq.c",
+         "linux/dev/softintr.c",
+         "linux/dev/misc.c",
+         "linux/dev/timer.c",
+         "linux/dev/bios32.c",
+         "linux/dev/port.c",
+         
+         "linux/src/drivers/pci/pci.c",
+         "linux/src/lib/ctype.c",
+  }  with flags linux_dev;
+  files{ "linux/src/arch/i386/lib/putuser.S",
+         "linux/src/arch/i386/lib/getuser.S",
+         "linux/src/arch/i386/lib/semaphore.S"
+  }  with flags linux_dev_asm;
+  rename{ dev.linux_panic to panic };
+}
+
+/*#
+Support for Linux Ethernet drivers.
+#*/
+
+bundletype LinuxEtherSupport_T = {
+  NS8390_init,
+  
+  __kfree_skb,
+  alloc_skb,
+  skb_over_panic,
+  skb_reserve,
+  skbuff_is_skbufio,
+  skbmem_alloc,
+  skbmem_free,
+  skbufio_iid,
+  
+  autoirq_report,
+  autoirq_setup,
+  ei_close,
+  ei_interrupt,
+  ei_open,
+  ethdev_init,
+  ether_setup,
+  init_etherdev,
+  netif_rx,
+
+  oskit_linux_ether_iids,
+  oskit_linux_ether_ops,
+  oskit_linux_netdev_probe,
+
+}
+
+// Use this to generate LinuxEtherSupport_T
+// mk_unit -o linux/dev/3c501.o linux/dev/3c501_etherglue.o linux/dev/3c503.o linux/dev/3c503_etherglue.o linux/dev/3c505.o linux/dev/3c505_etherglue.o linux/dev/3c507.o linux/dev/3c507_etherglue.o linux/dev/3c509.o linux/dev/3c509_etherglue.o linux/dev/3c59x.o linux/dev/3c59x_etherglue.o linux/dev/ac3200.o linux/dev/ac3200_etherglue.o linux/dev/at1700.o linux/dev/at1700_etherglue.o linux/dev/de4x5.o linux/dev/de4x5_etherglue.o linux/dev/e2100.o linux/dev/e2100_etherglue.o linux/dev/eepro100.o linux/dev/eepro100_etherglue.o linux/dev/eepro.o linux/dev/eepro_etherglue.o linux/dev/eexpress.o linux/dev/eexpress_etherglue.o linux/dev/epic100.o linux/dev/epic100_etherglue.o linux/dev/eth16i.o linux/dev/eth16i_etherglue.o linux/dev/ewrk3.o linux/dev/ewrk3_etherglue.o linux/dev/fmv18x.o linux/dev/fmv18x_etherglue.o linux/dev/hp-plus.o linux/dev/hp-plus_etherglue.o linux/dev/hp100.o linux/dev/hp100_etherglue.o linux/dev/hp.o linux/dev/hp_etherglue.o linux/dev/ne.o linux/dev/ne_etherglue.o linux/dev/ni52.o linux/dev/ni52_etherglue.o linux/dev/ni65.o linux/dev/ni65_etherglue.o linux/dev/seeq8005.o linux/dev/seeq8005_etherglue.o linux/dev/sk_g16.o linux/dev/sk_g16_etherglue.o linux/dev/ultra.o linux/dev/smc-ultra_etherglue.o linux/dev/smc9194.o linux/dev/smc9194_etherglue.o linux/dev/tulip.o linux/dev/tulip_etherglue.o linux/dev/wd.o linux/dev/wd_etherglue.o linux/dev/znet.o linux/dev/znet_etherglue.o
+
+// add this to find what part of that is required from the ethersupport stuff
+// (ie doesn't come from the generic part)
+// linux/dev/s_kmem.o linux/dev/s_sched.o linux/dev/printf.o linux/dev/s_intr.o linux/dev/s_misc.o linux/dev/s_init.o linux/dev/misc.o linux/dev/timer.o linux/dev/panic.o linux/dev/vsprintf.o linux/dev/ctype.o linux/dev/sched.o linux/dev/softintr.o linux/dev/pci.o linux/dev/bios32.o linux/dev/irq.o linux/dev/port.o linux/dev/driver.o linux/dev/init.o  linux/dev/putuser.o linux/dev/getuser.o linux/dev/semaphore.o linux/dev/dma.o
+
+// mk_unit -o -n linux_ether_support linux/dev/net_glue.o linux/dev/net.o linux/dev/net_init.o linux/dev/net_debug.o linux/dev/net.o linux/dev/ethernet.o linux/dev/autoirq.o linux/dev/8390.o 
+
+// omitted: init_ethernet.c
+
+/*#
+Support for Linux Ethernet drivers.
+#*/
+
+unit linux_ether_support = {
+  imports[ dev    : LinuxDeviceSupport_T,
+           driver : OSEnvDriver_T, // only here so I can write dependency
+           device : OSEnvDevice_T, // osenv_device_register
+           isa    : OSEnvISA_T,    // osenv_isabus_addchild
+           log    : OSEnvLog_T,
+           timer  : OSEnvTimer_T, // spin
+           osenv_sleep : OSEnvSleep_T,
+           panic  : OSEnvPanic_T,
+           iids   : { oskit_bufio_iid,
+                      oskit_device_iid,
+                      oskit_etherdev_iid,
+                      oskit_iunknown_iid,
+                      oskit_netdev_iid,
+                      oskit_netio_iid,
+                      oskit_skbufio_iid,
+                    },
+           string : String_T,
+         ];
+  exports[ out : LinuxEtherSupport_T,
+           d   : {drivers}  // virtual symbol
+         ];
+  initializer isa.oskit_dev_probe for {device.osenv_device_lookup_etherdev};  // hack to make it be schedulable
+  depends{ exports needs dev + driver + {device.osenv_device_register} + {isa.osenv_isabus_addchild} + log + timer + iids };
+  // before probing, we want to get all the drivers registered
+  depends{ {isa.oskit_dev_probe} needs {d.drivers} };
+  // anyone doing etherdev lookups depends on this unit
+  depends{ {device.osenv_device_lookup_etherdev} needs exports };
+  files{ "linux/dev/net_glue.c",
+         "linux/dev/net.c",
+         "linux/dev/skbuff.c",
+         "linux/dev/skbuff_mem.c",
+         "linux/src/drivers/net/net_init.c",
+         "linux/dev/net_debug.c",
+         "linux/dev/ethernet.c",
+         "linux/dev/autoirq.c",
+         "linux/src/drivers/net/8390.c",
+  } with flags { flags linux_dev, "-Wno-unused" };
+  rename{ dev.linux_panic to panic };
+}
+
+/************************************************************/
+// Ethernet drivers
+/************************************************************/
+
+// mk_unit -o -n 3c501 linux/dev/3c501.o linux/dev/3c501_etherglue.o
+unit eth_3c501 = {
+  imports[ dev : LinuxDeviceSupport_T,
+           eth : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : {} ];
+  initializer oskit_linux_init_ethernet_etherlink for drivers;
+  depends{ inits needs imports - drivers };
+  depends{ {oskit_linux_init_ethernet_etherlink} needs imports - drivers };
+  files{ "linux/src/drivers/net/3c501.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c501_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n 3c503 linux/dev/3c503.o linux/dev/3c503_etherglue.o
+unit eth_3c503 = {
+  imports[ dev : LinuxDeviceSupport_T,
+           eth : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer : OSEnvTimer_T,
+         ];
+  exports[ out : {} ];
+  initializer oskit_linux_init_ethernet_etherlink2 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/3c503.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c503_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n 3c505 linux/dev/3c505.o linux/dev/3c505_etherglue.o
+unit eth_3c505 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : {} ];
+  initializer oskit_linux_init_ethernet_etherplus for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/3c505.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c505_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n 3c507 linux/dev/3c507.o linux/dev/3c507_etherglue.o
+unit eth_3c507 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : {} ];
+  initializer oskit_linux_init_ethernet_etherlink16 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/3c507.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c507_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n 3c509 linux/dev/3c509.o linux/dev/3c509_etherglue.o
+unit eth_3c509 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_etherlink3 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/3c509.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c509_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n 3c59x linux/dev/3c59x.o linux/dev/3c59x_etherglue.o
+unit eth_3c59x = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+           mem     : OSEnvMem_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_vortex for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/3c59x.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/3c59x_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ac3200 linux/dev/ac3200.o linux/dev/ac3200_etherglue.o
+unit eth_ac3200 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},        // virtual symbol
+           mem     : OSEnvMem_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ac3200 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/ac3200.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/ac3200_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n at1700 linux/dev/at1700.o linux/dev/at1700_etherglue.o
+unit eth_at1700 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_at1700 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/at1700.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/at1700_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n de4x5 linux/dev/de4x5.o linux/dev/de4x5_etherglue.o
+unit eth_de4x5 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+           string  : String_T, // strstr
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_de4x5 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/de4x5.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/de4x5_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+
+// mk_unit -o -n e2100 linux/dev/e2100.o linux/dev/e2100_etherglue.o
+unit eth_e2100 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},          // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_e2100 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/e2100.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/e2100_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n eepro100 linux/dev/eepro100.o linux/dev/eepro100_etherglue.o
+unit eth_eepro100 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_eepro100 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/eepro100.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/eepro100_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n eepro linux/dev/eepro.o linux/dev/eepro_etherglue.o
+unit eepro = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_eepro for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/eepro.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/eepro_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n eexpress linux/dev/eexpress.o linux/dev/eexpress_etherglue.o
+unit eexpress = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_eexpress for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/eexpress.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/eexpress_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n epic100 linux/dev/epic100.o linux/dev/epic100_etherglue.o
+unit epic100 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_epic100 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/epic100.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/epic100_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n eth16i linux/dev/eth16i.o linux/dev/eth16i_etherglue.o
+unit eth16i = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_eth16i for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/eth16i.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/eth16i_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ewrk3 linux/dev/ewrk3.o linux/dev/ewrk3_etherglue.o
+unit ewrk3 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ewrk3 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/ewrk3.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/ewrk3_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n fmv18x linux/dev/fmv18x.o linux/dev/fmv18x_etherglue.o
+unit fmv18x = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_fmv18x for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/fmv18x.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/fmv18x_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n hp_plus linux/dev/hp-plus.o linux/dev/hp-plus_etherglue.o
+unit hp_plus = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_hp_plus for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/hp-plus.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/hp-plus_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n hp100 linux/dev/hp100.o linux/dev/hp100_etherglue.o
+unit hp100 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+           mem     : OSEnvMem_Tory,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_hp100 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/hp100.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/hp100_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n hp linux/dev/hp.o linux/dev/hp_etherglue.o
+unit hp = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_hp for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/hp.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/hp_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ne linux/dev/ne.o linux/dev/ne_etherglue.o
+unit ne = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ne for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/ne.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/ne_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ni52 linux/dev/ni52.o linux/dev/ni52_etherglue.o
+unit ni52 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ni52 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/ni52.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/ni52_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ni65 linux/dev/ni65.o linux/dev/ni65_etherglue.o
+unit ni65 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ni65 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/ni65.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/ni65_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n seeq8005 linux/dev/seeq8005.o linux/dev/seeq8005_etherglue.o
+unit seeq8005 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_seeq8005 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/seeq8005.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/seeq8005_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n sk_g16 linux/dev/sk_g16.o linux/dev/sk_g16_etherglue.o
+unit sk_g16 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_sk_g16 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/sk_g16.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/sk_g16_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n ultra linux/dev/smc-ultra.o linux/dev/smc-ultra_etherglue.o
+unit ultra = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_ultra for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/smc-ultra.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/smc-ultra_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+
+// mk_unit -o -n smc9194 linux/dev/smc9194.o linux/dev/smc9194_etherglue.o
+unit smc9194 = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_smc9194 for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/smc9194.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/smc9194_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// Note setting for TULIP_DEFAULT_MEDIA to 12 == "10baseT(forced)"
+// mk_unit -o -n tulip linux/dev/tulip.o linux/dev/tulip_etherglue.o
+unit tulip = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+           timer   : OSEnvTimer_T,
+           string  : String_T,
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_tulip for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/tulip.c" 
+  } with flags { flags linux_dev, "-DTULIP_DEFAULT_MEDIA=12" };
+  files "${BUILDDIR}" { "linux/dev/tulip_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n wd linux/dev/wd.o linux/dev/wd_etherglue.o
+unit wd = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_wd for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/wd.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/wd_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+// mk_unit -o -n znet linux/dev/znet.o linux/dev/znet_etherglue.o
+unit znet = {
+  imports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           drivers : {drivers},  // virtual symbol
+         ];
+  exports[ out : { } ];
+  initializer oskit_linux_init_ethernet_znet for drivers;
+  depends{ inits needs imports - drivers };
+  files{ "linux/src/drivers/net/znet.c" } with flags linux_dev;
+  files "${BUILDDIR}" { "linux/dev/znet_etherglue.c"  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+/************************************************************/
+// SCSI drivers
+/************************************************************/
+
+// mk_unit -o -n 53c7,8xx linux/dev/53c7,8xx.o linux/dev/53c7,8xx_scsiglue.o
+// mk_unit -o -n AM53C974 linux/dev/AM53C974.o linux/dev/AM53C974_scsiglue.o
+// mk_unit -o -n BusLogic linux/dev/BusLogic.o linux/dev/BusLogic_scsiglue.o
+// mk_unit -o -n NCR53c406a linux/dev/NCR53c406a.o linux/dev/NCR53c406a_scsiglue.o
+// mk_unit -o -n advansys linux/dev/advansys.o linux/dev/advansys_scsiglue.o
+// mk_unit -o -n aha152x linux/dev/aha152x.o linux/dev/aha152x_scsiglue.o
+// mk_unit -o -n aha1542 linux/dev/aha1542.o linux/dev/aha1542_scsiglue.o
+// mk_unit -o -n aha1740 linux/dev/aha1740.o linux/dev/aha1740_scsiglue.o
+// mk_unit -o -n aic7xxx linux/dev/aic7xxx.o linux/dev/aic7xxx_scsiglue.o
+// mk_unit -o -n dtc linux/dev/dtc.o linux/dev/dtc_scsiglue.o
+// mk_unit -o -n eata_dma eata_linux/dev/dma.o linux/dev/eata_dma_scsiglue.o
+// mk_unit -o -n eata_pio eata_linux/dev/pio.o linux/dev/eata_pio_scsiglue.o
+// mk_unit -o -n eata linux/dev/eata.o linux/dev/eata_scsiglue.o
+// mk_unit -o -n fdomain linux/dev/fdomain.o linux/dev/fdomain_scsiglue.o
+// mk_unit -o -n in2000 linux/dev/in2000.o linux/dev/in2000_scsiglue.o
+// mk_unit -o -n ncr53c8xx linux/dev/ncr53c8xx.o linux/dev/ncr53c8xx_scsiglue.o
+// mk_unit -o -n pas16 linux/dev/pas16.o linux/dev/pas16_scsiglue.o
+// mk_unit -o -n qlogicfas linux/dev/qlogicfas.o linux/dev/qlogicfas_scsiglue.o
+// mk_unit -o -n qlogicisp linux/dev/qlogicisp.o linux/dev/qlogicisp_scsiglue.o
+// mk_unit -o -n seagate linux/dev/seagate.o linux/dev/seagate_scsiglue.o
+// mk_unit -o -n t128 linux/dev/t128.o linux/dev/t128_scsiglue.o
+// mk_unit -o -n u14-34f u14-linux/dev/34f.o linux/dev/u14-34f_scsiglue.o
+// mk_unit -o -n ultrastor linux/dev/ultrastor.o linux/dev/ultrastor_scsiglue.o
+// mk_unit -o -n wd7000 linux/dev/wd7000.o linux/dev/wd7000_scsiglue.o
+
+/************************************************************/
+// IDE drivers
+/************************************************************/
+
+// mk_unit -o -n linux_ide linux/dev/ide.o linux/dev/ide-cd.o linux/dev/cmd640.o linux/dev/rz1000.o linux/dev/block_glue.o linux/dev/block.o linux/dev/ide-dma.o linux/dev/cdrom.o linux/dev/ide-probe.o linux/dev/ide-disk.o linux/dev/ide-floppy.o linux/dev/genhd.o 
+
+
+// scsi needs these - and we need scsi
+// linux/dev/scsi.o linux/dev/hosts.o linux/dev/dma.o linux/dev/scsi_error.o linux/dev/scsi_queue.o linux/dev/scsi_obsolete.o linux/dev/sd.o linux/dev/sd_ioctl.o linux/dev/scsi_ioctl.o linux/dev/constants.o linux/dev/scsicam.o 
+
+/*#
+The Linux IDE driver.
+#*/
+
+unit linux_ide = {
+  imports[ driver : OSEnvDriver_T,
+           isa    : OSEnvISA_T,
+           log    : OSEnvLog_T,
+           timer  : OSEnvTimer_T,
+           osenv_sleep : OSEnvSleep_T,
+           dev    : LinuxDeviceSupport_T,
+           string : String_T,  // strstr
+           iids   : { oskit_blkdev_iid,
+                      oskit_blkio_iid,
+                      oskit_bus_iid,
+                      oskit_device_iid,
+                      oskit_driver_iid,
+                      oskit_idebus_iid,
+                      oskit_iunknown_iid,
+                    },
+         ];
+  exports[ triton : IDE_T ];
+// in theory, we ought to write this but, in practice, no-one ever
+// looks up isa_devices in the device registry
+//  initializer isa.oskit_dev_probe for {device.osenv_device_lookup_isadev};
+  // this initialiser should be run before we consider probing for devices
+  initializer oskit_linux_init_ide for triton;
+  initializer isa.oskit_dev_probe for triton;
+  depends{ {oskit_linux_init_ide} + exports
+           needs (imports - (isa + timer)) +  // ToDo: why not timer???
+                 {isa.osenv_isabus_addchild} + 
+                 {isa.osenv_isadma_alloc, isa.osenv_isadma_free} // scsi only??
+         };
+  // the following says that if both are reachable, they must be
+  // initialised in this order (init_ide before probe) _but_
+  // just because we probe doesn't mean that init_ide
+  // is reachable
+  depends{ {oskit_linux_init_ide} < {isa.oskit_dev_probe} };
+  
+  // whereas this says that if triton is used, we'd better
+  // probe first (and probe does become reachable)
+//  depends{ exports needs {isa.oskit_dev_probe} };
+  files{ "linux/dev/block.c",
+         "linux/dev/block_glue.c",
+         "linux/dev/ide.c",
+         "linux/src/drivers/cdrom/cdrom.c",
+         "linux/src/drivers/block/cmd640.c",
+         "linux/src/drivers/block/rz1000.c",
+         "linux/src/drivers/block/genhd.c",
+         "linux/src/drivers/block/ide-cd.c",
+         "linux/src/drivers/block/ide-dma.c",
+         "linux/src/drivers/block/ide-pci.c",
+         "linux/src/drivers/block/ide-probe.c",
+         "linux/src/drivers/block/ide-disk.c",
+         "linux/src/drivers/block/ide-floppy.c",
+         
+         // these should be in a separate module
+         // in fact, they're just dead code at the moment since I don't
+         // export any scsi related symbols
+         "linux/src/drivers/scsi/scsi.c",
+         "linux/src/drivers/scsi/scsi_debug.c",
+         "linux/src/drivers/scsi/scsi_error.c",
+         "linux/src/drivers/scsi/scsi_ioctl.c",
+         "linux/src/drivers/scsi/scsi_obsolete.c",
+         "linux/src/drivers/scsi/scsi_queue.c",
+         "linux/src/drivers/scsi/scsicam.c",
+//       "linux/src/drivers/scsi/scsi_drivers.c",
+         "linux/src/drivers/scsi/hosts.c",
+         "linux/src/drivers/scsi/constants.c",
+         "linux/src/drivers/scsi/sd.c",
+         "linux/src/drivers/scsi/sd_ioctl.c",
+
+         // arguably part of linux_dev but only needed by scsi 
+         "linux/dev/dma.c",
+
+
+//         "linux/dev/init_blk.c",  // no longer needed
+//        "linux/dev/init_scsi.c", // shouldn't be here
+  } with flags linux_dev;
+  rename{ dev.linux_panic to panic };
+}
+
+/*#
+A read/write IDE block device instance - not wrapped in process_lock.
+#*/
+unit ide_block_init_unwrapped = {
+  imports[ name : { ide_name },
+           mode : { read_only },
+           ide  : { oskit_linux_block_open },
+         ];
+  exports[ blkio : { blkio }  // oskit_blkio_t*
+         ];
+  initializer init for blkio;
+  finalizer   fini for blkio;
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/ide_block_init.c",
+  } with flags startup;
+}
+
+/*#
+Wrap a block device with process_lock.
+(Don't use this if you're mounting a filesystem on the device because
+ most/all filesystems also take the process_lock.)
+#*/
+unit wrap_blkio_init = {
+  imports[ in   : { unwrapped_blkio },
+           osenv_sleep : OSEnvSleep_T,
+         ];
+  exports[ blkio : { blkio }  // oskit_blkio_t*
+         ];
+  initializer init for blkio;
+  finalizer   fini for blkio;
+  depends{ exports + inits + finis needs imports };
+  files { "knit/c/wrap_block.c",
+  } with flags startup;
+}
+
+/************************************************************/
+// End
+/************************************************************/
+

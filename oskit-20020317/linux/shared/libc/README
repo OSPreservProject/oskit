@@ -1,0 +1,22 @@
+Directories: oskit/linux/dev/libc
+Target: liboskit_linux_dev.a & liboskit_linux_fs.a
+Documentation: This file.
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Linux v2.0.29, Linux Project
+Description:  
+
+	Linux device driver and filesystem support glue code
+
+	This directory contains self-contained implementations of
+	any ``libc'' type routines required by the drivers or the
+	glue code.
+
+	They are not allowed to reference the OSKit headers, or
+	depend on them for linking.  Functions that an OS might
+	want to override are channeled through the osenv_* 
+	interfaces. (Note that the `oskit/dev' headers can be 
+	included, to access required prototypes, etc.)
+
+	Most of these files are stripped-down versions of OSKit 
+	liboskit_c library files or are written from scratch.

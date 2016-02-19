@@ -1,0 +1,140 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// The MzScheme unit
+// (see Delta.unit for a unit which uses it).
+/************************************************************/
+
+directory "${MZ_OBJS}"
+
+include "All.unit"
+
+/************************************************************/
+/*#
+The MzScheme unit.
+
+To build this, first build the MzScheme object files by configuring
+and building MzScheme.  Then invoke Knit with 
+MZ_OBJS=<path to object files> on the command line.
+#*/
+/************************************************************/
+
+unit MzScheme = {
+  imports [ stdout        : Stdout_T,
+            fds           : PosixFD_T, 
+            files         : PosixFiles_T, 
+            sockets       : PosixSocket_T,
+            malloc        : Malloc_T,
+            string        : String_T,
+            cfiles        : FreeBSDFiles_T,
+            sprintf       : Sprintf_T,
+            longjmp       : LongJmp_T,
+            locale        : FreeBSDLocale_T,
+            error         : Error_T,
+            math          : Math_T,
+            mathstr       : MathString_T,
+            time          : PosixTime_T,
+            freebsdtime   : FreeBSDTime_T,
+            exit          : Exit_T,
+            signal        : { signal },
+            getenv        : GetPutEnv_T,
+            qsort         : { qsort },
+            stack         : { base_stack_start },
+            sleep         : { oskit_sleep },
+            direct        : DirectConsole_T,
+            ntoh          : { htons },
+            gethostbyname : { gethostbyname },
+            _exit         : _Exit_T ];
+  exports [ main : Main_T ];
+  depends{ exports + inits + finis needs imports };
+  files {
+    "main.o",
+    "mzdyn.o",
+    "sgc/sgc.o",
+    "src/bignum.o",
+    "src/builtin.o",
+    "src/bool.o",
+    "src/char.o",
+    "src/complex.o",
+    "src/dynext.o",
+    "src/env.o",
+    "src/error.o",
+    "src/eval.o",
+    "src/file.o",
+    "src/fun.o",
+    "src/hash.o",
+    "src/image.o",
+    "src/list.o",
+    "src/network.o",
+    "src/numarith.o",
+    "src/number.o",
+    "src/numcomp.o",
+    "src/numstr.o",
+    "src/objclass.o",
+    "src/object.o",
+    "src/port.o",
+    "src/portfun.o",
+    "src/print.o",
+    "src/process.o",
+    "src/promise.o",
+    "src/rational.o",
+    "src/read.o",
+    "src/regexp.o",
+    "src/salloc.o",
+    "src/sema.o",
+    "src/setjmpup.o",
+    "src/string.o",
+    "src/struct.o",
+    "src/symbol.o",
+    "src/syntax.o",
+    "src/type.o",
+    "src/unit.o",
+    "src/unitsig.o",
+    "src/vector.o"
+  };
+  rename{ sleep.oskit_sleep to sleep };
+}
+
+unit gethostbyname = {
+  imports[];
+  exports[ out : { gethostbyname } ];
+  depends{ exports + inits + finis needs imports };
+  files "$(MZ_OBJS)" {
+    "ghbn.c"
+  } with flags libc;
+}
+
+unit null_socket_factory = {
+   imports[];
+   exports[ out : SocketFactory_T ];
+   depends{ exports + inits + finis needs imports };
+   files {
+     "src/nullfac.c"
+   } with flags {};
+}
+
+unit nodirect = {
+   imports[];
+   exports[ out : DirectConsole_T ];
+   depends{ exports + inits + finis needs imports };
+   files {
+     "src/nodirect.c"
+   } with flags {};
+}
+
+/************************************************************/
+// End
+/************************************************************/

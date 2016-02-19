@@ -1,0 +1,80 @@
+This directory contains definitions of OSKit components for use with
+the Knit component definition and linking language.  You can get a
+copy of Knit and associated documentation from:
+
+  http://www.cs.utah.edu/flux/knit/
+
+And view automatically generated HTML documentation for the components at:
+
+  ftp://flux.cs.utah.edu/flux/knit/current/oskit/index.html
+
+The following list summarises what is covered by the current component
+set.  The most obvious omission is complete support for multithreading.
+
+
+  Standard library code:
+  - memory allocators
+  - math and string support
+  - getenv, exit, atexit, panic
+  - printing/parsing code (printf, fprintf, sprintf, ..., gets, sscanf, ...)
+  - qsort
+  - longjmp
+  
+  Device driver support code:
+  - memory allocators
+  - resource reservation
+  - device and driver registries
+  - interrupt and timer handlers
+  - debugging/logging hooks
+  
+  Console code:
+  - serial line and VGA
+
+  Debugging:
+  - killswitch
+  - debugging over serial line
+  - stack traces
+
+  Network code:
+  - ethernet device drivers
+  - tcp/ip stack
+  - simple udp implementation (fudp)
+  - simple arp implementation (farp)
+  - posix network wrappers
+  - standard C library network support
+
+  Filesystem code:
+  - IDE disk driver
+  - scsi disk drivers (untested)
+  - memory filesystem
+  - freebsd filesystem
+  - linux filesystems (untested)
+  - posix filesystem wrappers
+  - standard C library file support
+
+  Threads and locks:
+  - disable preemption and interrupts (base_critical)
+  - thread and lock package
+  - threadsafe wrappers for network, filesystem, etc
+  - threadsafe versions of numerous standard library functions
+
+  Time:
+  - posix time functions
+  - stdlib time functions
+
+  Virtual memory:
+  - page protection component (SVM) - not tested thoroughly (at all?)
+  - posix wrapper for VM system
+
+  Bootstrapping:
+  - multiboot specific code
+  - x86 specific code
+  - many initializers
+
+  COM:
+  - queues
+  - listener and listener fanouts
+
+  Some work started on PXE boot, netboot, netdisk, etc. but not
+  completed (i.e., it didn't work).
+

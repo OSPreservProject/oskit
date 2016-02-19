@@ -1,0 +1,610 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Consoles (including stdin/stdout)
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype PutChar_T =
+{ include "${OSKITDIR}/oskit/c/stdio.h",
+  putchar,
+  putbytes,
+} with flags libc
+
+bundletype GetChar_T =
+{ include "${OSKITDIR}/oskit/c/stdio.h",
+  getchar,
+} with flags libc
+
+bundletype Console_T =
+{ extends PutChar_T
+, extends GetChar_T
+}
+
+bundletype Stdin_T =
+{ getline
+, gets
+, extends GetChar_T
+}
+
+bundletype Stdout_T =
+{ include "${OSKITDIR}/oskit/c/stdio.h",
+  printf,
+  vprintf,
+  puts,
+  extends PutChar_T
+} with flags libc
+
+// not sure this is ever used
+bundletype StdIO_T =
+{ extends Stdin_T
+, extends Stdout_T
+}
+
+// ToDo: relate to getchar and stdin
+bundletype DirectGetChar_T =
+{ extends GetChar_T
+, trygetchar
+, set_flags
+}
+
+/************************************************************/
+// The following interfaces are only used in building BaseConsole
+// at the moment - but they should have their names regularised
+// a bit.
+/************************************************************/
+
+bundletype TermIOS_T =
+{ include "${OSKITDIR}/oskit/tty.h",
+  base_cooked_termios,
+  base_raw_termios,
+} with flags libc
+
+bundletype DirectConsole_T =
+{ include "${BUILDDIR}/oskit/machine/pc/direct_cons.h",
+  direct_cons_getchar,
+  direct_cons_putchar,
+  direct_cons_set_flags,
+  direct_cons_trygetchar,
+} with flags libc
+
+bundletype COMConsole_T =
+{ include "${BUILDDIR}/oskit/machine/pc/com_cons.h",
+  com_cons_enable_receive_interrupt,
+  com_cons_init,
+  com_cons_getchar,
+  com_cons_trygetchar,
+  com_cons_putchar,
+  com_cons_flush,
+} with flags libc
+            
+bundletype GDBConsole_T =
+{ include "${OSKITDIR}/oskit/gdb_serial.h",
+  gdb_pc_com_init,
+  gdb_serial_exit,
+  gdb_serial_getchar,
+  gdb_serial_putchar,
+  gdb_serial_puts,
+} with flags libc
+
+bundletype BaseConsole_T =
+{ extends Console_T,
+  puts,
+  include "${BUILDDIR}/oskit/machine/pc/base_console.h",
+  enable_gdb,
+  enable_gprof,
+  fully_initialized  // virtual
+} with flags libc
+
+/************************************************************/
+// Consoles
+/************************************************************/
+
+/*#
+ToDo: direct_cons_putchar is "self-initialising" - the first time you
+call it, it initialises itself.  Do we want to provide an explicit
+initialisation point instead?
+
+Warning: uses the PIT and the speaker - so (I imagine)
+no-one else should be using them!
+#*/
+
+// mk_unit -o -n raw_VGA kern/direct_cons_putchar.o kern/direct_cons_bell.o kern/pc_speaker.o
+unit raw_VGA = {
+  imports[ critical : Critical_T,
+           vm       : VM_T,
+           string   : String_T,
+          // The flags dependency should be removed!
+//         flags : { direct_cons_flags },
+         ];
+  exports[ out : { putchar } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/direct_cons_putchar.c",
+         "kern/x86/pc/direct_cons_bell.c",
+         "kern/x86/pc/pc_speaker.c",
+  } with flags kern;
+  rename{ out with prefix direct_cons_ };
+}
+
+unit putbytes = {
+  imports[ x : { putchar } ];
+  exports[ out : { putbytes } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/putbytes.c" }
+  with flags libc;
+}
+
+/*#
+adds putbytes
+(Sadly can't be done in the atomic unit because we have to rename things
+ a little.)
+#*/
+unit VGA = {
+  imports[ critical : Critical_T,
+           vm       : VM_T,
+           string   : String_T,
+         ];
+  exports[ out : PutChar_T ];
+  link {
+    [vga]      <- raw_VGA  <- [critical, vm, string];
+    [putbytes] <- putbytes <- [vga];
+
+    out = vga + putbytes;
+  }
+}
+
+// mk_unit -o -n KBD kern/direct_cons_getchar.o kern/direct_cons_trygetchar.o
+unit KBD = {
+  imports[ critical : Critical_T ];
+  exports[ out : DirectGetChar_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/direct_cons_getchar.c"
+       , "kern/x86/pc/direct_cons_trygetchar.c"
+       }
+  with flags kern;
+  rename{ out with prefix direct_cons_ };
+}
+
+/*#
+A putchar/getchar pair - no more, no less.
+If you're using the VGA, you probably want to use vga_console
+instead (it has a more useful finalizer).
+#*/
+unit simple_console = {
+  imports[ vga : PutChar_T,
+           kbd : GetChar_T,
+         ];
+  exports[ out : Console_T ];
+  link { out = vga+kbd; }
+}
+
+// ToDo: need to say that wait_for_key is a finalizer somewhere
+
+/*#
+This is a good finalizer for consoles which use the VGA.
+#*/
+unit waitForKey = {
+  imports[ stdin  : GetChar_T,
+           stdout : Stdout_T,
+         ];
+  exports[ out : { wait_for_key } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/wait_for_key.c" }
+   with flags libc;
+}
+
+/*#
+Just like simple_console but its finalizer waits for a keypress
+so you can read anything it says on the console before
+the console is cleared (or whatever happens...).
+#*/
+unit vga_console = {
+  imports[ vga    : PutChar_T,
+           kbd    : GetChar_T,
+	   stdout : Stdout_T,
+         ];
+  exports[ simple : Console_T ];
+  finalizer wfk.wait_for_key for stdout;
+  link{
+    [simple] <- simple_console <- [vga,kbd];
+    [wfk]    <- waitForKey <- [kbd,stdout];
+  }
+}
+
+// mk_unit -o -n base_termios kern/base_cooked_termios.o kern/base_raw_termios.o
+unit base_termios = {
+  imports[];
+  exports[ out : TermIOS_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/base_cooked_termios.c"
+       , "kern/base_raw_termios.c"
+       }
+   with flags kern;
+}
+
+// mk_unit -o -n direct_console kern/direct_cons_getchar.o kern/direct_cons_trygetchar.o kern/direct_cons_putchar.o kern/direct_cons_bell.o kern/pc_speaker.o 
+unit direct_console = {
+  imports[ critical : Critical_T,
+           vm       : VM_T,
+           string   : String_T,  // memcpy
+         ];
+  exports[ console : DirectConsole_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/direct_cons_getchar.c",
+         "kern/x86/pc/direct_cons_trygetchar.c",
+         "kern/x86/pc/direct_cons_putchar.c",
+         "kern/x86/pc/direct_cons_bell.c",
+         "kern/x86/pc/pc_speaker.c",
+  } with flags kern;
+}
+
+// mk_unit -o -n com_console kern/com_cons.o 
+unit com_console = {
+  imports[ termios  : TermIOS_T,
+           critical : Critical_T,
+           panic    : Panic_T,
+         ];
+  exports[ console : COMConsole_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/com_cons.c" } with flags kern;
+}
+
+// This console is hardwired at 115200 baud.
+// If you want to change this, go hack on knit/c/com_init.c
+//
+// I doubt the panic will get very far...
+unit serial_console = {
+  imports[ critical : Critical_T, 
+           panic : Panic_T 
+         ];
+  exports[ console : Console_T ];
+  finalizer fini for console;
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "kern/x86/pc/com_cons.c",
+    "kern/base_cooked_termios.c",
+    "knit/c/com_init.c",
+  } with flags kern;
+}
+
+bundletype Killswitch_T = { set_killswitch }
+bundletype Breakpoint_T = { set_breakpoint }
+bundletype SetIRQHandler_T = { set_irq_handler }
+
+// mk_unit -n killswitch kern/killswitch.o  kern/com_kill_intr.o
+unit killswitch = {
+  imports[ termios : TermIOS_T,
+           console : COMConsole_T,
+           set_irq : SetIRQHandler_T,
+           trap    : Trap_T,
+         ];
+  exports[ out : Killswitch_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/killswitch.c" } with flags kern;
+  files{ "kern/x86/pc/com_kill_intr.S" } with flags { flags kern, flags asm };
+  rename{ out with prefix gdb_pc_ };
+}
+
+// mk_unit -n set_breakpoint kern/set_breakpoint.o 
+unit breakpoint = {
+  imports[ gdt : { base_gdt_load } ];
+  exports[ out : Breakpoint_T];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/pc/set_breakpoint.c" } with flags kern;
+  rename{ out.set_breakpoint to gdb_pc_set_bkpt };
+}
+
+// mk_unit -o -n set_irq_handler knit/c/set_irq_handler.o
+unit set_irq_handler = {
+  imports[ irq : IRQ_T,
+           pic : PIC_T,
+           idt : { base_idt },
+         ];
+  exports[ out : SetIRQHandler_T ];
+  depends{ exports + inits + finis needs imports };
+//  depends{ exports + inits + finis needs irq + pic };
+  files{ "knit/c/set_irq_handler.c" } with flags kern;
+}
+
+
+// mk_unit -o -n gdb_console kern/gdb_pc_com.o gdb_trap kern/gdb_trap.o kern/gdb_trap_ss.o kern/gdb_pc_com_intr.o kern/gdb_serial.o kern/gdb_copy.o kern/gdb_set_trace_flag.o 
+unit gdb_console = {
+  imports[ critical : Critical_T,
+           trap     : Trap_T,
+           panic    : Panic_T,
+           com      : COMConsole_T,
+           stdout   : Stdout_T,  // probably should not be gdb console!
+           sprintf  : Sprintf_T,
+           string   : String_T, //  memset, strtol, strtoul
+           termios  : TermIOS_T,
+           set_irq  : SetIRQHandler_T,
+         ];
+  exports[ console : GDBConsole_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ 
+    "kern/x86/gdb_trap.c",
+    "kern/x86/pc/gdb_pc_com.c",
+    "kern/gdb_serial.c",
+    "kern/x86/gdb_set_trace_flag.c",
+  } with flags kern;
+  files{ 
+    "kern/x86/gdb_trap_ss.S",
+    "kern/x86/pc/gdb_pc_com_intr.S",
+    "kern/x86/gdb_copy.S",
+  } with flags { flags kern, flags asm };
+}
+
+
+
+
+/*#
+WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+The following documentation does you no good at all if you happen
+to invoke your kernel via netboot over a serial line because
+netboot messes with any flags you specify.  
+(The same goes for using mkmbimage - the multiboot adaptor takes it
+ into its head to delete some of the flags you use and maybe add
+ some of its own.)
+Fortunately, neither messes with your environment variables so an 
+incantation like this:
+
+   155.99.212.90:/z/reid/foo -h -f -d CONS_COM=1 GDB_COM=2 BAUD=115200 --
+
+is likely to get through.  Still, if strange things start happening, 
+the first thing to do is check to see exactly what flags were passed to
+your kernel.
+WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
+
+This unit used the environment and boot arguments to select various
+aspects of gdb support.
+
+Environment variables:
+  CONS_COM=<port>      // enables serial line on <port> (default 1)
+  GDB_COM=<port>       // enables gdb on <port> (default 1)
+  BAUD=<baud_rate>     // sets serial/gdb baud rates, doesn't enable either
+  DIRECT_CONS          // disable serial line
+
+boot_args:
+  -f                   // same as BAUD=115200
+  -h                   // enable serial line
+  -d                   // enable gdb
+  -p                   // enable gprof
+  -k                   // enable killswitch
+
+The initialization dependencies for this unit are a little strange.
+The direct console doesn't need initialization.
+Adding a dependency on console.fully_initialized is necessary if any part
+of your kernel absolutely _must_ have working gdb, com, etc.
+#*/
+
+// mk_unit -o -nselect_console kern/gdb_console.o kern/com_console.o kern/direct_console.o kern/base_console_init.o kern/base_console.o com/trivial_stream.o
+unit select_console = {
+  imports[ direct_console : DirectConsole_T,
+           com_console    : COMConsole_T,
+           gdb_console    : GDBConsole_T,
+           string         : String_T,     // atol
+           termios        : TermIOS_T,
+           critical       : Critical_T,
+// #ifdef HAVE_DEBUG_REGS
+           main           : Main_T,  // all we need is the address, we don't call it
+// #endif                  
+           iids           : { oskit_iunknown_iid, oskit_stream_iid },
+           env            : GetEnv_T,
+           cmdline        : CmdLine_T,
+           killswitch     : Killswitch_T,
+           breakpoint     : Breakpoint_T,
+         ];
+  exports[ console : BaseConsole_T 
+         ];
+  constraints{ context exports <= context(direct_console + com_console + gdb_console) };
+  initializer init for {console.fully_initialized,console.enable_gdb,console.enable_gprof};
+  finalizer   fini for {}; // ToDo: should be console;
+  // ToDo: several dependencies obviously missing from the following...
+  depends{ {console.getchar, console.putchar, console.putbytes, console.puts}
+           needs direct_console + critical + string + iids };
+  depends{ inits needs com_console + gdb_console + termios + env + cmdline };
+  depends{ finis needs {} };
+  files{ "kern/x86/pc/direct_console.c",
+         "kern/x86/pc/com_console.c",
+         "kern/x86/pc/gdb_console.c",
+         "kern/x86/pc/base_console_init.c",
+         "kern/x86/pc/base_console.c",
+       } with flags kern;
+  files{ "com/trivial_stream.c" } with flags com;
+  files{ "knit/c/console_init.c" } with flags kern;
+  rename{ killswitch with prefix gdb_pc_ };
+  rename{ breakpoint.set_breakpoint to gdb_pc_set_bkpt };
+  rename{ console.putchar  to console_putchar };
+  rename{ console.putbytes to console_putbytes };
+  rename{ console.puts     to console_puts };
+  rename{ console.getchar  to console_getchar };
+}
+
+
+/*#
+The base_console_w_direct unit exports both regular console
+functions and the direct ones. Maybe we should get rid of it.
+#*/
+unit base_console_w_direct = {
+  imports[ string   : String_T, //  atol, strtol, strtoul
+           critical : Critical_T,
+           trap     : Trap_T,
+           stdin    : Stdin_T, // getchar
+           stdout   : Stdout_T,
+           getenv   : GetEnv_T,
+// #ifdef HAVE_DEBUG_REGS
+           main     : Main_T,
+// #endif
+           panic    : Panic_T, 
+           sprintf  : Sprintf_T,
+           vm       : VM_T,
+           iids     : { oskit_iunknown_iid, oskit_stream_iid },
+           cmdline  : CmdLine_T,
+           breakpoint : Breakpoint_T,
+           set_irq  : SetIRQHandler_T,
+         ];
+  exports[ console : BaseConsole_T,
+	   direct  : DirectConsole_T ];
+  link{
+    [console]<- select_console <- [direct,com,gdb,string,termios,critical,main,
+                            iids,getenv,cmdline,killswitch,breakpoint];
+    [termios] <- base_termios <- [];
+    [direct] <- direct_console <- [critical,vm,string];
+    [com]    <- com_console <- [termios,critical,panic];
+    [gdb]    <- gdb_console <- [critical,trap,panic,com,stdout,sprintf,string,termios,set_irq];
+    [killswitch] <- killswitch <- [termios,com,set_irq,trap];
+  }
+}
+
+/*#
+This is the normal console unit.
+#*/
+unit base_console = {
+  imports[ string   : String_T,     //  atol, strtol, strtoul
+           critical : Critical_T,
+           trap     : Trap_T,
+           stdin    : Stdin_T,      // getchar
+           stdout   : Stdout_T,
+           getenv   : GetEnv_T,
+// #ifdef HAVE_DEBUG_REGS
+           main     : Main_T,
+// #endif
+           panic    : Panic_T,
+           sprintf  : Sprintf_T,
+           vm       : VM_T,
+           iids     : { oskit_iunknown_iid, oskit_stream_iid },
+           cmdline  : CmdLine_T,
+           breakpoint : Breakpoint_T,
+           set_irq  : SetIRQHandler_T,
+         ];
+  exports[ console : BaseConsole_T ];
+  link{
+    [console, _] <- base_console_w_direct <- {string, critical,
+	                            trap, stdin, stdout,
+	                            getenv, main, panic, sprintf, vm, iids,
+	                            cmdline, breakpoint, set_irq};
+  }
+}
+
+/*#
+A simple printf implementation.
+
+ToDo: puts should use putbytes (or maybe PutChar_T should include
+puts as well as putbytes?)
+#*/
+
+// mk_unit -o -n libc_stdout libc/doprnt.o libc/printf.o libc/putchar.o libc/puts.o
+unit libc_stdout = {
+  imports[ putchar : PutChar_T ];
+  exports[ stdout : Stdout_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdio/doprnt.c"
+       , "libc/stdio/printf.c"
+       , "libc/stdio/putchar.c"
+       , "libc/stdio/puts.c"
+       , "knit/c/putbytes.c"  // ToDo: just reexport import
+       }
+  with flags libc;
+  rename{ putchar.putchar  to console_putchar };
+  rename{ putchar.putbytes to console_putbytes };
+}
+
+
+/*#
+A fairly complete printf implementation.
+#*/
+
+// freebsd/libc/putw.o 
+
+// mk_unit -n freebsd_stdout freebsd/libc/printf.o freebsd/libc/vprintf.o freebsd/libc/putchar.o freebsd/libc/puts.o 
+unit freebsd_stdout = {
+  imports[ cfiles : CFiles_T,
+           isthreaded  : { __isthreaded },
+         ];
+  exports[ stdout : Stdout_T ];  // actually doesn't export putbytes - ignoring that detail for now
+  constraints{ context exports <= context imports };
+//  depends{ exports + inits + finis needs imports };  // hack, hack, todo, xxx
+  depends{ exports needs {} }; // yeah, right
+  files{
+    "freebsd/3.x/src/lib/libc/stdio/printf.c",
+    "freebsd/3.x/src/lib/libc/stdio/vprintf.c",
+    "freebsd/3.x/src/lib/libc/stdio/putchar.c",
+    "freebsd/3.x/src/lib/libc/stdio/puts.c",
+//    "freebsd/3.x/src/lib/libc/stdio/putw.c",
+  } with flags freebsd_libc;
+}
+
+// mk_unit -o -n libc_stdin libc/getline.o libc/getchar.o libc/gets.o
+unit libc_stdin = {
+  imports[ console : Console_T,
+           stdout  : Stdout_T
+         ];
+  exports[ stdin : Stdin_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/gen/getline.c",
+         "libc/stdio/getchar.c",
+         "libc/stdio/gets.c",
+       }
+  with flags libc;
+  rename{ console.putchar  to console_putchar };
+  rename{ console.putbytes to console_putbytes };
+  rename{ console.getchar  to console_getchar };
+}
+
+/*#
+A COM wrapper for the console.
+#*/
+unit console_obj = {
+  imports[ console : Console_T,
+           string  : String_T,
+           iids    : {
+                oskit_asyncio_iid,
+                oskit_iunknown_iid,
+                oskit_posixio_iid,
+                oskit_stream_iid,
+                oskit_ttystream_iid,
+              },
+         ];
+  exports[ out : DefaultConsole_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "clientos/default_console.c",
+  } with flags clientos;
+  rename{ console.putchar  to console_putchar };
+  rename{ console.putbytes to console_putbytes };
+  rename{ console.getchar  to console_getchar };
+}
+
+/*#
+A wrapper for stdout
+#*/
+unit wrap_stdout = {
+  imports[ in  : Stdout_T, wrap : {pre,post} ];
+  exports[ out : Stdout_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/wrap_stdout.c",
+  } with flags libc;
+  rename{ in with prefix in_ };
+  rename{ out with prefix out_ };
+}  
+
+/************************************************************/
+// End
+/************************************************************/

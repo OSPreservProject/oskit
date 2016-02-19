@@ -1,0 +1,13 @@
+Directories: oskit/boot/pxe/bootinfo
+Target: bootinfo
+Documentation: none
+Original Code Source:
+	Flux Research Group, University of Utah.
+Description:
+
+A trivial example of a bootinfo server that responds to the pxeboot
+kernel, telling it what to do.
+
+This program should be compiled by the native compiler and run on the
+same node as your ProxyDHCP server.
+

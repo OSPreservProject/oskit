@@ -1,0 +1,77 @@
+#
+# Copyright (c) 1994-1995, 1998 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_makerules_top_
+_oskit_makerules_top_ = yes
+
+# This Makerules file is only used by top-level Makefiles
+# in machine-dependent source trees.
+#
+# SRCTREES must contain the pathnames of all more-speific source trees.
+# The first pathname is assumed to be the directory containing configstart,
+# and is where the configure script is produced.
+#
+# SUBDIRS must be set to the complete list of subdirectories
+# which contain Makefiles to descend into.
+# The directories can be listed in any order.
+#
+# FIRST_SUBDIRS can be a subset of those subdirectories
+# which must be built before all other subdirectories,
+# in the order specified in FIRST_SUBDIRS.
+#
+# Similarly, LAST_SUBDIRS can be a subset of the SUBDIRS
+# which must be built after all others,
+# in the specified order.
+#
+# Naturally, FIRST_SUBDIRS and LAST_SUBDIRS should not overlap.
+
+SRCTREES += $(GSRCDIR)
+
+CONFIGDIR = $(firstword $(SRCTREES))
+
+# Generate a final, properly-ordered list of all subdirectories.
+ORDERED_SUBDIRS := $(foreach DIR,$(FIRST_SUBDIRS),$(filter $(DIR),$(SUBDIRS))) \
+		   $(filter-out $(FIRST_SUBDIRS), \
+		     $(filter-out $(LAST_SUBDIRS),$(SUBDIRS))) \
+		   $(foreach DIR,$(LAST_SUBDIRS),$(filter $(DIR),$(SUBDIRS)))
+
+all:
+	for subdir in $(ORDERED_SUBDIRS); do $(MAKE) -C $$subdir || exit 1; done
+
+install:
+	for subdir in $(ORDERED_SUBDIRS); do $(MAKE) -C $$subdir install || exit 1; done
+
+prepare:
+	for subdir in $(ORDERED_SUBDIRS); do $(MAKE) -C $$subdir prepare || exit 1; done
+
+clean:
+	for subdir in $(SUBDIRS); do $(MAKE) -C $$subdir clean; done
+
+distclean: clean
+	rm -f Makefile config.status $(addsuffix /Makefile,$(SUBDIRS))
+
+configure: configure.in
+	autoconf
+	cp configure $(CONFIGDIR)/
+
+configure.in:	$(addsuffix /aclocal.m4,$(SRCTREES))	\
+		$(CONFIGDIR)/configstart		\
+		$(addsuffix /configrules,$(SRCTREES))
+	cat $^ >$@
+
+
+endif

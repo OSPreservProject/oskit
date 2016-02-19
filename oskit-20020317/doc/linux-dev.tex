@@ -1,0 +1,909 @@
+%
+% Copyright (c) 1996-1998, 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{linux-dev}
+
+The Linux device driver library consists of various native Linux
+device drivers coupled with glue code to export the \oskit{}
+interfaces such as blkio, netio, and bufio (See Chapter~\ref{oskit-io}).
+See the source file \texttt{linux/dev/README} for a list of devices and
+their status.
+
+The header files \texttt{oskit/dev/linux_ethernet.h} and
+\texttt{oskit/dev/linux_scsi.h} determine which network and SCSI
+drivers are compiled into \texttt{liboskit_linux_dev.a}.
+Those files also influence driver probing;
+see the \texttt{oskit_linux_init} routines below.
+
+
+\apisec{Initialization and Registration}
+
+There are several ways to initalize this library.
+One can either initialize all the compiled-in drivers
+(\texttt{oskit_\-linux_\-init_\-devs},
+initialize a specific class of drivers
+(\texttt{oskit_\-linux_\-init_\-ethernet}),
+or initialize specific drivers
+(e.g., \texttt{oskit_\-linux_\-init_\-scsi_\-ncr53c8xx}).
+
+These initialization functions initialize various glue code and
+register the appropriate device(s) in the device tree,
+to be probed with \texttt{oskit_dev_probe}.
+
+\api{oskit_linux_init_devs}{Initialize and register all known drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_devs(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers all known drivers.
+	The known drivers are: the IDE disk driver, and all drivers
+	listed in the \texttt{<oskit/dev/linux_ethernet.h>} and
+	\texttt{<oskit/dev/linux_scsi.h>} files.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_net}{Initialize and register known network drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_net(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers all available network drivers.
+	Currently this means Ethernet drivers only,
+	but in the future there may be other network drivers supported such
+	as Myrinet.
+	The known Ethernet drivers are listed in the
+	\texttt{<oskit/dev/linux_ethernet.h>} file.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_ethernet}{Initialize and register known Ethernet network drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_ethernet(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers all available Ethernet
+	network drivers.
+	The known Ethernet drivers are listed in the
+	\texttt{<oskit/dev/linux_ethernet.h>} file.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_scsi}{Initialize and register known SCSI disk drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_scsi(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers all available SCSI disk drivers.
+	The known SCSI drivers are listed in the
+	\texttt{<oskit/dev/linux_scsi.h>} file.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_ide}{Initialize and register known IDE disk drivers}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_ide(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers all available IDE disk drivers.
+	There is currently only one IDE driver.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_scsi_\emph{name}}{Initialize and register a specific SCSI disk driver}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_scsi_\emph{name}(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers a specific SCSI disk driver.
+	The \emph{name} must be one from the \texttt{name} field of the drivers
+	listed in the
+	\texttt{<oskit/dev/linux_scsi.h>} file.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\api{oskit_linux_init_ethernet_\emph{name}}{Initialize and register a specific Ethernet network driver}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto void oskit_linux_init_ethernet_\emph{name}(void);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes and registers a specific Ethernet
+	network driver.
+	The \emph{name} must be one from the \texttt{name} field of the drivers
+	listed in the
+	\texttt{<oskit/dev/linux_ethernet.h>} file.
+
+	Once drivers are registered, their devices may be probed
+	via \texttt{oskit_dev_probe}.
+\end{apidesc}
+
+
+\apisec{Obtaining object references}
+
+Once the desired drivers are initialized, registered, and probed,
+one can obtain references to their \texttt{blkio}, \texttt{netio}, etc
+interfaces (See Chapter~\ref{oskit-io}) two different ways.
+
+The first way is to look them up via their Linux name, e.g., ``sd0'' for
+a SCSI disk, or ``eth0'' for a Ethernet device.
+This is described here as it is specific to Linux.
+
+The second, and preferred, way is to use \texttt{osenv_\-device_\-lookup}
+to find a detected device with the desired interface, such as
+\texttt{oskit_\-etherdev_\-iid} (See Chapter~\ref{libfdev}).
+
+
+% We only describe oskit_linux_block_open because that is the only
+% one that is actually used in the examples.
+
+\api{oskit_linux_block_open}{Open a disk given its Linux name}
+\begin{apisyn}
+	\cinclude{oskit/dev/linux.h}
+
+	\funcproto oskit_error_t oskit_linux_block_open(const char *name,
+					unsigned flags,
+					\outparam oskit_blkio_t **out_io);
+\end{apisyn}
+\begin{apidesc}
+	This function takes a Linux name of a disk,
+	e.g., ``sd0'' or ``wd1'',
+	and returns an \texttt{oskit_blkio_t} that can be used to access
+	the device.
+
+	The \texttt{oskit_blkio} interface is described in
+	Chapter~\ref{oskit-io}.
+\end{apidesc}
+\begin{apiparm}
+	\item[name]
+		The Linux name of the device
+		e.g., ``sd0'' or ``wd1''.
+
+	\item[flags]
+		Formed by or'ing the following values:
+		\begin{description}
+		\item[OSKIT_DEV_OPEN_READ]
+		\item[OSKIT_DEV_OPEN_WRITE]
+		\item[OSKIT_DEV_OPEN_ALL]
+		\end{description}
+
+	\item[out_io]
+		Upon success, is set to point to an \texttt{oskit_blkio_t}
+		that can be used to access the device.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{oskit_linux_block_open_kdev}{Open a disk given its Linux kdev}
+
+
+\api{oskit_linux_netdev_find}{Open a netcard given its Linux name}
+
+
+\api{oskit_linux_net_open}{Open a netcard given its Linux name}
+
+
+\newpage
+\emph{The rest of this chapter is very incomplete.
+Some of the internal details of the Linux driver emulation are described,
+but not the aspects relevant for typical use of the library.}
+
+\section{Introduction}
+
+XXX
+
+\emph{Much of the data here on Linux device driver internals
+is out-of-date with respect to the newer device drivers that are now
+part of the \oskit{}.  This section documents drivers from Linux
+1.3.6.8 or earlier; the current \oskit{} drivers are from Linux
+2.2.12, so parts of this section are likely no longer correct.}
+
+
+XXX Library can be used either as one component
+or can be used to produce many separate components,
+depending on how it is used.
+
+\section{Partially-compliant Drivers}
+
+There are a number of assumptions made by \emph{some} drivers:
+if a given assumption is not met by the OS using the framework,
+then the drivers that make the assumption will not work,
+but other drivers may still be usable.
+The specific assumptions made by each partially-compliant driver
+are listed in a table in the appropriate section below;
+here is a summary of the assumptions some of the drivers make:
+\begin{itemize}
+\item	Kernel memory can be allocated from interrupt handlers.
+\item	Drivers can allocate contiguous chunks of physical memory
+	larger than one page.
+\item	(x86) Drivers can allocate memory specifically in the low 16MB
+	of memory accessible to the PC's built-in DMA controller.
+\item	Drivers can sleep uninterruptibly.
+\item	Drivers can access the clock timer and DMA registers directly.
+\item	``Poll-and-Yield:'' polls for short
+	periods of time and yields the CPU without explicitly going to sleep.
+
+\end{itemize}
+
+\section{Internals}
+
+The following sections document all the variables and functions that Linux
+drivers can refer to.
+These variables and functions are provided by the glue code
+supplied as part of the library,
+so this information should not be needed for normal use of the library
+under the device driver framework.
+However, they are documented here
+for the benefit of those working on this library
+or upgrading it to new versions of the Linux drivers,
+or for those who wish to ``short-cut'' through the framework
+directly to the Linux device drivers in some situations,
+e.g., for performance reasons.
+
+
+\subsection{Namespace Management Rules}
+
+\sloppy{%
+For an outline of our namespace management conventions,
+see Section 4.7.2 in our SOSP paper,
+\htmladdnormallink{http://www.cs.utah.edu/flux/papers/index.html\#SOSKIT}%
+		  {http://www.cs.utah.edu/flux/papers/index.html\#SOSKIT}.
+}
+
+% doc/papers/oskit-sosp16.ps.   ....sorry, this has copyright problems.
+
+\com{%
+XXX make this fit.
+
+To address preprocessor and type conflicts and the like,
+the rule is that imported OS code _only_ includes its native headers
+plus any ``glue'' headers that we write specifically for that OS\@.
+In other words, the Linux drivers should definitely never see <oskit/page.h>
+or any of the other \oskit\ header files outside the linux_dev package.
+(The specific problem above is that Linux's <asm-i386/page.h>
+was changed to include <oskit/page.h>, which it shouldn't do.)
+The fdev glue code specific to a particular OS (e.g., linux/dev/*.c)
+can include that OS's headers, the glue headers specific to that OS,
+_and_ the generic fdev headers defining the fdev interfaces (fdev/*.h),
+but must not include any other \oskit\ headers.
+Clients of these device drivers and all other code outside a driver set
+must never include any of the native OS headers used within the driver set;
+this is already enforced by the native OS include directory
+being a private subdirectory in the driver set (e.g., linux_fdev/include/)
+rather than a subdirectory of the public header file directory (oskit/).
+By following these rules, imported OS symbols never touch
+any symbols defined by the \oskit\ or the client OS,
+with the exception of the fdev/* headers defining the interface between the two;
+and _all_ of the symbols in these fdev headers are prefixed with `fdev_'.
+
+To address linker namespace conflicts,
+the rule is that _all_ global linker symbols used in a given driver set
+must be given a common prefix for that driver set, e.g., `fdev_linux_'.
+Global symbols defined by the glue code for that driver set,
+either to be publicly exported to clients or merely for internal use,
+must be named according to this convention from the outset.
+(For example, see oskit_linux_dev_init() or oskit_linux_block_open().)
+Global symbols defined or used by the native OS code being imported
+must be given this common prefix using appropriate preprocessor magic.
+Specifically, I've created (but not yet checked in)
+a Linux glue-code header file called `global.h'
+that simply consists of a bunch of #define's to add this prefix.
+In linux/dev/GNUmakerules, I've added a magic GCC flag
+causing this header file to be included at the top of _all_ linux/dev sources,
+including both the glue code sources and the raw Linux sources.
+This means that both the Linux glue code and the Linux code itself
+can use the plain Linux symbols and be oblivious to the fact
+that they're getting prefixed.
+The initial global.h I created is consistent with the set
+of global variables and functions Shantanu documented in linux-dev.tex.
+Naturally, there are quite a few more that need to be added,
+some because they were originally missed or appeared in the Linux-2.0 upgrade,
+others because they are both defined and used by the drivers themselves
+and thus never appeared to us as ``undefined symbols'' on linker runs
+(e.g., the SCSI globals used by the various SCSI-related drivers).
+Although it may sound like a pain to keep this list up-to-date,
+it is really quite trivial to find any symbols we missed using nm and grep.
+Also, a lot of the remaining global symbols look like they don't need to be,
+and we can probably address them by sending patches to the Linux people.
+
+>you said that the files belonging to BSD should only see the
+>BSD header files, and that only the glue code would see both.
+>
+>However, take the case of `struct proc'. Clearly, to implement
+>sleep/wakeup, this struct must be enhanced with a osenv_sleeprec_t,
+>thus requiring to double definitions or to pull in the dev header
+>tree in all files including sys/proc.h (practically all.)
+
+Good point.  Yes, it's probably OK to pull in fdev header files
+from modified BSD include files (we do that in Linux already),
+since all of the fdev symbols defined should have a disambiguating prefix.
+I guess the rule will have to be that the native BSD code
+only _directly_ includes native BSD header files.
+
+}%com
+
+\subsection{Variables}
+
+\begin{icsymlist}
+\item[current]
+
+This is a global variable that points to the state for the current
+process.  It is mostly used by drivers to set or clear the
+interruptible state of the process.
+
+\item[jiffies]
+
+Many Linux device drivers depend on a global variable called {\tt jiffies},
+which in Linux contains a clock tick counter
+that is incremented by one at each 10-millisecond (100Hz) clock tick.
+The device drivers typically read this counter while polling a device
+during a (hopefully short) interrupt-enabled busy-wait loop.
+Although a few drivers
+take the global clock frequency symbol {\tt HZ} into account
+when determining timeout values and such,
+most of the drivers just used hard-coded values
+when using the {\tt jiffies} counter for timeouts,
+and therefore assume that {\tt jiffies} increments
+``about'' 100 times per second.
+
+\item[irq2dev_map]
+
+This variable is an array of pointers to network device structures.
+The array is indexed by the interrupt request line (IRQ) number.
+Linux network drivers use it in interrupt handlers to find the
+interrupting network device given the IRQ number passed to them by the
+kernel.
+
+\item[blk_dev]
+
+This variable is an array of ``struct blk_dev_struct'' structures.  It
+is indexed by the major device number.  Each element contains the I/O
+request queue and a pointer to the I/O request function in the
+driver.  The kernel queues I/O requests on the request queue, and calls
+the request function to process the queue.
+
+\item[blk_size]
+
+This variable is an array of pointers to integers.  It is indexed by
+the major device number.  The subarray is indexed by the minor device
+number.  Each cell of the subarray contains the size of the device in
+1024 byte units.  The subarray pointer can be NULL, in which case, the
+kernel does not check the size and range of an I/O request for the device.
+
+\item[blksize_size]
+
+This variable is an array of pointers to integers.  It is indexed by
+the major device number.  The subarray is indexed by the minor device
+number.  Each cell of the subarray contains the block size of the
+device in bytes.  The subarray can be NULL, in which case, the kernel
+uses the global definition BLOCK_SIZE (currently 1024 bytes) in its
+calculations.
+
+\item[hardsect_size]
+
+This variable is an array of pointers to integers.  It is indexed by
+the major device number.  The subarray is indexed by the minor device
+number.  Each cell of the subarray contains the hardware sector size of the
+device in bytes.  If the subarray is NULL, the kernel uses 512 bytes
+in its calculations.
+
+\item[read_ahead]
+
+This variable is an array of integers indexed by the major device
+number.  It specifies how many sectors of read-ahead the kernel should
+perform on the device.  The drivers only initialize the values in this
+array; the Linux kernel block buffer code is the actual user of these
+values.
+
+\item[wait_for_request]
+
+The Linux kernel uses a static array of I/O request structures.  When
+all I/O request structures are in use, a process sleeps on this
+variable.  When a driver finishes an I/O request and frees the I/O
+request structure, it performs a wake up on this variable.
+
+\item[EISA_bus]
+
+If this variable is non-zero, it indicates that the machine has an
+EISA bus.  It is initialized bye the Linux kernel prior to device
+configuration.
+
+\item[high_memory]
+
+This variable contains the address of the last byte of physical memory
+plus one.  It is initialized by the Linux kernel prior to device
+configuration.
+
+\item[intr_count]
+
+This variable gets incremented on entry to an interrupt handler,
+and decremented on exit.  Its purpose is let driver code determine if it
+was called from an interrupt handler.
+
+\item[kstat]
+
+This variable contains Linux kernel statistics counters.  Linux
+drivers increment various fields in it when certain events occur.
+
+\item[tq_timer]
+
+Linux has a notion of ``bottom half'' handlers.  These handlers have a
+higher priority than any user level process but lower priority than
+hardware interrupts.  They are analogous to software interrupts in
+BSD\@.  Linux checks if any ``bottom half'' handlers need to be run when
+it is returning to user mode.  Linux provides a number of lists of
+such handlers that are scheduled on the occurrence of specific events.
+{\tt tq_timer} is one such list.  On every clock interrupt,
+Linux checks if any handlers are on this list, and if there are,
+immediately schedules the handlers to run.
+
+\com{%
+	This is only used by dev.c which is not a driver.  I am not sure
+	if I should include it here.
+
+\item[bh_base]
+
+This variable is an array of ``struct bh_struct'' elements.  It is
+indexed by global constants defined in <linux/interrupt.h>.  Each
+element of this array contains a pointer to a function and a pointer
+to an opaque data item which is passed to the function when it is
+invoked.  The array holds the list of software interrupt handlers.
+Driver can directly add an entry in the array, and the Linux kernel
+arranges for the handlers to be invoked at the appropriate junction.
+}
+
+\item[timer_active]
+
+This integer variable indicates which of the timers in {\tt timer_table}
+(described below) are active.  A bit is set if the timer is active,
+otherwise it is clear.
+
+\item[timer_table]
+
+This variable is an array of ``struct timer_struct'' elements.  The
+array is index by global constants defined in <linux/timer.h>.  Each
+element contains the duration of timeout, and a pointer to a function
+that will be invoked when the timer expires.
+
+\item[system_utsname]
+
+This variable holds the Linux version number.  Some drivers check the
+kernel version to account for feature differences between different
+kernel releases.
+\end{icsymlist}
+
+\subsection{Functions}
+
+\begin{icsymlist}
+\item[autoirq_setup]
+\funcproto int autoirq_setup(int waittime);
+
+This function is called by a driver to set up for probing IRQs.
+The function attaches a handler on each available IRQ, waits
+for \emph{waittime} ticks, and returns a bit mask of IRQs available
+IRQs.  The driver should then force the device to generate an interrupt.
+
+\item[autoirq_report]
+\funcproto int autoirq_report(int waittime);
+
+This function is called by a driver after it has programmed the device
+to generate an interrupt.  The function waits \emph{waittime} ticks, and
+returns the IRQ number on which the device interrupted.  If no
+interrupt occurred, 0 is returned.
+
+\item[register_blkdev]
+\funcproto int register_blkdev(unsigned major, const char *name,
+				struct~file_operations *fops);
+
+This function registers a driver for the major number \emph{major}.
+When an access is made to a device with the specified major number,
+the kernel accesses the driver through the operations vector \emph{fops}.
+The function returns 0 on success, non-zero otherwise.
+
+\item[unregister_blkdev]
+\funcproto int unregister_blkdev(unsigned major, const char *name);
+
+This function removes the association between a driver and the major
+number \emph{major}, previously established by {\tt register_blkdev}.
+The function returns 0 on success, non-zero otherwise.
+
+\item[getblk]
+\funcproto struct~buffer_head *getblk(kdev_t dev, int block, int size);
+
+This function is called by a driver to allocate a buffer \emph{size} bytes in
+length and associate it with device \emph{dev}, and block number \emph{block}.
+
+\item[brelse]
+\funcproto void brelse(struct~buffer_head *bh);
+
+This function frees the buffer \emph{bh}, previously allocated by
+{\tt getblk}.
+
+\item[bread]
+\funcproto struct~buffer_head *bread(kdev_t dev, int block, int size);
+
+This function allocates a buffer \emph{size} bytes in length, and fills
+it with data from device \emph{dev}, starting at block number \emph{block}.
+
+\item[block_write]
+\funcproto int block_write(struct~inode *inode, struct~file *file,
+				const char *buf, int count);
+
+This function is the default implementation of file write.  It is used
+by most of the Linux block drivers.  The function writes \emph{count}
+bytes of data to the device specified by \emph{i_rdev} field of
+\emph{inode}, starting at byte offset specified by \emph{f_pos} of
+\emph{file}, from the buffer \emph{buf}.  The function returns 0 for
+success, non-zero otherwise.
+
+\item[block_read]
+\funcproto int block_read(struct~inode *inode, struct~file *file,
+				const char *buf, int count);
+
+This function is the default implementation of file read.  It is used
+by most of the Linux block drivers.  The function reads \emph{count}
+bytes of data from the device specified by \emph{i_rdev} field of
+\emph{inode}, starting at byte offset specified by \emph{f_pos} field of
+\emph{file}, into the buffer \emph{buf}.  The function returns 0 for
+success, non-zero otherwise.
+
+\item[check_disk_change]
+\funcproto int check_disk_change(kdev_t dev);
+
+This function checks if media has been removed or changed in a
+removable medium device specified by \emph{dev}.  It does so by invoking the
+\emph{check_media_change} function in the driver's file operations
+vector.  If a change has occurred, it calls the driver's \emph{revalidate}
+function to validate the new media.  The function returns 0 if no
+medium change has occurred, non-zero otherwise.
+
+\item[request_dma]
+\funcproto int request_dma(unsigned drq, const char *name);
+
+This function allocates the DMA request line \emph{drq} for the calling
+driver.  It returns 0 on success, non-zero otherwise.
+
+\item[free_dma]
+\funcproto void free_dma(unsigned drq);
+
+This function frees the DMA request line \emph{drq} previously
+allocated by {\tt request_dma}.
+
+\item[disable_irq]
+\funcproto void disable_irq(unsigned irq);
+
+This function masks the interrupt request line \emph{irq} at the
+interrupt controller.
+
+\item[enable_irq]
+\funcproto void enable_irq(unsigned irq);
+
+This function unmasks the interrupt request line \emph{irq} at the
+interrupt controller.
+
+\item[request_irq]
+\funcproto int request_irq(unsigned~int irq,
+			   void (*handler)(int, struct),
+			   unsigned long flags,
+			   const char *device);
+
+This function allocates the interrupt request line \emph{irq}, and
+attach the interrupt handler \emph{handler} to it.  It returns 0 on
+success, non-zero otherwise.
+
+\item[free_irq]
+\funcproto void free_irq(unsigned int irq);
+
+This function frees the interrupt request line \emph{irq}, previously
+allocated by {\tt request_irq}.
+
+\item[kmalloc]
+\funcproto void *kmalloc(unsigned~int size, int priority);
+
+This function allocates \emph{size} bytes memory.
+The \emph{priority} argument is a set of bitfields defined as follows:
+\begin{icsymlist}
+\item[GFP_BUFFER]	Not used by the drivers.
+\item[GFP_ATOMIC]	Caller cannot sleep.
+\item[GFP_USER]		Not used by the drivers.
+\item[GFP_KERNEL]	Memory must be physically contiguous.
+\item[GFP_NOBUFFER]	Not used by the drivers.
+\item[GFP_NFS] 		Not used by the drivers.
+\item[GFP_DMA]		Memory must be usable by the DMA controller.
+			This means, on the x86, it must be below 16 MB, and
+			it must not cross a 64K boundary.  This flag implies
+			GFP_KERNEL.
+\end{icsymlist}
+
+\item[kfree]
+\funcproto void kfree(void *p);
+
+This function frees the memory \emph{p} previously allocated by
+{\tt kmalloc}.
+
+\item[vmalloc]
+\funcproto void *vmalloc(unsigned long size);
+
+This function allocates \emph{size} bytes of memory in kernel
+virtual space that need not have underlying contiguous physical memory.
+
+\item[check_region]
+\funcproto int check_region(unsigned port, unsigned size);
+
+Check if the I/O address space region starting at \emph{port} and
+\emph{size} bytes in length, is available for use.  Returns 0 if region is
+free, non-zero otherwise.
+
+\item[request_region]
+\funcproto void request_region(unsigned port, unsigned size,
+				const char *name);
+
+Allocate the I/O address space region starting at \emph{port} and
+\emph{size} bytes in length.  It is the caller's responsibility to
+make sure the region is free by calling {\tt check_region}, prior
+to calling this routine.
+
+\item[release_region]
+\funcproto void release_region(unsigned port, unsigned size);
+
+Free the I/O address space region starting at \emph{port} and
+\emph{size} bytes in length, previously allocated by {\tt request_region}.
+
+\item[add_wait_queue]
+\funcproto void add_wait_queue(struct~wait_queue **q, struct~wait_queue *wait);
+
+Add the wait element \emph{wait} to the wait queue \emph{q}.
+
+\item[remove_wait_queue]
+\funcproto void remove_wait_queue(struct~wait_queue **q,
+				  struct~wait_queue *wait);
+
+Remove the wait element \emph{wait} from the wait queue \emph{q}.
+
+\item[down]
+\funcproto void down(struct~semaphore *sem);
+
+Perform a down operation on the semaphore \emph{sem}.  The caller blocks if
+the value of the semaphore is less than or equal to 0.
+
+\item[sleep_on]
+\funcproto void sleep_on(struct~wait_queue **q, int interruptible);
+
+Add the caller to the wait queue \emph{q}, and block it.
+If \emph{interruptible} flag is non-zero, the caller can be woken up from
+its sleep by a signal.
+
+\item[wake_up]
+\funcproto void wake_up(struct~wait_queue **q);
+
+Wake up anyone waiting on the wait queue \emph{q}.
+
+\item[wait_on_buffer]
+\funcproto void wait_on_buffer(struct~buffer_head *bh);
+
+Put the caller to sleep, waiting on the buffer \emph{bh}.
+Called by drivers to wait for I/O completion on the buffer.
+
+\item[schedule]
+\funcproto void schedule(void);
+
+Call the scheduler to pick the next task to run.
+
+\item[add_timer]
+\funcproto void add_timer(struct~timer_list *timer);
+
+Schedule a time out.  The length of the time out and function to be called
+on timer expiry are specified in \emph{timer}.
+
+\item[del_timer]
+\funcproto int del_timer(struct~timer_list *timer);
+
+Cancel the time out \emph{timer}.
+\end{icsymlist}
+
+
+\subsection{Directory Structure}
+
+The {\tt linux} subdirectory in the \oskit\ source tree
+is organized as follows.
+The top-level {\tt linux/dev} directory
+contains all the glue code implemented by the Flux project
+to squash the Linux drivers into the \oskit{} driver framework.
+{\tt linux/fs} contains our glue for Linux filesystems,
+and {\tt linux/shared} contains glue used by both components.
+In general, everything \emph{except} the code in the {\tt linux/src} directory
+was written by us, whereas everything under {\tt linux/src}
+comes verbatim from Linux.
+Each of the subdirectories of {\tt linux/src}
+corresponds to the identically named subdirectories
+of in the Linux kernel source tree.
+
+Of course, there are a few necessary deviations from this rule:
+a few of the Linux header and source files are slightly modified,
+and a few of the Linux header files (but no source files)
+were completely replaced.
+The header files that were heavily modified include:
+
+\begin{csymlist}
+\item[linux/src/include/linux/sched.h]	Linux task and scheduling declarations
+\end{csymlist}
+
+
+\section{Block device drivers}
+
+\begin{table}
+\begin{tabular}[c]{|l|l||c|c|c|c|c|}
+\hline
+Name	& Description			& $V=P$
+					  & {\tt jiffies}
+					    & {\tt P+Y}
+					      & {\tt current}
+					        &	\\
+\hline
+\hline
+cmd640.c	& CMD640 IDE Chipset	& & & & &	\\\hline
+floppy		& Floppy drive		&*&*&*&*&	\\\hline
+ide-cd.c	& IDE CDROM		& &*&*&*&	\\\hline
+ide.c		& IDE Disk		& & & & &	\\\hline
+rz1000.c	& RZ1000 IDE Chipset	& & & &	&	\\\hline
+sd.c		& SCSI disk		& &*& &	&	\\\hline
+sr.c		& SCSI CDROM		& & & &	&	\\\hline
+triton.c	& Triton IDE Chipset	&*& & &	&	\\\hline
+\end{tabular}
+\label{linux-block-drivers}
+\caption{Linux block device drivers}
+\end{table}
+
+\section{Network drivers}
+
+Things drivers may want to do
+that make emulation difficult:
+\begin{itemize}
+\item	Call the 16-bit BIOS.
+\item	Use the system DMA controller.
+\item	Assume kernel virtual addresses are equivalent to physical addresses.
+\item	Assume kernel virtual addresses can be mapped to physical addresses
+	merely by adding a constant offset.
+\item	Implement timeouts by busy-waiting on a global clock-tick counter.
+\item	Busy-wait for interrupts.
+	XXX This means that the OS \emph{must} allow interrupts
+	during execution of process-level driver code,
+	and not just when all process-level activity is blocked.
+\end{itemize}
+
+\begin{table}
+\begin{tabular}[c]{|l|l||c|c|c|c|c|}
+\hline
+Name	& Description			& $V=P$
+					  & {\tt jiffies}
+					    & {\tt P+Y}
+					      & {\tt current}
+					        &	\\
+\hline
+\hline
+3c501.c		& 3Com 3c501 ethernet		& &*& &	&	\\\hline
+3c503.c		& NS8390 ethernet		& &*& &	&	\\\hline
+3c505.c		& 3Com Etherlink Plus (3C505)	& &*& &	&	\\\hline
+3c507.c		& 3Com EtherLink16		& &*& &	&	\\\hline
+3c509.c		& 3c509 EtherLink3 ethernet	& &*& &	&	\\\hline
+3c59x.c		& 3Com 3c590/3c595 "Vortex"	& &*& &	&	\\\hline
+ac3200.c	& Ansel Comm. EISA ethernet	& &*& &	&	\\\hline
+apricot.c	& Apricot			&*&*& &	&	\\\hline
+at1700.c	& Allied Telesis AT1700		& &*& &	&	\\\hline
+atp.c		& Attached (pocket) ethernet	& &*& &	&	\\\hline
+de4x5.c		& DEC DE425/434/435/500		& &*& &	&	\\\hline
+de600.c		& D-link DE-600			& &*& &	&	\\\hline
+de620.c		& D-link DE-620			& &*& &	&	\\\hline
+depca.c		& DEC DEPCA \& EtherWORKS	& &*& &	&	\\\hline
+e2100.c		& Cabletron E2100		& &*& &	&	\\\hline
+eepro.c		& Intel EtherExpress Pro/10	& &*& &	&	\\\hline
+eexpress.c	& Intel EtherExpress		& &*& &	&	\\\hline
+eth16i.c	& ICL EtherTeak 16i \& 32	& &*& &	&	\\\hline
+ewrk3.c		& DEC EtherWORKS 3		& &*& &	&	\\\hline
+hp-plus.c	& HP PCLAN/plus			& &*& &	&	\\\hline
+hp.c		& HP LAN			& &*& &	&	\\\hline
+hp100.c		& HP10/100VG ANY LAN		& &*& &	&	\\\hline
+lance.c		& AMD LANCE			&*&*& &	&	\\\hline
+ne.c		& Novell NE2000			& &*& &	&	\\\hline
+ni52.c		& NI5210 (i82586 chip)		& &*& &	&	\\\hline
+ni65.c		& NI6510 (am7990 `lance' chip)	&*&*& &	&	\\\hline
+seeq8005.c	& SEEQ 8005			& &*& &	&	\\\hline
+sk_g16.c	& Schneider \& Koch G16		& &*& &	&	\\\hline
+smc-ultra.c	& SMC Ultra			& &*& &	&	\\\hline
+tulip.c		& DEC 21040			&*&*& &	&	\\\hline
+wavelan.c	& AT\&T GIS (NCR) WaveLAN	& &*& &	&	\\\hline
+wd.c		& Western Digital WD80x3	& &*& &	&	\\\hline
+znet.c		& Zenith Z-Note			& &*& &	&	\\\hline
+\end{tabular}
+\label{linux-net-drivers}
+\caption{Linux network drivers}
+\end{table}
+
+\section{SCSI drivers}
+
+The Linux SCSI driver set includes
+both the low-level SCSI host adapter drivers
+and the high-level SCSI drivers for generic SCSI disks, tapes, etc.
+
+
+\begin{table}
+{\small
+\begin{tabular}[c]{|l|l||c|c|c|c|c|}
+\hline
+Name	& Description			& $V=P$
+					  & {\tt jiffies}
+					    & {\tt P+Y}
+					      & {\tt current}
+					 	&	\\
+\hline
+\hline
+53c7,8xx.c	& NCR 53C7x0, 53C8x0		&*&*& & &	\\\hline
+AM53C974.c	& AM53/79C974 (PCscsi)		&*& & &	&	\\\hline
+BusLogic.c	& BusLogic MultiMaster adapters	&*&*& &	&	\\\hline
+NCR53c406a.c	& NCR53c406a			&*&*& & &	\\\hline
+advansys.c	& AdvanSys SCSI Adapters	&*&*& &	&	\\\hline
+aha152x.c	& Adaptec AHA-152x		& &*& &	&	\\\hline
+aha1542.c	& Adaptec AHA-1542		&*&*& &	&	\\\hline
+aha1740.c	& Adaptec AHA-1740		&*& & &	&	\\\hline
+aic7xxx.c	& Adaptec AIC7xxx		&*&*& &	&	\\\hline
+eata.c		& EATA 2.x DMA host adapters	& &*& &	&	\\\hline
+eata_dma.c	& EATA/DMA host adapters	&*&*& &	&	\\\hline
+eata_pio.c	& EATA/PIO host adapters	& &*& &	&	\\\hline
+fdomain.c	& Future Domain TMC-16x0	& &*& &	&	\\\hline
+in2000.c	& Always IN 2000		& &*& &	&	\\\hline
+NCR5380.c	& Generic NCR5380		&*&*&*&	&	\\\hline
+pas16.c		& Pro Audio Spectrum/Studio 16	& & & &	&	\\\hline
+qlogic.c	& Qlogic FAS408			& &*& &	&	\\\hline
+scsi.c		& SCSI middle layer		&*&*&*&*&	\\\hline
+scsi_debug.c	& SCSI debug layer		& &*& &	&	\\\hline
+seagate.c	& ST01,ST02, TMC-885		& &*& &	&	\\\hline
+t128.c		& Trantor T128/128F/228		& & & &	&	\\\hline
+u14-34f.c	& UltraStor 14F/34F		&*&*& &	&	\\\hline
+ultrastor.c	& UltraStor 14F/24F/34F		&*& & &	&	\\\hline
+wd7000.c	& WD-7000			&*&*& &	&	\\\hline
+\end{tabular}
+\label{linux-scsi-drivers}
+\caption{Linux SCSI drivers}
+}
+\end{table}

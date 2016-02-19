@@ -1,0 +1,84 @@
+#
+# Copyright (c) 1995-1996, 1998, 2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_freebsd_dev_makerules_
+_oskit_freebsd_dev_makerules_ = yes
+
+TARGET	= liboskit_freebsd_dev.a
+
+SRCDIRS	+= $(addprefix $(OSKIT_SRCDIR)/freebsd/,	\
+		dev					\
+		dev/$(HOST_ARCH)			\
+		dev/$(HOST_ARCH)/conf			\
+		src/sys/i386/isa)
+
+# XXX This is a horrible kludge to get si.c to compile...
+DEFINES += -DTIOCSETP=-1
+
+# Build individual glue files for the ISA device drivers; see below.
+-include isadrivers
+ISAGLUE_CFILES := $(addsuffix _isaglue.c,$(ISADRIVERS))
+OBJFILES += $(addsuffix _isaglue.o,$(ISADRIVERS))
+CLEAN_FILES += isadrivers $(addsuffix _isaglue.c,$(ISADRIVERS))
+
+include $(OSKIT_SRCDIR)/freebsd/shared/GNUmakerules
+
+# Turn off warnings on legacy code
+WARNFLAGS += $(WARNFLAGS-$(patsubst $(OSKIT_SRCDIR)/freebsd/src/%,legacy,$<))
+WARNFLAGS-legacy += -Wno-unused
+WARNFLAGS-legacy += -Wno-uninitialized
+WARNFLAGS-legacy += -Wno-implicit
+WARNFLAGS-legacy += -Wno-parentheses
+WARNFLAGS-legacy += -Wno-format
+OSKIT_CFLAGS += $(WARNFLAGS)
+
+# Create the version.h header file from the information in conf/newvers.sh.
+version.h: $(OSKIT_SRCDIR)/freebsd/src/sys/conf/newvers.sh
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@"
+	sed -n -e 's/^REVISION=/#define REVISION /p' \
+	       -e 's/^BRANCH=/#define BRANCH /p' $< > $@.new
+	mv -f $@.new $@
+
+# make sure it gets built the first time, before we have automatic deps
+ioconf.o isa.o: version.h
+
+
+# Extract the list of ISA device drivers from <dev/freebsd_isa.h>;
+# the list will appear as a makefile variable called ISADRIVERS.
+# for each driver, we'll need to build a <driver>_isaglue.o stub file.
+isadrivers: $(OSKIT_SRCDIR)/oskit/dev/freebsd_isa.h \
+	    $(OSKIT_SRCDIR)/freebsd/dev/isadrivers.awk
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating makefile fragment $@"
+	sed -e 's/[(),]/ /g' <$< | \
+		$(AWK) -f $(OSKIT_SRCDIR)/freebsd/dev/isadrivers.awk >$@
+
+#KBF - added these files to eliminate the files created by the above rule
+CLEAN_FILES += version.h cx.h cy.h mse.h psm.h rc.h sc.h si.h sio.h
+
+%_isaglue.c: $(OSKIT_SRCDIR)/oskit/dev/freebsd_isa.h version.h \
+	     $(OSKIT_SRCDIR)/freebsd/src/sys/i386/i386/conf.c
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating FreeBSD ISA glue $@"
+	echo '#include "isa_glue.h"' >$@
+	sed -e '/#include "$*.h"/,/#endif/!d' \
+		< $(OSKIT_SRCDIR)/freebsd/src/sys/i386/i386/conf.c >>$@
+	echo 'static struct cdevsw gcdevsw =' >>$@
+	sed -e '/{ $*open/,/}/!d' \
+	    -e 's/},/};/' <$(OSKIT_SRCDIR)/freebsd/src/sys/i386/i386/conf.c >>$@
+	sed -n -e '/driver($*,/p' -e '/instance($*,/p' $< >>$@
+	echo 'enddriver($*)' >>$@
+
+endif

@@ -1,0 +1,8 @@
+Directories: oskit/unix/freebsd
+Target: part of liboskit_unix.a
+Documentation: unix-support.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	The FreeBSD-specific bits of liboskit_unix.a.  These functions
+	map various OSKit routines to underlying FreeBSD system calls.

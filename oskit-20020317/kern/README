@@ -1,0 +1,11 @@
+
+Directories: oskit/kern
+Target: liboskit_kern.a
+Documentation: doc/kern.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	A set of functions and definitions useful primarily in
+	OS kernels. The code in the top level directory is machine
+	independent kernel support. See the README files in the machine
+	dependent directories for more information.

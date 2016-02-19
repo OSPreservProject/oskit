@@ -1,0 +1,265 @@
+%
+% Copyright (c) 1997-1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{bootp}
+
+\newcommand{\bootp}{BOOTP}
+
+\section{Introduction}
+
+The \oskit{} provides a small library that allows \oskit{} clients to
+contact a \bootp{} server to obtain the information necessary to 
+configure their network parameters, such as IP address or hostname.
+The implementation is based on RFC 1048/1533.
+
+\section{External Dependencies}
+
+The current implementation requires the user to provide an
+implementation of the \texttt{oskit_etherdev} interface. Such interfaces
+are supported by the \oskit{}'s device driver components.
+It also requires access to the system clock. The library obtains 
+access to the system clock by calling 
+\texttt{oskit_clock_init}	% name might change
+It releases its reference after the \bootp{} protocol has finished.
+Additionally, \texttt{bootp_dump} uses \texttt{printf}.
+
+\section{API reference}
+
+The following sections describe the functions exported by the \bootp{}
+library in detail.
+All of these functions, as well as the types necessary to use them,
+are declared in the header file {\tt <oskit/net/bootp.h>}.
+
+\api{bootp_net_info}{\bootp{} protocol information structures}
+\begin{apisyn}
+\begin{codefrag}
+\small
+\begin{verbatim}
+struct bootp_addr_array {
+        struct in_addr *addr;   /* array of addresses */
+        int             len;    /* number of addresses */
+};
+
+struct bootp_net_info {
+        oskit_u32_t    flags;           /* which fields are valid */
+        struct in_addr ip;              /* client IP address */
+        struct in_addr netmask;         /* subnet mask */
+        struct in_addr server;          /* server that replied  */
+        struct bootp_addr_array gateway;        /* gateways */
+        struct bootp_addr_array dns_server;     /* DNS server address  */
+        struct bootp_addr_array time_server;    /* time server address  */
+        struct bootp_addr_array log_server;     /* log server address  */
+        struct bootp_addr_array lpr_server;     /* LPR server address  */
+        oskit_s32_t    time_offset;     /* offset from UTC */
+        char *hostname;                 /* client hostname */
+        char *server_name;              /* name of replying server */
+        char *bootfile_name;            /* boot file name */
+        char *domainname;               /* domain name */
+        unsigned char server_hwaddr[ETHER_ADDR_SIZE];   /* server address */
+};
+\end{verbatim}
+\end{codefrag}
+\end{apisyn}
+\begin{apidesc}
+	The first field of the \texttt{struct bootp_net_info} structure, 
+	\emph{flags},
+	denotes which of the other fields are valid.
+	\emph{flags} is an ORed combination of the flag values below.
+	Each flag corresponds to a field in the structure
+	with the same name (in lower case).
+
+	All other fields are of one of three types:
+	\begin{enumerate}
+	\item An IP address encoded as a 
+		\texttt{struct in_addr},
+	\item A string encoded as a \texttt{char *},
+	\item A list of IP addresses encoded in a
+		\texttt{struct bootp_addr_array}.
+	\end{enumerate}
+
+	The following table gives an overview of the flags that
+	are currently supported and the types of the corresponding
+	fields.
+
+	\begin{tabular}{|l|l|l|}
+	\hline
+	Field & Type & Function \\
+	\hline
+	\texttt{BOOTP_NET_IP}		& IP address & IP address \\
+	\texttt{BOOTP_NET_NETMASK}	& IP address & netmask \\
+	\texttt{BOOTP_NET_GATEWAY}	& IP address & gateway \\
+	\texttt{BOOTP_NET_SERVER}	& IP address & 
+		server that answered \bootp{} request \\
+	\texttt{BOOTP_NET_DNS_SERVER}	& List of IP addrs &
+		domain name servers \\
+	\texttt{BOOTP_NET_TIME_SERVER}	& List of IP addrs &
+		time servers \\
+	\texttt{BOOTP_NET_LOG_SERVER}	& List of IP addrs &
+		log servers \\
+	\texttt{BOOTP_NET_LPR_SERVER}	& List of IP addrs &
+		LPR servers \\
+	\texttt{BOOTP_NET_TIME_OFFSET}	& unsigned int & see below \\
+	\texttt{BOOTP_NET_HOSTNAME}	& string & hostname \\
+	\texttt{BOOTP_NET_SERVER_NAME}	& string & 
+		name of the \bootp{} server \\
+	\texttt{BOOTP_NET_BOOTFILE_NAME}& string &
+		bootfile name \\
+	\texttt{BOOTP_NET_DOMAINNAME}	& string &
+		DNS domain name \\
+	\texttt{BOOTP_NET_SERVER_ADDR}  & unsigned char[6] &
+		Ethernet MAC address of \bootp{} server \\
+	\hline
+	\end{tabular}
+
+	The \emph{time_offset} field
+	specifies the time offset of the local subnet in seconds
+	from Coordinated Universal Time (UTC). 
+	It is a signed 32-bit integer,
+        positive numbers indicate west of the Prime Meridian.
+	% and it even works on our subnet, thanks to Bart!
+\end{apidesc}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% bootp
+%
+\api{bootp_gen}{Generate a \bootp{} protocol request}
+\begin{apisyn}
+	\cinclude{oskit/net/bootp.h}
+
+	\funcproto int bootp_gen(oskit_etherdev_t *dev, 
+		\inoutparam struct~bootp_net_info *info,
+		int retries, int timeout);
+\end{apisyn}
+\begin{apidesc}
+	This function broadcasts \emph{retries} \bootp{} request packets,  
+	waiting \emph{timeout} milliseconds for a reply.
+
+	The only field of \emph{info} that is used as input for the request
+	is the \emph{ip} field corresponding to \texttt{BOOTP_NET_IP}.
+	See RFC 1048 for more explanation. Users should set this
+	field if they know their IP address; \texttt{BOOTP_NET_IP}
+	needs to be set in \emph{flags} if this is the case.
+
+	Lists of IP addresses and strings are dynamically
+	allocated as needed, users of \texttt{boopt_gen}
+	should pass the \emph{info} struct to 
+	\texttt{bootp_free} to deallocate them.
+\end{apidesc}
+\begin{apiparm}
+	\item[dev]
+		A pointer to an \texttt{oskit_etherdev} device interface.
+
+	\item[info]
+		The \bootp{} info to be used. 
+
+	\item[retries]
+		Number of \bootp{} request packets that are sent.
+
+	\item[timeout]
+		Timeout in milliseconds.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, \texttt{OSKIT_ETIMEDOUT} if the
+	operation timed out, or another error code as specified in
+	{\tt <oskit/error.h>}
+\end{apiret}
+\begin{apirel}
+	\texttt{bootp_net_info}
+\end{apirel}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% bootp
+%
+\api{bootp}{Generate a \bootp{} protocol request (simple interface)}
+\begin{apisyn}
+	\cinclude{oskit/net/bootp.h}
+
+	\funcproto int bootp(oskit_etherdev_t *dev, 
+		\inoutparam struct~bootp_net_info *info);
+\end{apisyn}
+\begin{apidesc}
+	This function performs a \bootp{} request with
+	a timeout of 200 milliseconds (1/5 of a second) with five retries
+	using \texttt{bootp_gen}.
+
+	The only field of \emph{info} that is used as input for the request
+	is the \emph{ip} field corresponding to \texttt{BOOTP_NET_IP}.
+	See RFC 1048 for more explanation. Users should set this
+	field if they know their IP address; \texttt{BOOTP_NET_IP}
+	needs to be set in \emph{flags} if this is the case.
+
+	Lists of IP addresses and strings are dynamically
+	allocated as needed, users of \texttt{boopt_gen}
+	should pass the \emph{info} struct to 
+	\texttt{bootp_free} to deallocate them.
+\end{apidesc}
+\begin{apiparm}
+	\item[dev]
+		A pointer to an \texttt{oskit_etherdev} device interface.
+	\item[info]
+		The \bootp{} info to be used.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, or an error code specified in
+	{\tt <oskit/error.h>} on error.
+\end{apiret}
+\begin{apirel}
+	\texttt{bootp_net_info}
+\end{apirel}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% bootp_free
+%
+\api{bootp_free}{Free the result of a \bootp{} request}
+\begin{apisyn}
+	\cinclude{oskit/net/bootp.h}
+
+	\funcproto void bootp_free(\inoutparam struct~bootp_net_info *info);
+\end{apisyn}
+\begin{apidesc}
+	The function frees data structures that were allocated
+	during a call to \texttt{bootp_gen}.
+\end{apidesc}
+\begin{apiparm}
+	\item[info]
+		The \bootp{} info to be freed.
+\end{apiparm}
+\begin{apirel}
+	\texttt{bootp_gen},
+	\texttt{bootp_net_info}
+\end{apirel}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% bootp_dump
+%
+\api{bootp_dump}{Dump the result of a \bootp{} via printf}
+\begin{apisyn}
+	\cinclude{oskit/net/bootp.h}
+
+	\funcproto void bootp_dump(struct~bootp_net_info *info);
+\end{apisyn}
+\begin{apidesc}
+	This function prints the contents stored in a
+	\texttt{bootp_net_info} structure to via \texttt{printf}.
+\end{apidesc}
+\begin{apiparm}
+	\item[info]
+		The \bootp{} info to be printed.
+\end{apiparm}
+\begin{apirel}
+	\texttt{bootp_net_info},
+	\texttt{printf}
+\end{apirel}

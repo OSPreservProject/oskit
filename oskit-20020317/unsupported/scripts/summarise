@@ -1,0 +1,41 @@
+#! /usr/local/bin/perl 
+
+# Usage: summarise prefix_1 ...prefix_n
+#
+# Tries to match lines of input against a list of prefixes.
+# Non-matching lines are copied to stdout.
+# Matching lines are collected together and printed in the form:
+#
+#  prefix{suffix1, ... suffixn}
+#
+# Often used in conjunction with imports and exports:
+#
+#  exports liboskit_kern.a \
+#  | summarise pdir_ oskit_ pic_ i16_bios_ i16_ phys_ intr_ \
+#              mem_ gdb_ console_ com_ dos_ cpu_ base_critical_ \
+#              base_ anno_ direct_cons_
+#
+#  imports liboskit_kern.a  | summarise str lmm osenv_ oskit_ 
+
+
+foreach $prefix (@ARGV) {
+    @entries{$prefix} = [];
+}
+
+LINE: while (<STDIN>) {
+    foreach $prefix (@ARGV) {
+	if (/^(\s*)$prefix(\w*)/) {
+	    $foo = $entries{$prefix};
+	    push(@$foo,$2);
+	    $indent = $1;
+	    next LINE;
+	}
+    }
+    print;
+}
+
+foreach $prefix (@ARGV) {
+    $foo = $entries{$prefix};
+    print "$indent$prefix\{", join(",",@$foo), "}\n";
+}
+

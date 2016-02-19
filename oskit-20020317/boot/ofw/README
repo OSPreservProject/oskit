@@ -1,0 +1,26 @@
+
+Directories: oskit/boot/ofw
+Target: ofwboot.o mkofwimage ldscript.elf2bsd
+Documentation: some in doc/intro.tex
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	This directory implements an OFW->Multiboot boot-adaptor.
+	It allows the user to create an OFW-bootable image from a
+	MultiBoot-compliant kernel plus any arbitrary boot-modules.
+
+	mkofwimage is a script for linking a kernel image
+	and arbitrary boot-modules
+	with ofwboot.o to create an image loadable by the 
+	OFW boot loader.
+
+	ofwboot.o is the icky magic needed to interface with
+	the OFW boot loader.
+	It takes the info given to it by the OFW boot loader
+	as well as the boot-module info added by mkbsdimage,
+	and creates a multiboot_info struct to pass to the booted
+	kernel.
+
+	ldscript.elf2bsd is the linker script that tells the GNU linker
+	how to take ELF binaries and produce an OFW compliant image
+	(netbsd a.out format) using linker emulation.
+

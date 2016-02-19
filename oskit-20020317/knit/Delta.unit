@@ -1,0 +1,421 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Example kernels
+//
+// Test: Hello_Delta
+// ToDo: example_timer
+// Test: Timer_Delta
+// Test: Timer1_COM_Delta
+// Test: Timer2_COM_Delta
+// Test: MemFS_COM_Delta
+// Test: Blkio_Delta
+// Test: DiskPart_Delta
+// Test: MemFS_Posix_Delta
+// Test: NetBSD_Posix_Delta
+// Test: PingReply_Delta
+// ToDo: hello_min
+// ToDo: echo
+// Test: Cat_Delta
+// ToDo: time_test
+// ToDo: example_ls
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+include "All.unit"
+
+package Memory = { 
+  libc_malloc, mem_obj, LMM, multiboot_physlmm, osenv_mem,
+}
+
+// The same but with a slightly richer libc API
+package FreeBSDMemory = {
+  freebsd_malloc, mem_obj, LMM, multiboot_physlmm, osenv_mem,
+}
+
+package X86Support = { 
+  x86, base_anno, null_segments, null_VM, breakpoint, base_stack, 
+  stack_trace, null_delay,
+}
+
+package Bootstrap = {
+  progress, version, multiboot_main2,
+}
+
+// Some approximation of application startup/shutdown:
+//    argc/argv, getenv, exit, perror
+package Process = {
+  invoke_main, libc_env, cmdline, libc_exit, libc_error,
+}
+
+// A filesystem: combine with a posix layer and a disk partition to use
+package BSD_FileSystem = {
+  netbsd_fs, null_call_context, gettimeofday_fromrtc, 
+}
+
+// The Posix and libc layers of file support.
+// (You might want to make a copy of this and use freebsd code instead of
+// libc_files.)
+package FileSupport = {
+  posix_file_descriptors, posix_files, fsn_obj, fsn, fs_wrappers,
+  libc_files, 
+}
+
+// The FreeBSD TCP/IP stack and all necessary support code
+package TCPIP = {
+    listener_mgr, 
+    libc_net, net_io, wrap_sockio, wrap_stream,
+    posix_sockets, freebsd_net, freebsd_netlib, 
+}
+
+package OSEnv = {
+  osenv_log, osenv_intr, osenv_irq, osenv_panic,
+  osenv_clock, osenv_timer, osenv_rtc, rtclock,
+  osenv_dump, osenv_device, osenv_driver, services,
+  osenv_isa, osenv_pci, osenv_ioport, osenv_softirq,
+}
+
+/************************************************************/
+/*#
+Standard kernel base that includes selectable console + gdb. 
+#*/
+/************************************************************/
+
+
+unit Base_Delta = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit      : _Exit_T,
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  depends{ main needs console_obj };
+  flatten;
+  glue{ 
+    Console_Delta,
+    libc_longjmp,      // note that this doesn't save floating point state
+    base_critical, set_irq_handler, // Interrupts
+    null_threads, listener,         // Thread related stuff
+    package Memory, package Process, package OSEnv,
+    package X86Support, package Bootstrap,
+    libc_sprintf, libc_string, oskit_IIDs, // general purpose libraries
+    buf_io,    // general purpose I/O support
+  };
+  defaults{ ld_symbols, _exit, };
+  link{
+    out = find { multiboot_main_wrapped }
+        + find Stack_T
+        + find Version_T;
+    progress = find Progress_T;
+    invoke   = find InvokeMain_T;
+
+    [reset]       <- netboot_reset <- {raw_reset,...};
+    [raw_reset]   <- base_reset    <- {...};
+
+    main        = find Main_T;
+    console_obj = find DefaultConsole_T;
+  }
+}
+
+/************************************************************/
+/*#
+Standard hello kernel that includes selectable console + gdb. 
+#*/
+/************************************************************/
+
+unit Hello_Delta = 
+  modify Base_Delta
+  deleting {
+  } adding {
+    glue{ example_hello, version_print };
+  }
+
+/************************************************************/
+/*#
+Standard "cat" kernel using MemFS that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit Cat_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ cat, bmod_populate, MemFS, package FileSupport };
+    defaults{ fs };
+    link{
+      [fs]      <- copy_bmod      <- {fs=fs_raw,...};
+      [fs_raw]  <- memfs_obj      <- {...};
+    }
+  }
+
+unit Cat_BSD_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ cat, package FileSupport, package BSD_FileSystem, 
+          diskpart, linux_dev, linux_ide
+    };
+    defaults{ rootfs };
+    link{
+      [rootfs] <- fs_init                  <- {blkio=hda0, mode, ...};
+      [hda0]   <- partition_init           <- {blkio=hda, name=partition, ...};
+      [hda]    <- ide_block_init_unwrapped <- {name=drive, mode, ...};
+
+      [partition] <- %{ char* partition_name="s1"; %};
+      [drive]     <- %{ char* ide_name="hda"; %};
+      [mode]      <- %{ int read_only=1; %};
+    }
+  }
+
+unit Console_Delta = {
+  imports[ string     : String_T, //  atol, strtol, strtoul
+           critical   : Critical_T,
+           trap       : Trap_T,
+           getenv     : GetEnv_T,
+// #ifdef HAVE_DEBUG_REGS
+           main       : Main_T,
+// #endif             
+           panic      : Panic_T, 
+           sprintf    : Sprintf_T,
+           vm         : VM_T,
+           cmdline    : CmdLine_T,
+           breakpoint : Breakpoint_T,
+           set_irq    : SetIRQHandler_T,
+           iids       : {
+                          oskit_asyncio_iid,
+                          oskit_iunknown_iid,
+                          oskit_posixio_iid,
+                          oskit_stream_iid,
+                          oskit_ttystream_iid,
+                        },
+         ];
+  exports[ console_obj : DefaultConsole_T,
+           direct      : DirectConsole_T,
+           stdin       : Stdin_T,
+           stdout      : Stdout_T,
+         ];
+  depends{ console_obj needs {console.fully_initialized} };
+  link{
+    [console,direct] <- base_console_w_direct
+                        <- { string, critical, trap, stdin, stdout,
+	                     getenv, main, panic, sprintf, vm, iids,
+	                     cmdline, breakpoint, set_irq };
+    [console_obj] <- console_obj <- {console,string,iids};
+    [stdout]      <- libc_stdout <- {putchar=console};
+    [stdin]       <- libc_stdin  <- {console,stdout};
+  }
+}
+  
+
+/************************************************************/
+/*#
+Standard timer kernel that includes selectable console + gdb. 
+#*/
+/************************************************************/
+
+unit Timer_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_timer };
+  }
+
+/************************************************************/
+/*#
+Standard timer_com kernel that includes selectable console + gdb.
+Doubles as timer_com2.
+#*/
+/************************************************************/
+
+unit Timer1_COM_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_timer_com };
+  }
+
+unit Timer2_COM_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_timer_com2 };
+  }
+
+/************************************************************/
+/*#
+Standard memfs_com kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit MemFS_COM_Delta =
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_memfs_com, principal };
+    glue{ bmod_populate, MemFS };
+    defaults{ fs };
+    link{
+      [fs]      <- copy_bmod      <- {fs=fs_raw,...};
+      [fs_raw]  <- memfs_obj      <- {...};
+    }
+  }
+
+/************************************************************/
+/*#
+Standard memfs_fs_posix kernel that includes selectable console + gdb.
+This combines a bmod/memfs with the FreeBSD C library and Posix libraries
+to do Posix style files stuff.
+#*/
+/************************************************************/
+
+unit MemFS_Posix_Delta =
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_memfs_posix, principal };
+    glue{ package FileSupport, memfs_obj, MemFS };
+  }
+
+/************************************************************/
+/*#
+Standard blkio kernel that includes selectable console + gdb.
+Supports just IDE drives. 
+#*/
+/************************************************************/
+
+unit Blkio_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_blkio, linux_dev, linux_ide };
+  }
+
+/************************************************************/
+/*#
+Standard diskpart kernel that includes selectable console + gdb.
+Supports just IDE drives. 
+#*/
+/************************************************************/
+
+unit DiskPart_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_diskpart, diskpart, linux_dev, linux_ide };
+  }
+
+/************************************************************/
+/*#
+Standard netbsd_fs_posix kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit NetBSD_Posix_Delta =
+  modify DiskPart_Delta
+  deleting{
+    glue{ example_diskpart };
+  } adding {
+    glue{ example_netbsdfs_posix, package FileSupport, package BSD_FileSystem
+    };
+    defaults{ rootfs };
+    link{
+      [rootfs] <- fs_init                  <- {blkio=hda0, mode, ...};
+      [hda0]   <- partition_init           <- {blkio=hda, name=partition, ...};
+      [hda]    <- ide_block_init_unwrapped <- {name=drive, mode, ...};
+
+      [partition] <- %{ char* partition_name="s1"; %};
+      [drive]     <- %{ char* ide_name="hda"; %};
+      [mode]      <- %{ int read_only=0; %};
+    }
+  }
+
+/************************************************************/
+/*#
+Standard pingreply kernel that includes selectable console + gdb.
+#*/
+/************************************************************/
+
+unit PingReply_Delta = 
+  modify Base_Delta
+  deleting{
+  } adding {
+    glue{ example_pingreply, examples_ipinfo, bootp, };
+    glue{ libc_net, net_io };
+    glue{ tulip, linux_ether_support, linux_dev };
+  }
+
+/************************************************************/
+/*#
+The MzScheme kernel.
+#*/
+/************************************************************/
+
+include "MzScheme.unit"
+
+unit MzKernelY =
+  modify Base_Delta
+  deleting {
+    glue{ libc_string, libc_env };
+    glue{ package Memory };
+  } adding {
+    glue{ MzScheme };
+    glue{ package FreeBSDMemory, freebsd_locale, freebsd_math,
+          freebsd_signals, freebsd_env, qsort, freebsd_mathstr, 
+          freebsd_stdtime, freebsd_quad, null_issetugid,
+          freebsd_string, 
+    };
+    // You only need one of the following 2 lines (but having both does
+    // no harm except for increasing build time).
+    glue{ diskpart, package BSD_FileSystem, };
+    glue{ MemFS };
+    glue{ package FileSupport, freebsd_files, };
+
+    // Network stuff
+    glue{ package TCPIP, bsd_socket_factory };
+    glue{ do_bootp, examples_ipinfo, bootp, first_etherdev, ether_if };
+    glue{ null_posix_process, };
+
+    // Device drivers
+    glue{ tulip, linux_ether_support };
+    glue{ linux_ide };
+    glue{ linux_dev };
+    defaults{ gethostname, rootfs };
+    link{
+
+      // Disk config - an empty memfs or real disk?
+      [rootfs]  <- memfs_obj      <- {...};
+
+//      [rootfs] <- fs_init                  <- {blkio=hda0, mode, ...};
+//      [hda0]   <- partition_init           <- {blkio=hda, name=partition, ...};
+//      [hda]    <- ide_block_init_unwrapped <- {name=drive, mode, ...};
+//
+//      partition = %{ char* partition_name="s1"; %};
+//      drive     = %{ char* ide_name="hda"; %};
+//      mode      = %{ int read_only=0; %};
+
+      // Network config
+      // ToDo: get the hostname from the netdisk bootp code
+      [gethostname] <- hostname <- [find String_T,hostname];
+      [hostname]    <- %{ const char* name = "bellies"; %};
+    }
+  }
+
+/************************************************************/
+// End
+/************************************************************/

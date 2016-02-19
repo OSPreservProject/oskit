@@ -1,0 +1,57 @@
+Known bugs and problems in the OSKit as of September 1, 2000.
+I'm sure we've forgotten a bunch of others.
+For some of these, more details are in the file `BUGS.details'.
+
+Bugs:
+
+* There is a linking problem with the `-loskit_startup' library when using
+  GNU binutils 2.x ld in an a.out configuration, we think due to a bug in
+  that linker.  (PR 220)
+
+* The loopback interface does not work in the -lfreebsd_net stack.  (PR 11)
+
+* A few device drivers don't pass our testing; see linux/dev/README
+  for Linux device driver status.
+
+Booting-related bugs:
+  See BUGS.details for more info.  We have not had time to look into the
+  DOS and Linux problems.  The third is elusive.
+
+* The DOS boot adapter (dosboot.exe, in boot/dos) doesn't work.
+
+Restrictions:
+
+* The OSKit must be compiled with a mininum optimization of
+  -O (-O1 or -O2) because of problems with inline functions.
+
+* The POSIX threads code has suffered bitrot and does not currently
+  run in SMP (Symmetric Multiprocessing) mode.
+
+* Recently some of our libraries that are commonly used together have
+  developed more interdependencies than desirable.  A result is that you
+  may have to stick them on the ld line more than once.
+
+* oskit_sendsig_init creates a libc-on-libkernel dependency that we
+  should remove by replacing it with a dynamic interface or a
+  function pointer.  For now, add another -loskit_kern.
+
+* NetBoot (boot/net) uses a hardcoded name -> IP address table.  In the
+  future it will use real DNS.
+
+* The filesystem libraries (Linux and NetBSD) do permission checking.
+  This can cause problems when file access routines are built on top
+  of them.  For example, implementing open("foo", O_WRONLY|O_CREAT, 0444)
+  in terms of the OSKit filesystem primitives doesn't work because
+  first a file is created with mode 0444 and then it is opened for
+  writing, which fails because the mode is 0444.  Linux and BSD have
+  similar create and open VFS primitives but permission checking is
+  done a layer up.  The OSKit interfaces should probably be like
+  that but such a major change requires more investigation.
+
+* The documentation suffers from a number of maladies; see doc/README.doc.
+
+Basic missing features:
+
+* Console code: there is no `pager' so info scrolls off before you
+  can see it.  At Utah we always debug via serial lines to other
+  machines, so we have not gotten around to adding this.

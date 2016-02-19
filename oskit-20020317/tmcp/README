@@ -1,0 +1,12 @@
+
+Directories: oskit/tmcp
+Target: oskit_libtmcp.a
+Documentation: none
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	This directory contains support for interfacing with the
+	Utah Testbed (emulab.net) Testbed Master Control Daemon (TMCD)
+	via the Testbed Master Control Protocol (TMCP), a cheezy text-based
+	UDP protocol.
+
+	No one outside of Utah should ever need this.

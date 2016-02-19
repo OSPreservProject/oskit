@@ -1,0 +1,18 @@
+
+Directories: oskit/clientos
+Target: Default implementation of the Client OS. This library is mandatatory
+        for all oskit kernels, although its exact implementation can vary.
+Documentation: See the source files
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	The Oskit libraries, in particular the C libraries, rely on
+	the existence of a Client OS library to provide default
+	implementations of many things, such as where to get memory,
+	the console object, how to exit, etc. Rather than depend on
+	linktime hell, the Client OS defines all this stuff in a few
+	well understood COM objects. These objects are installed in
+	the device registry, where other libraries can pick them up as
+	needed.
+
+	This library is mandatory for all oskit kernels.
+

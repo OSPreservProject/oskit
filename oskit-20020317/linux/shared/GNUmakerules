@@ -1,0 +1,106 @@
+#
+# Copyright (c) 1997-2000 The University of Utah and the Flux Group.
+# 
+# This file is part of the OSKit Linux Glue Libraries, which are free
+# software, also known as "open source;" you can redistribute them and/or
+# modify them under the terms of the GNU General Public License (GPL),
+# version 2, as published by the Free Software Foundation (FSF).
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#
+# This make cruft is shared between the Linux fs and dev stuff.
+# The respective fs and dev makefiles include this file,
+# which should be done after setting $(OBJFILES).
+#
+
+ifndef _oskit_linux_shared_makerules_
+_oskit_linux_shared_makerules_ = yes
+
+# Translate oskit architecture names (host_arch in configure.in)
+# to the Linux architecture names used to name the Linux source directories.
+LINUX_ARCH-x86 := i386
+LINUX_ARCH-arm32 := arm
+LINUX_HOST_ARCH := $(firstword $(LINUX_ARCH-$(HOST_ARCH)) $(HOST_ARCH))
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/linux/shared			\
+		$(OSKIT_SRCDIR)/linux/shared/libc		\
+		$(OSKIT_SRCDIR)/linux/shared/$(HOST_ARCH)	\
+		$(OSKIT_SRCDIR)/linux/src/lib			\
+		$(OSKIT_SRCDIR)/linux/src/arch/$(LINUX_HOST_ARCH)/lib
+
+INCDIRS +=	$(OSKIT_SRCDIR)/linux/src/include		\
+		$(OSKIT_SRCDIR)/linux/shared/libc		\
+		objinclude
+
+DEFINES += -DOSKIT -D__KERNEL__
+
+# If debugging is enabled,
+# define the symbol OSKIT_DEBUG instead of the usual DEBUG,
+# because the Linux drivers have their own meaning for DEBUG.
+ifneq "$(filter -DDEBUG, $(DEFINES))" ""
+DEFINES := $(subst -DDEBUG, -DOSKIT_DEBUG, $(DEFINES))
+endif
+
+#
+# We need to do this here since it adds stuff to $(OBJFILES).
+#
+### Include other appropriate make rules files ###
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+OSKIT_ASFLAGS += -D__ASSEMBLY__
+
+# Implicitly include the shared global.h header file at the top of all sources.
+# This header #defines a bunch of global Linux symbols
+# to ensure linker namespace cleanliness and avoid conflicts.
+OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/linux/shared/global.h
+$(OBJFILES): $(OSKIT_SRCDIR)/linux/shared/global.h
+
+# Create the objinclude/asm include symlink.
+# We have to kludge a little to get it to work right,
+# because OSKIT_SRCDIR might be either an absolute or a relative path
+# and it will only work reliably if interpreted from _this_ directory.
+$(OBJFILES): objinclude/asm
+CLEAN_FILES += objinclude objinclude_asm
+objinclude/asm:
+	$(OSKIT_QUIET_MAKE_INFORM) "Setting up $< link"
+	-mkdir -p objinclude
+	ln -s ../objinclude_asm objinclude/asm
+	ln -s $(OSKIT_SRCDIR)/linux/src/include/asm-$(LINUX_HOST_ARCH) objinclude_asm
+
+prepare:: objinclude/asm
+
+#
+# This needs config help. For now all ARM32 builds use the same subdirs.
+# The proc subdir points to proc-armv, which should be fine for anything
+# we care about. For the arch subdir, we will use the shark subdir from
+# a www.arm.linux.org.uk ARM kernel release.
+#
+ifeq ($(HOST_ARCH), arm32)
+$(OBJFILES): archinclude/asm/proc archinclude/asm/arch
+CLEAN_FILES += archinclude archinclude_asmproc archinclude_asmarch
+INCDIRS += archinclude
+
+archinclude/asm/proc:
+	$(OSKIT_QUIET_MAKE_INFORM) "Setting up $@ link"
+	-mkdir -p archinclude/asm
+	ln -fs ../../archinclude_asmproc archinclude/asm/proc
+	ln -fs $(OSKIT_SRCDIR)/linux/src/include/asm-$(LINUX_HOST_ARCH)/proc-armv \
+					archinclude_asmproc
+
+archinclude/asm/arch:
+	$(OSKIT_QUIET_MAKE_INFORM) "Setting up $@ link"
+	-mkdir -p archinclude/asm
+	ln -fs ../../archinclude_asmarch archinclude/asm/arch
+	ln -fs $(OSKIT_SRCDIR)/linux/src/include/asm-$(LINUX_HOST_ARCH)/arch-shark \
+					archinclude_asmarch
+
+prepare:: archinclude/asm/proc archinclude/asm/arch
+
+endif
+endif

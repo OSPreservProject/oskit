@@ -1,0 +1,25 @@
+
+Directories: oskit/fudp
+Target: liboskit_fudp.a
+Documentation: [doc/fudp.tex - should be, but doesn't exist yet]
+Original Code Source: Flux Research Group, University of Utah
+Description: 
+	A Fake UDP implementation.  It provides a simple send-only UDP
+	interface without fragmentation.  Basically, only oskit_socket_sendto
+	is provided.  
+
+	This is useful for the H-PFQ link-sharing code and is used by
+	examples/x86/hpfq_fudp.c.
+
+	Notable holes in this implementation are:
+
+		- It cannot send thru a gateway.  It expects the destination
+		  to be on the local network.  This is not hard to fix:
+		  just decide on an interface to obtain the netmask and gateway
+		  address and fix 'sk_sendto' to send to the gateway if
+		  needed.
+
+		- It does not invoke the ARP protocol to map IP addresses to
+		  ethernet addresses.  Instead it expects the caller of this
+		  library to load our fake ARP table via 'farp_add'.
+

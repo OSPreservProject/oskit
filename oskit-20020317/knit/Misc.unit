@@ -1,0 +1,2134 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Random components
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+/************************************************************/
+// Properties
+/************************************************************/
+
+type NoContext 
+type ProcessContext <= NoContext
+
+property context
+
+/************************************************************/
+// Units
+/************************************************************/
+
+bundletype IIDs_T = 
+            { osenv_safe_iid
+            , oskit_absio_iid
+            , oskit_asyncio_iid
+            , oskit_avc_iid
+// dead?            , oskit_avcomcallback_iid
+            , oskit_blkdev_iid
+            , oskit_blkio_iid
+            , oskit_bufio_iid
+            , oskit_bufio_stream_iid
+            , oskit_bufiovec_iid
+            , oskit_bus_iid
+            , oskit_cacheio_iid
+            , oskit_chario_iid
+            , oskit_clock_iid
+            , oskit_comsid_iid
+            , oskit_condvar_iid
+            , oskit_device_iid
+            , oskit_dir_iid
+            , oskit_dirents_iid
+            , oskit_dir_secure_iid
+            , oskit_driver_iid
+            , oskit_etherdev_iid
+            , oskit_file_iid
+            , oskit_file_secure_iid
+            , oskit_filepsid_iid
+            , oskit_filesystem_iid
+            , oskit_fsnamespace_iid
+            , oskit_idebus_iid
+            , oskit_isa_driver_iid
+            , oskit_isabus_iid
+            , oskit_isabus_io_iid
+            , oskit_iunknown_iid
+            , oskit_libcenv_iid
+            , oskit_listener_fanout_iid
+            , oskit_listener_iid
+            , oskit_local_isabus_iid
+            , oskit_lock_iid
+            , oskit_lock_mgr_iid
+            , oskit_mem_iid
+            , oskit_membus_iid
+            , oskit_netdev_iid
+            , oskit_netio_fanout_iid
+            , oskit_netio_iid
+            , oskit_openfile_iid
+            , oskit_osenv_device_iid
+            , oskit_osenv_driver_iid
+            , oskit_osenv_iid
+            , oskit_osenv_intr_iid
+            , oskit_osenv_ioport_iid
+            , oskit_osenv_irq_iid
+            , oskit_osenv_isa_iid
+            , oskit_osenv_log_iid
+            , oskit_osenv_mem_iid
+            , oskit_osenv_pci_config_iid
+            , oskit_osenv_rtc_iid
+            , oskit_osenv_sleep_iid
+            , oskit_osenv_timer_iid
+            , oskit_pipe_iid
+            , oskit_posixio_iid
+            , oskit_pqueue_iid
+            , oskit_principal_iid
+            , oskit_queue_iid
+            , oskit_scsibus_iid
+            , oskit_services_iid
+            , oskit_sleep_iid
+            , oskit_skbufio_iid
+            , oskit_socket_factory_iid
+            , oskit_socket_factory_secure_iid
+            , oskit_socket_iid
+            , oskit_socket_secure_iid
+            , oskit_stream_iid
+            , oskit_timer_iid
+            , oskit_ttydev_iid
+            , oskit_ttystream_iid
+            , pfq_leaf_iid
+            , pfq_sched_iid
+            }
+
+
+// actually, this imports initial_clientos_libcenv as well because
+// it's mentioned in oskit/com/libcenv.h and not marked extern.  ToDo?
+// mk_unit -o -n oskit_IIDs com/*_iid.o
+unit oskit_IIDs = {
+  imports[];
+  exports[ out : IIDs_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files "${BUILDDIR}" { 
+         "com/osenv_safe_iid.c",
+         "com/oskit_absio_iid.c",
+         "com/oskit_asyncio_iid.c",
+         "com/oskit_avc_iid.c",
+         "com/oskit_blkdev_iid.c",
+         "com/oskit_blkio_iid.c",
+         "com/oskit_bufio_iid.c",
+         "com/oskit_bufio_stream_iid.c",
+         "com/oskit_bufiovec_iid.c",
+         "com/oskit_bus_iid.c",
+         "com/oskit_cacheio_iid.c",
+         "com/oskit_chario_iid.c",
+         "com/oskit_clock_iid.c",
+         "com/oskit_comsid_iid.c",
+         "com/oskit_condvar_iid.c",
+         "com/oskit_device_iid.c",
+         "com/oskit_dir_iid.c",
+         "com/oskit_dir_secure_iid.c",
+         "com/oskit_dirents_iid.c",
+         "com/oskit_driver_iid.c",
+         "com/oskit_etherdev_iid.c",
+         "com/oskit_file_iid.c",
+         "com/oskit_file_secure_iid.c",
+         "com/oskit_filepsid_iid.c",
+         "com/oskit_filesystem_iid.c",
+         "com/oskit_fsnamespace_iid.c",
+         "com/oskit_idebus_iid.c",
+         "com/oskit_isa_driver_iid.c",
+         "com/oskit_isabus_iid.c",
+         "com/oskit_isabus_io_iid.c",
+         "com/oskit_iunknown_iid.c",
+         "com/oskit_libcenv_iid.c",
+         "com/oskit_listener_fanout_iid.c",
+         "com/oskit_listener_iid.c",
+         "com/oskit_local_isabus_iid.c",
+         "com/oskit_lock_iid.c",
+         "com/oskit_lock_mgr_iid.c",
+         "com/oskit_mem_iid.c",
+         "com/oskit_membus_iid.c",
+         "com/oskit_netdev_iid.c",
+         "com/oskit_netio_fanout_iid.c",
+         "com/oskit_netio_iid.c",
+         "com/oskit_openfile_iid.c",
+         "com/oskit_osenv_device_iid.c",
+         "com/oskit_osenv_driver_iid.c",
+         "com/oskit_osenv_iid.c",
+         "com/oskit_osenv_intr_iid.c",
+         "com/oskit_osenv_ioport_iid.c",
+         "com/oskit_osenv_irq_iid.c",
+         "com/oskit_osenv_isa_iid.c",
+         "com/oskit_osenv_log_iid.c",
+         "com/oskit_osenv_mem_iid.c",
+         "com/oskit_osenv_pci_config_iid.c",
+         "com/oskit_osenv_rtc_iid.c",
+         "com/oskit_osenv_sleep_iid.c",
+         "com/oskit_osenv_timer_iid.c",
+         "com/oskit_pipe_iid.c",
+         "com/oskit_posixio_iid.c",
+         "com/oskit_pqueue_iid.c",
+         "com/oskit_principal_iid.c",
+         "com/oskit_queue_iid.c",
+         "com/oskit_scsibus_iid.c",
+         "com/oskit_services_iid.c",
+         "com/oskit_sleep_iid.c",
+         "com/oskit_skbufio_iid.c",
+         "com/oskit_socket_factory_iid.c",
+         "com/oskit_socket_factory_secure_iid.c",
+         "com/oskit_socket_iid.c",
+         "com/oskit_socket_secure_iid.c",
+         "com/oskit_stream_iid.c",
+         "com/oskit_timer_iid.c",
+         "com/oskit_ttydev_iid.c",
+         "com/oskit_ttystream_iid.c",
+         "com/pfq_leaf_iid.c",
+         "com/pfq_sched_iid.c",
+       }
+  with flags com;
+}
+
+/************************************************************/
+// OSEnv - things needed by device drivers
+/************************************************************/
+
+// mk_unit -o -nosenv_device dev/device_register.o 
+unit osenv_device = {
+  imports[ panic    : OSEnvPanic_T,
+           iids     : { oskit_device_iid },
+           services : Services_T,     // oskit_services_create
+         ];
+  exports[ out : OSEnvDevice_T ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/device_register.c"
+       } with flags osenv;
+}
+
+// ToDo: this unit is identical to osenv_device modulo renaming
+// mk_unit -o -nosenv_driver dev/driver_register.o 
+unit osenv_driver = {
+  imports[ panic    : OSEnvPanic_T,
+           iids     : { oskit_driver_iid },
+           services : Services_T,   // oskit_services_create
+         ];
+  exports[ out : OSEnvDriver_T ];
+  initializer init for out;
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/driver_register.c"
+       } with flags osenv;
+}
+
+// mk_unit -o -nosenv_dump  dev/dump.o
+unit osenv_dump = {
+  imports[ malloc : Malloc_T,  // free (only)
+           string : String_T,
+           driver : { osenv_driver_lookup },
+           log    : OSEnvLog_T,
+           isa    : OSEnvISA_T,
+           iids   : { oskit_bus_iid
+                    , oskit_driver_iid
+                    },
+         ];
+  exports[ dump : OSEnvDump_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/dump.c" } with flags osenv;
+}
+
+// mk_unit -o -nosenv_ioport dev/io.o 
+unit osenv_ioport = {
+  imports[];
+  exports[ out : OSEnvIOPort_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/io.c"
+       } with flags osenv
+}
+
+// mk_unit -o -nosenv_isa  dev/isa_bus.o dev/dma.o dev/root.o dev/probe.o
+unit osenv_isa = {
+  imports[ driver   : OSEnvDriver_T,
+           mem      : OSEnvMem_T,
+           iids     : { oskit_bus_iid
+                      , oskit_device_iid
+                      , oskit_driver_iid
+                      , oskit_isa_driver_iid
+                      , oskit_isabus_iid
+                      , oskit_iunknown_iid
+                      },
+           free    : { free  }, // how come it's not osenv_free?
+           panic   : OSEnvPanic_T,
+           string  : String_T,
+           sprintf : Sprintf_T,
+         ];
+  exports[ isa : OSEnvISA_T ];
+  initializer osenv_isabus_init for isa;
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/isa_bus.c",
+         "dev/dma.c",
+         "dev/root.c",
+         "dev/probe.c",
+  } with flags osenv;
+}
+
+// mk_unit -o -nosenv_log    dev/log.o
+unit osenv_log = {
+  imports[ stdout : Stdout_T ];
+  exports[ osenv_log : OSEnvLog_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/log.c",
+  } with flags osenv;
+}
+
+
+// mk_unit -o -nosenv_logobj dev/osenv_log.o 
+unit osenv_logobj = {
+  imports[ panic     : OSEnvPanic_T,
+           osenv_log : OSEnvLog_T,
+           iids      : { oskit_iunknown_iid
+                       , oskit_osenv_log_iid
+                       },
+         ];
+  exports[ out : OSEnvLog_TObj ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/osenv_log.c"
+  } with flags osenv;
+}
+
+// mk_unit -o -nosenv_panic dev/panic.o 
+unit osenv_panic = {
+  imports[ log   : OSEnvLog_T,
+           panic : Panic_T,
+         ];
+  exports[ out : OSEnvPanic_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/panic.c"
+       } with flags osenv ;
+}
+
+// mk_unit -o -nosenv_pci dev/pcibus.o dev/pci.o 
+unit osenv_pci = {
+  imports[ ioport : OSEnvIOPort_T,
+           log    : OSEnvLog_T,
+         ];
+  exports[ out : OSEnvPCI_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/x86/pcibus.c"
+       , "dev/pci.c"
+       } with flags osenv;
+}
+
+// mk_unit -o -nosenv_pciobj dev/osenv_pci_config.o 
+unit osenv_pciobj = {
+  imports[ pci  : OSEnvPCI_T,
+           iids : { oskit_iunknown_iid
+                  , oskit_osenv_pci_config_iid
+                  },
+         ];
+  exports[ out : OSEnvPCIObj_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "dev/osenv_pci_config.c",
+  } with flags osenv;
+}
+    
+// // mk_unit -o -nosenv_registry  dev/osenv.o startup/start_osenv.o
+// unit osenv_registry = {
+//   imports[ device : OSEnvDevice_T
+//           , driver : OSEnvDriver_T
+//           , intr   : OSEnvIntr_T
+//           , ioport : OSEnvIOPort_T
+//           , irq    : OSEnvIRQ_T
+//           , isa    : OSEnvISA_T
+//           , log    : OSEnvLog_T
+//           , mem    : OSEnvMem_T   
+//           // not OSEnvPanic_T!
+//           , pci    : OSEnvPCI_T   
+//           , rtc    : OSEnvRTC_T  
+//           , sleep  : OSEnvSleep_T 
+//           , timer  : OSEnvTimer_T 
+//           , iids : 
+//               { oskit_bus_iid
+//               , oskit_driver_iid
+//               , oskit_osenv_device_iid
+//               , oskit_osenv_driver_iid
+//               , oskit_osenv_intr_iid
+//               , oskit_osenv_ioport_iid
+//               , oskit_osenv_irq_iid
+//               , oskit_osenv_isa_iid
+//               , oskit_osenv_log_iid
+//               , oskit_osenv_mem_iid
+//               , oskit_osenv_pci_config_iid
+//               , oskit_osenv_rtc_iid
+//               , oskit_osenv_sleep_iid
+//               , oskit_osenv_timer_iid
+//               , oskit_services_create
+//               }
+//           , panic  : OSEnvPanic_T
+//           , services : Services_T
+//           , stdout : Stdout_T // for start_osenv
+//          ];
+//   exports[ out : OSEnvRegistry_T ];
+//   initializer start_osenv for ;
+//   depends{ exports needs {device.oskit_create_osenv_device} + 
+//                       {driver.oskit_create_osenv_driver} +
+//                       {intr.oskit_create_osenv_intr} +
+//                       {ioport.oskit_create_osenv_ioport} +
+//                       {irq.oskit_create_osenv_irq} +
+//                       {isa.oskit_create_osenv_isa} + 
+//                       {log.oskit_create_osenv_log} +
+//                       {mem.oskit_create_osenv_mem} + 
+//                       {pci.oskit_create_osenv_pci_config} + 
+//                       {rtc.oskit_create_osenv_rtc} +
+//                       {sleep.oskit_create_osenv_sleep} + 
+//                       {timer.oskit_create_osenv_timer} + 
+//                       iids + 
+//                       panic };
+//   depends{ {start_osenv} needs {services.oskit_set_osenv} + out + stdout }; 
+//   depends{ {start_osenv} < {services.oskit_get_osenv} };
+//   files{ 
+// //       "dev/init.c",  // contains initialiser glue
+//          "dev/osenv.c"
+//        } with flags osenv;
+//   files{ "startup/start_osenv.c"
+//        } with flags startup;
+// }
+
+unit OSEnv = {
+  imports[ base_irq: { base_irq_default_handler, base_irq_handlers },
+           vm      : VM_T,
+           pic     : PIC_T,
+           rtc2    : RTC_T,
+           services2: Services_T, // oskit_lookup_first, oskit_services_create
+           malloc  : Malloc_T,    // { malloc, free, sfree }
+           panic2  : Panic_T,
+           sprintf : Sprintf_T,
+           string  : String_T,    // memcpy, memset, strcmp, strcpy, strncpy
+           stdout  : Stdout_T,
+           iids    : { oskit_bus_iid
+                     , oskit_device_iid
+                     , oskit_driver_iid
+                     , oskit_isa_driver_iid
+                     , oskit_isabus_iid
+                     , oskit_iunknown_iid
+                     , oskit_mem_iid
+                     , oskit_osenv_device_iid
+                     , oskit_osenv_driver_iid
+                     , oskit_osenv_intr_iid
+                     , oskit_osenv_ioport_iid
+                     , oskit_osenv_irq_iid
+                     , oskit_osenv_isa_iid
+                     , oskit_osenv_log_iid
+                     , oskit_osenv_mem_iid
+                     , oskit_osenv_pci_config_iid
+                     , oskit_osenv_rtc_iid
+                     , oskit_osenv_sleep_iid
+                     , oskit_osenv_timer_iid
+                     , oskit_sleep_iid
+                     },
+           phys_lmm : PhysLMM_T,
+           memobj   : MemObj_T,
+	];
+  exports[ device   : OSEnvDevice_T,
+           driver   : OSEnvDriver_T,
+           dump     : OSEnvDump_T,
+           intr     : OSEnvIntr_T,
+           ioport   : OSEnvIOPort_T,
+           irq      : OSEnvIRQ_T,
+           isa      : OSEnvISA_T,
+           log      : OSEnvLog_T,  
+           panic    : OSEnvPanic_T, 
+           mem      : OSEnvMem_T,   
+           pci      : OSEnvPCI_T,   
+           rtc      : OSEnvRTC_T,  
+           sleep    : OSEnvSleep_T, 
+           timer    : OSEnvTimer_T, 
+         ];
+  link{
+    [device] <- osenv_device <- [panic,iids,services2]; 
+    [driver] <- osenv_driver <- [panic,iids,services2]; 
+    [dump]   <- osenv_dump   <- [malloc,string,driver,log,isa,iids];
+    [intr]   <- osenv_intr   <- [];   
+    [ioport] <- osenv_ioport <- []; 
+    [irq]    <- osenv_irq    <- [base_irq,log,mem,pic];    
+    [isa]    <- osenv_isa    <- [driver,mem,iids,malloc,panic,string,sprintf];    
+    [log]    <- osenv_log    <- [stdout];
+    [panic]  <- osenv_panic  <- [log,panic2];  
+    [mem]    <- osenv_mem    <- [memobj,vm,phys_lmm];
+    [pci]    <- osenv_pci    <- [ioport,log];    
+    [rtc]    <- osenv_rtc    <- [intr,log,rtc2];    
+    [sleep]  <- osenv_sleep  <- [intr];  
+    [timer]  <- osenv_timer  <- [intr,irq,log,panic];  
+  }
+}
+
+/************************************************************/
+// quad
+/************************************************************/
+
+// mk_unit -o -nfreebsd_quad freebsd/libc/adddi3.o freebsd/libc/anddi3.o freebsd/libc/ashldi3.o freebsd/libc/ashrdi3.o freebsd/libc/cmpdi2.o freebsd/libc/divdi3.o freebsd/libc/fixdfdi.o freebsd/libc/fixsfdi.o freebsd/libc/fixunsdfdi.o freebsd/libc/fixunssfdi.o freebsd/libc/floatdidf.o freebsd/libc/floatdisf.o freebsd/libc/floatunsdidf.o freebsd/libc/iordi3.o freebsd/libc/lshrdi3.o freebsd/libc/lshldi3.o freebsd/libc/moddi3.o freebsd/libc/muldi3.o freebsd/libc/negdi2.o freebsd/libc/notdi2.o freebsd/libc/qdivrem.o freebsd/libc/subdi3.o freebsd/libc/ucmpdi2.o freebsd/libc/udivdi3.o freebsd/libc/umoddi3.o freebsd/libc/xordi3.o
+
+/*#
+64-bit arithmetic.
+#*/
+
+unit freebsd_quad = {
+  imports[];
+  exports[ quad : Quad_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/quad/adddi3.c",
+         "freebsd/3.x/src/lib/libc/quad/anddi3.c",
+         "freebsd/3.x/src/lib/libc/quad/ashldi3.c",
+         "freebsd/3.x/src/lib/libc/quad/ashrdi3.c",
+         "freebsd/3.x/src/lib/libc/quad/cmpdi2.c",
+         "freebsd/3.x/src/lib/libc/quad/divdi3.c",
+         "freebsd/3.x/src/lib/libc/quad/fixdfdi.c",
+         "freebsd/3.x/src/lib/libc/quad/fixsfdi.c",
+         "freebsd/3.x/src/lib/libc/quad/fixunsdfdi.c",
+         "freebsd/3.x/src/lib/libc/quad/fixunssfdi.c",
+         "freebsd/3.x/src/lib/libc/quad/floatdidf.c",
+         "freebsd/3.x/src/lib/libc/quad/floatdisf.c",
+         "freebsd/3.x/src/lib/libc/quad/floatunsdidf.c",
+         "freebsd/3.x/src/lib/libc/quad/iordi3.c",
+         "freebsd/3.x/src/lib/libc/quad/lshrdi3.c",
+         "freebsd/3.x/src/lib/libc/quad/lshldi3.c",
+         "freebsd/3.x/src/lib/libc/quad/moddi3.c",
+         "freebsd/3.x/src/lib/libc/quad/muldi3.c",
+         "freebsd/3.x/src/lib/libc/quad/negdi2.c",
+         "freebsd/3.x/src/lib/libc/quad/notdi2.c",
+         "freebsd/3.x/src/lib/libc/quad/qdivrem.c",
+         "freebsd/3.x/src/lib/libc/quad/subdi3.c",
+         "freebsd/3.x/src/lib/libc/quad/ucmpdi2.c",
+         "freebsd/3.x/src/lib/libc/quad/udivdi3.c",
+         "freebsd/3.x/src/lib/libc/quad/umoddi3.c",
+         "freebsd/3.x/src/lib/libc/quad/xordi3.c",
+  } with flags freebsd_libc;
+}
+
+/************************************************************/
+// math
+/************************************************************/
+
+flags freebsd_math = {
+   "-I${OSKITDIR}/freebsd/3.x/src/lib/msun/src/",
+   "-Wno-uninitialized",
+   "-Wno-implicit",
+   "-Wno-unused",
+   flags freebsd_libc
+}
+
+unit freebsd_math = {
+  imports[ errno : Errno_T, fds : PosixFD_T ];
+  exports[ math : Math_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "freebsd/3.x/src/lib/libc/i386/gen/isinf.c",
+    "freebsd/3.x/src/lib/libc/i386/gen/infinity.c",
+  }  with flags freebsd_libc;
+  files {
+    "freebsd/3.x/src/lib/msun/i387/e_acos.S",
+    "freebsd/3.x/src/lib/msun/src/e_acosf.c",
+    "freebsd/3.x/src/lib/msun/src/e_acosh.c",
+    "freebsd/3.x/src/lib/msun/src/e_acoshf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_asin.S",
+    "freebsd/3.x/src/lib/msun/src/e_asinf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_atan2.S",
+    "freebsd/3.x/src/lib/msun/src/e_atan2f.c",
+    "freebsd/3.x/src/lib/msun/src/e_atanh.c",
+    "freebsd/3.x/src/lib/msun/src/e_atanhf.c",
+    "freebsd/3.x/src/lib/msun/src/e_cosh.c",
+    "freebsd/3.x/src/lib/msun/src/e_coshf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_exp.S",
+    "freebsd/3.x/src/lib/msun/src/e_expf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_fmod.S",
+    "freebsd/3.x/src/lib/msun/src/e_fmodf.c",
+    "freebsd/3.x/src/lib/msun/src/e_gamma.c",
+    "freebsd/3.x/src/lib/msun/src/e_gamma_r.c",
+    "freebsd/3.x/src/lib/msun/src/e_gammaf.c",
+    "freebsd/3.x/src/lib/msun/src/e_gammaf_r.c",
+    "freebsd/3.x/src/lib/msun/src/e_hypot.c",
+    "freebsd/3.x/src/lib/msun/src/e_hypotf.c",
+    "freebsd/3.x/src/lib/msun/src/e_j0.c",
+    "freebsd/3.x/src/lib/msun/src/e_j0f.c",
+    "freebsd/3.x/src/lib/msun/src/e_j1.c",
+    "freebsd/3.x/src/lib/msun/src/e_j1f.c",
+    "freebsd/3.x/src/lib/msun/src/e_jn.c",
+    "freebsd/3.x/src/lib/msun/src/e_jnf.c",
+    "freebsd/3.x/src/lib/msun/src/e_lgamma.c",
+    "freebsd/3.x/src/lib/msun/src/e_lgamma_r.c",
+    "freebsd/3.x/src/lib/msun/src/e_lgammaf.c",
+    "freebsd/3.x/src/lib/msun/src/e_lgammaf_r.c",
+    "freebsd/3.x/src/lib/msun/i387/e_log.S",
+    "freebsd/3.x/src/lib/msun/i387/e_log10.S",
+    "freebsd/3.x/src/lib/msun/src/e_log10f.c",
+    "freebsd/3.x/src/lib/msun/src/e_logf.c",
+    "freebsd/3.x/src/lib/msun/src/e_pow.c",
+    "freebsd/3.x/src/lib/msun/src/e_powf.c",
+    "freebsd/3.x/src/lib/msun/src/e_rem_pio2.c",
+    "freebsd/3.x/src/lib/msun/src/e_rem_pio2f.c",
+    "freebsd/3.x/src/lib/msun/i387/e_remainder.S",
+    "freebsd/3.x/src/lib/msun/src/e_remainderf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_scalb.S",
+    "freebsd/3.x/src/lib/msun/src/e_scalbf.c",
+    "freebsd/3.x/src/lib/msun/src/e_sinh.c",
+    "freebsd/3.x/src/lib/msun/src/e_sinhf.c",
+    "freebsd/3.x/src/lib/msun/i387/e_sqrt.S",
+    "freebsd/3.x/src/lib/msun/src/e_sqrtf.c",
+    // "freebsd/3.x/src/lib/msun/src/get_hw_float.c",
+    "freebsd/3.x/src/lib/msun/src/k_cos.c",
+    "freebsd/3.x/src/lib/msun/src/k_cosf.c",
+    "freebsd/3.x/src/lib/msun/src/k_rem_pio2.c",
+    "freebsd/3.x/src/lib/msun/src/k_rem_pio2f.c",
+    "freebsd/3.x/src/lib/msun/src/k_sin.c",
+    "freebsd/3.x/src/lib/msun/src/k_sinf.c",
+    "freebsd/3.x/src/lib/msun/src/k_standard.c",
+    "freebsd/3.x/src/lib/msun/src/k_tan.c",
+    "freebsd/3.x/src/lib/msun/src/k_tanf.c",
+    "freebsd/3.x/src/lib/msun/src/s_asinh.c",
+    "freebsd/3.x/src/lib/msun/src/s_asinhf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_atan.S",
+    "freebsd/3.x/src/lib/msun/src/s_atanf.c",
+    "freebsd/3.x/src/lib/msun/src/s_cbrt.c",
+    "freebsd/3.x/src/lib/msun/src/s_cbrtf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_ceil.S",
+    "freebsd/3.x/src/lib/msun/src/s_ceilf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_copysign.S",
+    "freebsd/3.x/src/lib/msun/src/s_copysignf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_cos.S",
+    "freebsd/3.x/src/lib/msun/src/s_cosf.c",
+    "freebsd/3.x/src/lib/msun/src/s_erf.c",
+    "freebsd/3.x/src/lib/msun/src/s_erff.c",
+    "freebsd/3.x/src/lib/msun/src/s_expm1.c",
+    "freebsd/3.x/src/lib/msun/src/s_expm1f.c",
+    "freebsd/3.x/src/lib/msun/src/s_fabs.c",
+    "freebsd/3.x/src/lib/msun/src/s_fabsf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_finite.S",
+    "freebsd/3.x/src/lib/msun/src/s_finitef.c",
+    "freebsd/3.x/src/lib/msun/i387/s_floor.S",
+    "freebsd/3.x/src/lib/msun/src/s_floorf.c",
+    "freebsd/3.x/src/lib/msun/src/s_frexp.c",
+    "freebsd/3.x/src/lib/msun/src/s_frexpf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_ilogb.S",
+    "freebsd/3.x/src/lib/msun/src/s_ilogbf.c",
+    "freebsd/3.x/src/lib/msun/src/s_isnan.c",
+    "freebsd/3.x/src/lib/msun/src/s_isnanf.c",
+    "freebsd/3.x/src/lib/msun/src/s_ldexp.c",
+    "freebsd/3.x/src/lib/msun/src/s_ldexpf.c",
+    "freebsd/3.x/src/lib/msun/src/s_lib_version.c",
+    "freebsd/3.x/src/lib/msun/i387/s_log1p.S",
+    "freebsd/3.x/src/lib/msun/src/s_log1pf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_logb.S",
+    "freebsd/3.x/src/lib/msun/src/s_logbf.c",
+    "freebsd/3.x/src/lib/msun/src/s_matherr.c",
+    "freebsd/3.x/src/lib/msun/src/s_modf.c",
+    "freebsd/3.x/src/lib/msun/src/s_modff.c",
+    "freebsd/3.x/src/lib/msun/src/s_nextafter.c",
+    "freebsd/3.x/src/lib/msun/src/s_nextafterf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_rint.S",
+    "freebsd/3.x/src/lib/msun/src/s_rintf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_scalbn.S",
+    "freebsd/3.x/src/lib/msun/src/s_scalbnf.c",
+    "freebsd/3.x/src/lib/msun/src/s_signgam.c",
+    "freebsd/3.x/src/lib/msun/i387/s_significand.S",
+    "freebsd/3.x/src/lib/msun/src/s_significandf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_sin.S",
+    "freebsd/3.x/src/lib/msun/src/s_sinf.c",
+    "freebsd/3.x/src/lib/msun/i387/s_tan.S",
+    "freebsd/3.x/src/lib/msun/src/s_tanf.c",
+    "freebsd/3.x/src/lib/msun/src/s_tanh.c",
+    "freebsd/3.x/src/lib/msun/src/s_tanhf.c",
+    "freebsd/3.x/src/lib/msun/src/w_acos.c",
+    "freebsd/3.x/src/lib/msun/src/w_acosf.c",
+    "freebsd/3.x/src/lib/msun/src/w_acosh.c",
+    "freebsd/3.x/src/lib/msun/src/w_acoshf.c",
+    "freebsd/3.x/src/lib/msun/src/w_asin.c",
+    "freebsd/3.x/src/lib/msun/src/w_asinf.c",
+    "freebsd/3.x/src/lib/msun/src/w_atan2.c",
+    "freebsd/3.x/src/lib/msun/src/w_atan2f.c",
+    "freebsd/3.x/src/lib/msun/src/w_atanh.c",
+    "freebsd/3.x/src/lib/msun/src/w_atanhf.c",
+    "freebsd/3.x/src/lib/msun/src/w_cabs.c",
+    "freebsd/3.x/src/lib/msun/src/w_cabsf.c",
+    "freebsd/3.x/src/lib/msun/src/w_cosh.c",
+    "freebsd/3.x/src/lib/msun/src/w_coshf.c",
+    "freebsd/3.x/src/lib/msun/src/w_drem.c",
+    "freebsd/3.x/src/lib/msun/src/w_dremf.c",
+    "freebsd/3.x/src/lib/msun/src/w_exp.c",
+    "freebsd/3.x/src/lib/msun/src/w_expf.c",
+    "freebsd/3.x/src/lib/msun/src/w_fmod.c",
+    "freebsd/3.x/src/lib/msun/src/w_fmodf.c",
+    "freebsd/3.x/src/lib/msun/src/w_gamma.c",
+    "freebsd/3.x/src/lib/msun/src/w_gamma_r.c",
+    "freebsd/3.x/src/lib/msun/src/w_gammaf.c",
+    "freebsd/3.x/src/lib/msun/src/w_gammaf_r.c",
+    "freebsd/3.x/src/lib/msun/src/w_hypot.c",
+    "freebsd/3.x/src/lib/msun/src/w_hypotf.c",
+    "freebsd/3.x/src/lib/msun/src/w_j0.c",
+    "freebsd/3.x/src/lib/msun/src/w_j0f.c",
+    "freebsd/3.x/src/lib/msun/src/w_j1.c",
+    "freebsd/3.x/src/lib/msun/src/w_j1f.c",
+    "freebsd/3.x/src/lib/msun/src/w_jn.c",
+    "freebsd/3.x/src/lib/msun/src/w_jnf.c",
+    "freebsd/3.x/src/lib/msun/src/w_lgamma.c",
+    "freebsd/3.x/src/lib/msun/src/w_lgamma_r.c",
+    "freebsd/3.x/src/lib/msun/src/w_lgammaf.c",
+    "freebsd/3.x/src/lib/msun/src/w_lgammaf_r.c",
+    "freebsd/3.x/src/lib/msun/src/w_log.c",
+    "freebsd/3.x/src/lib/msun/src/w_log10.c",
+    "freebsd/3.x/src/lib/msun/src/w_log10f.c",
+    "freebsd/3.x/src/lib/msun/src/w_logf.c",
+    "freebsd/3.x/src/lib/msun/src/w_pow.c",
+    "freebsd/3.x/src/lib/msun/src/w_powf.c",
+    "freebsd/3.x/src/lib/msun/src/w_remainder.c",
+    "freebsd/3.x/src/lib/msun/src/w_remainderf.c",
+    "freebsd/3.x/src/lib/msun/src/w_scalb.c",
+    "freebsd/3.x/src/lib/msun/src/w_scalbf.c",
+    "freebsd/3.x/src/lib/msun/src/w_sinh.c",
+    "freebsd/3.x/src/lib/msun/src/w_sinhf.c",
+    "freebsd/3.x/src/lib/msun/src/w_sqrt.c",
+    "freebsd/3.x/src/lib/msun/src/w_sqrtf.c",
+    "freebsd/3.x/src/lib/msun/src/w_y0.c",
+    "freebsd/3.x/src/lib/msun/src/w_y0f.c",
+    "freebsd/3.x/src/lib/msun/src/w_y1.c",
+    "freebsd/3.x/src/lib/msun/src/w_y1f.c",
+    "freebsd/3.x/src/lib/msun/src/w_yn.c",
+    "freebsd/3.x/src/lib/msun/src/w_ynf.c",
+  }  with flags freebsd_math;
+}
+
+// TODO: fix dependency below. It's only commented out to avoid a
+//       mysterious cycle
+
+unit freebsd_mathstr = {
+  imports[ locale : FreeBSDLocale_T,
+	   error : Error_T,
+	   string : String_T,
+	   malloc : Malloc_T,
+	   quad : Quad_T ];
+  exports[ out : MathString_T ];
+  depends{ exports needs {} }; // ToDo: exports + inits + finis needs imports
+  files{
+    "freebsd/3.x/src/lib/libc/stdlib/atof.c",
+    "freebsd/3.x/src/lib/libc/stdlib/atoi.c",
+    "freebsd/3.x/src/lib/libc/stdlib/atol.c",
+    "freebsd/3.x/src/lib/libc/stdlib/strtod.c",
+    "freebsd/3.x/src/lib/libc/stdlib/strtol.c",
+    "freebsd/3.x/src/lib/libc/stdlib/strtoq.c",
+    "freebsd/3.x/src/lib/libc/stdlib/strtoul.c",
+    "freebsd/3.x/src/lib/libc/stdlib/strtouq.c",
+  } with flags freebsd_libc;
+}
+
+/************************************************************/
+// locale
+/************************************************************/
+
+unit freebsd_locale = {
+  imports [ string : String_T,
+	    cfiles : FreeBSDFiles_T,
+            error  : Error_T,
+            exit   : Exit_T,
+	    malloc : Malloc_T,
+	    time   : FreeBSDTime_T ];
+  exports [ locale : FreeBSDLocale_T ];
+  depends{ exports + inits + finis needs imports };
+  files {
+    "freebsd/libc/glue/progname.c",
+
+    "freebsd/3.x/src/lib/libc/locale/ansi.c",
+    "freebsd/3.x/src/lib/libc/locale/big5.c",
+    "freebsd/3.x/src/lib/libc/locale/collate.c",
+    "freebsd/3.x/src/lib/libc/locale/collcmp.c",
+    "freebsd/3.x/src/lib/libc/locale/euc.c",
+    "freebsd/3.x/src/lib/libc/locale/frune.c",
+    "freebsd/3.x/src/lib/libc/locale/isctype.c",
+    "freebsd/3.x/src/lib/libc/locale/lconv.c",
+    "freebsd/3.x/src/lib/libc/locale/localeconv.c",
+    "freebsd/3.x/src/lib/libc/locale/mbrune.c",
+    "freebsd/3.x/src/lib/libc/locale/mskanji.c",
+    "freebsd/3.x/src/lib/libc/locale/nomacros.c",
+    "freebsd/3.x/src/lib/libc/locale/none.c",
+    "freebsd/3.x/src/lib/libc/locale/rune.c",
+    "freebsd/3.x/src/lib/libc/locale/runetype.c",
+    "freebsd/3.x/src/lib/libc/locale/setinvalidrune.c",
+    "freebsd/3.x/src/lib/libc/locale/setlocale.c",
+    "freebsd/3.x/src/lib/libc/locale/setrunelocale.c",
+    "freebsd/3.x/src/lib/libc/locale/table.c",
+    "freebsd/3.x/src/lib/libc/locale/tolower.c",
+    "freebsd/3.x/src/lib/libc/locale/toupper.c",
+    "freebsd/3.x/src/lib/libc/locale/utf2.c",
+  } with flags freebsd_libc;
+}
+
+/************************************************************/
+// FreeBSD Lib
+/************************************************************/
+
+// ToDo: not 100% pure freebsd code
+unit freebsd_lib = {
+  imports[ mem    : OSEnvMem_T,
+           memobj : MemObj_T,
+           console: Console_T,
+           panic  : Panic_T,
+           bufio  : BufIO_T,
+           netio  : NetIO_T,
+           listener_mgr : ListenerMgr_T,
+           files  : PosixFiles_T,
+           fds    : PosixFD_T,
+           isthreaded : { __isthreaded, __cleanup },
+           issetugid : { issetugid },
+           posixsignals : PosixSignals_T,
+           time   : PosixTime_T,
+           _exit  : _Exit_T,
+           cmdline : CmdLine_T,
+           sockets : PosixSocket_T,
+           string : String_T,
+           iids   : {
+               oskit_asyncio_iid,
+               oskit_bufio_iid,
+               oskit_bufio_stream_iid,
+               oskit_bufiovec_iid,
+               oskit_etherdev_iid,
+               oskit_iunknown_iid,
+               oskit_posixio_iid,
+               oskit_socket_factory_iid,
+               oskit_socket_iid,
+               oskit_stream_iid,
+               oskit_dir_iid,
+             },
+         ];
+  exports[ cfiles   : FreeBSDFiles_T,
+           signal   : Signal_T,
+           malloc   : { extends Malloc_T, reallocf },
+           quad     : Quad_T,
+           math     : Math_T,
+           mathstr  : MathString_T,
+           locale   : FreeBSDLocale_T,
+           sometime : SomeTime_T,
+           freebsdtime : FreeBSDTime_T,
+           net    : Net_T,
+           error  : Error_T,
+           sprintf: Sprintf_T,
+           freebsd_string : FreeBSDString_T,
+           getenv : GetPutEnv_T,
+           exit   : Exit_T,
+           atexit : AtExit_T,
+           stdin  : Stdin_T,
+           stdout : Stdout_T
+         ];
+  defaults{ 
+    // pure things of no interest
+    sprintf, string, iids, net, quad,
+    // factories - also fairly dull
+    bufio, netio, listener_mgr, 
+    // things so ubiquitous as to be not worth mentioning
+    malloc, memobj, panic, stdout, error,
+  };
+  link{
+    [cfiles]      <- freebsd_files <- {files,fds,mem,bizarro_stuff=isthreaded,math,mathstr,atexit,...};
+    [sometime]    <- freebsd_sometime <- {getenv,fds,files,issetugid,...};
+    [signal]      <- freebsd_signals  <- [posixsignals];
+    [malloc]      <- freebsd_malloc   <- {...};  // has reallocf
+    [quad]        <- freebsd_quad     <- [];
+    [mathstr]     <- freebsd_mathstr  <- {locale,quad,...};
+    [math]        <- freebsd_math     <- {fds,...};
+    [locale]      <- freebsd_locale   <- {cfiles,error,exit,time=freebsdtime,...};
+    [freebsdtime] <- freebsd_stdtime  <- {time,locale,files,cfiles,fds,issetugid,getenv,...};
+    [net]         <- libc_net         <- {sprintf};
+    [error]       <- libc_error       <- {stdout,sprintf};
+    [sprintf]     <- libc_sprintf     <- [];
+    [freebsd_string] <- freebsd_string <- {locale,...};
+    [getenv]      <- freebsd_env      <- {cmdline,freebsd_string,...};
+    [exit,atexit] <- libc_exit        <- [_exit];
+    [stdin]       <- libc_stdin       <- [console,stdout]; 
+    [stdout]      <- freebsd_stdout   <- [cfiles,isthreaded];
+    // [netlib]   <- freebsd_netlib   <- {locale,atexit,files,cfiles,fds,getenv,issetugid,freebsdtime,stdout,sockets,mathstr,...};
+  }
+}
+
+// Identical to the above but omits sockets for use in kernels that don't
+// do networking and/or want to do their own.
+unit freebsd_lib_old = {
+  imports[ mem     : OSEnvMem_T,
+           memobj : MemObj_T,
+           console: Console_T,
+           panic  : Panic_T,
+           bufio  : BufIO_T,
+           netio  : NetIO_T,
+           listener_mgr : ListenerMgr_T,
+           files  : PosixFiles_T,
+           fds    : PosixFD_T,
+           isthreaded : { __isthreaded, __cleanup },
+           issetugid : { issetugid },
+           posixsignals : PosixSignals_T,
+           time   : PosixTime_T,
+           _exit  : _Exit_T,
+           cmdline : CmdLine_T,
+           string : String_T,
+           iids   : {
+               oskit_asyncio_iid,
+               oskit_bufio_iid,
+               oskit_bufio_stream_iid,
+               oskit_bufiovec_iid,
+               oskit_etherdev_iid,
+               oskit_iunknown_iid,
+               oskit_posixio_iid,
+               oskit_socket_factory_iid,
+               oskit_socket_iid,
+               oskit_stream_iid,
+               oskit_dir_iid,
+             },
+         ];
+  exports[ cfiles    : FreeBSDFiles_T,
+           signal   : Signal_T,
+           malloc   : { extends Malloc_T, reallocf },
+           quad     : Quad_T,
+           math     : Math_T,
+           mathstr  : MathString_T,
+           locale   : FreeBSDLocale_T,
+           sometime : SomeTime_T,
+           freebsdtime : FreeBSDTime_T,
+           net    : Net_T,
+           error  : Error_T,
+           sprintf: Sprintf_T,
+           freebsd_string : FreeBSDString_T,
+           getenv : GetPutEnv_T,
+           exit   : Exit_T,
+           atexit : AtExit_T,
+           stdin  : Stdin_T,
+           stdout : Stdout_T
+         ];
+  defaults{ 
+    // pure things of no interest
+    sprintf, string, iids, net, quad,
+    // factories - also fairly dull
+    bufio, netio, listener_mgr, 
+    // things so ubiquitous as to be not worth mentioning
+    malloc, memobj, panic, stdout, error,
+  };
+  link{
+    [cfiles]      <- freebsd_files    <- {files,fds,mem,bizarro_stuff=isthreaded,math,mathstr,atexit,...};
+    [sometime]    <- freebsd_sometime <- {getenv,fds,files,issetugid,...};
+    [signal]      <- freebsd_signals  <- [posixsignals];
+    [malloc]      <- freebsd_malloc   <- {...};  // has reallocf
+    [quad]        <- freebsd_quad     <- [];
+    [mathstr]     <- freebsd_mathstr  <- {locale,quad,...};
+    [math]        <- freebsd_math     <- {fds,...};
+    [locale]      <- freebsd_locale   <- {cfiles,error,exit,time=freebsdtime,...};
+    [freebsdtime] <- freebsd_stdtime  <- {time,locale,files,cfiles,fds,issetugid,getenv,...};
+    [net]         <- libc_net         <- {sprintf};
+    [error]       <- libc_error       <- {stdout,sprintf};
+    [sprintf]     <- libc_sprintf     <- [];
+    [freebsd_string] <- freebsd_string<- {locale,...};
+    [getenv]      <- freebsd_env      <- {cmdline,freebsd_string,...};
+    [exit,atexit] <- libc_exit        <- [_exit];
+    [stdin]       <- libc_stdin       <- [console,stdout]; 
+    [stdout]      <- freebsd_stdout   <- [cfiles]; 
+    // [netlib]   <- freebsd_netlib   <- {locale,atexit,files,cfiles,fds,getenv,issetugid,freebsdtime,stdout,sockets,mathstr,...};
+  }
+}
+
+unit freebsd_env = {
+  imports[ cmdline : CmdLine_T,
+           malloc  : Malloc_T, 
+           freebsd_string : FreeBSDString_T,
+           malloc  : { extends Malloc_T, reallocf }, // for setenv
+         ];
+  exports[ out : GetPutEnv_T ];
+  depends{ exports + inits + finis needs cmdline };
+  depends{ {out.putenv,out.setenv} needs imports };
+  files{ "freebsd/3.x/src/lib/libc/stdlib/getenv.c",
+         "freebsd/3.x/src/lib/libc/stdlib/putenv.c",
+         "freebsd/3.x/src/lib/libc/stdlib/setenv.c",
+  } with flags freebsd_libc;
+}
+
+unit freebsd_string = {
+  imports[ malloc : Malloc_T,
+           locale : FreeBSDLocale_T,
+           errno  : Errno_T ];
+  exports[ out : FreeBSDString_T ];
+  depends{ {out.strdup} needs malloc };
+//  depends{ {out.strcasecmp, out.strtol, out.strtoul} needs locale };
+  depends{ {out.strtol, out.strtoul} needs errno };
+  files{ "freebsd/3.x/src/lib/libc/string/memchr.c"
+       , "freebsd/3.x/src/lib/libc/string/memcmp.c"
+       , "freebsd/3.x/src/lib/libc/string/memset.c"
+       , "freebsd/3.x/src/lib/libc/string/memcpy.c"
+       , "freebsd/3.x/src/lib/libc/string/bcmp.c"
+       , "freebsd/3.x/src/lib/libc/string/rindex.c"
+       , "freebsd/3.x/src/lib/libc/string/index.c"
+       , "freebsd/3.x/src/lib/libc/string/strcasecmp.c"
+       , "freebsd/3.x/src/lib/libc/string/strcat.c"
+       , "freebsd/3.x/src/lib/libc/string/strchr.c"
+       , "freebsd/3.x/src/lib/libc/string/strcmp.c"
+       , "freebsd/3.x/src/lib/libc/string/strcpy.c"
+       , "freebsd/3.x/src/lib/libc/string/strcspn.c"
+       , "freebsd/3.x/src/lib/libc/string/strlen.c"
+       , "freebsd/3.x/src/lib/libc/string/strncat.c"
+       , "freebsd/3.x/src/lib/libc/string/strncmp.c"
+       , "freebsd/3.x/src/lib/libc/string/strncpy.c"
+       , "freebsd/3.x/src/lib/libc/string/strpbrk.c"
+       , "freebsd/3.x/src/lib/libc/string/strrchr.c"
+       , "freebsd/3.x/src/lib/libc/string/strsep.c"
+       , "freebsd/3.x/src/lib/libc/string/strspn.c"
+       , "freebsd/3.x/src/lib/libc/string/strstr.c"
+       , "freebsd/3.x/src/lib/libc/string/strtok.c"
+       , "freebsd/3.x/src/lib/libc/string/bcopy.c"
+       , "freebsd/3.x/src/lib/libc/string/bzero.c"
+       , "freebsd/3.x/src/lib/libc/string/strdup.c"
+	
+	//- Wrong pace for these (they're in mathstr), but we want to match String_T
+       , "freebsd/3.x/src/lib/libc/stdlib/atol.c"
+       , "freebsd/3.x/src/lib/libc/stdlib/strtol.c"
+       , "freebsd/3.x/src/lib/libc/stdlib/strtoul.c"
+   
+    } with flags freebsd_libc;
+}
+
+// mk_unit -n freebsd_netlib freebsd/libc/addr2ascii.o freebsd/libc/ascii2addr.o freebsd/libc/base64.o freebsd/libc/ether_addr.o freebsd/libc/gethostbydns.o freebsd/libc/gethostbyht.o freebsd/libc/gethostbynis.o freebsd/libc/gethostnamadr.o freebsd/libc/getnetbydns.o freebsd/libc/getnetbyht.o freebsd/libc/getnetbynis.o freebsd/libc/getnetnamadr.o freebsd/libc/herror.o freebsd/libc/inet_addr.o freebsd/libc/inet_lnaof.o freebsd/libc/inet_makeaddr.o freebsd/libc/inet_net_ntop.o freebsd/libc/inet_net_pton.o freebsd/libc/inet_neta.o freebsd/libc/inet_netof.o freebsd/libc/inet_network.o freebsd/libc/inet_ntoa.o freebsd/libc/inet_ntop.o freebsd/libc/inet_pton.o freebsd/libc/linkaddr.o freebsd/libc/map_v4v6.o freebsd/libc/ns_addr.o freebsd/libc/ns_name.o freebsd/libc/ns_netint.o freebsd/libc/ns_ntoa.o freebsd/libc/ns_parse.o freebsd/libc/ns_print.o freebsd/libc/ns_ttl.o freebsd/libc/nsap_addr.o freebsd/libc/recv.o freebsd/libc/res_comp.o freebsd/libc/res_data.o freebsd/libc/res_debug.o freebsd/libc/res_init.o freebsd/libc/res_mkquery.o freebsd/libc/res_mkupdate.o freebsd/libc/res_update.o freebsd/libc/res_query.o freebsd/libc/res_send.o freebsd/libc/send.o
+
+// Doesn't work, yet:
+unit freebsd_netlib = {
+  imports[ locale      : FreeBSDLocale_T,
+           atexit      : AtExit_T,
+           error       : Error_T,
+	   stdout      : Stdout_T,
+	   files       : PosixFiles_T,
+	   cfiles      : FreeBSDFiles_T,
+	   fds         : PosixFD_T,
+	   time        : PosixTime_T,
+	   process     : PosixProcess_T, // getpid
+	   string      : FreeBSDString_T,
+	   mathstr     : MathString_T,
+	   getenv      : GetEnv_T,
+	   malloc      : Malloc_T,
+	   sprintf     : Sprintf_T,
+           issetugid   : { issetugid },
+	   freebsdtime : FreeBSDTime_T,
+           sockets     : PosixSocket_T,
+           gethostname : { gethostname },
+           panic       : Panic_T,
+         ];
+  exports[ out : FreeBSDNetlib_T ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    // These should really be imported from outside but life is short...
+    "freebsd/3.x/src/lib/libc/gen/syslog.c",
+    "freebsd/libc/glue/progname.c",
+    "freebsd/3.x/src/lib/libc/gen/assert.c",
+
+    // Whereas these ones are all legit
+    "freebsd/3.x/src/lib/libc/net/addr2ascii.c",
+    "freebsd/3.x/src/lib/libc/net/ascii2addr.c",
+    "freebsd/3.x/src/lib/libc/net/base64.c",
+    "freebsd/3.x/src/lib/libc/net/ether_addr.c",
+    "freebsd/3.x/src/lib/libc/net/gethostbydns.c",
+    "freebsd/3.x/src/lib/libc/net/gethostbyht.c",
+    "freebsd/3.x/src/lib/libc/net/gethostbynis.c",
+    "freebsd/3.x/src/lib/libc/net/gethostnamadr.c",
+    "freebsd/3.x/src/lib/libc/net/getnetbydns.c",
+    "freebsd/3.x/src/lib/libc/net/getnetbyht.c",
+    "freebsd/3.x/src/lib/libc/net/getnetbynis.c",
+    "freebsd/3.x/src/lib/libc/net/getnetnamadr.c",
+    "freebsd/3.x/src/lib/libc/net/herror.c",
+    "freebsd/3.x/src/lib/libc/net/inet_addr.c",
+    "freebsd/3.x/src/lib/libc/net/inet_lnaof.c",
+    "freebsd/3.x/src/lib/libc/net/inet_makeaddr.c",
+    "freebsd/3.x/src/lib/libc/net/inet_net_ntop.c",
+    "freebsd/3.x/src/lib/libc/net/inet_net_pton.c",
+    "freebsd/3.x/src/lib/libc/net/inet_neta.c",
+    "freebsd/3.x/src/lib/libc/net/inet_netof.c",
+    "freebsd/3.x/src/lib/libc/net/inet_network.c",
+    "freebsd/3.x/src/lib/libc/net/inet_ntoa.c",
+    "freebsd/3.x/src/lib/libc/net/inet_ntop.c",
+    "freebsd/3.x/src/lib/libc/net/inet_pton.c",
+    "freebsd/3.x/src/lib/libc/net/linkaddr.c",
+    "freebsd/3.x/src/lib/libc/net/map_v4v6.c",
+    "freebsd/3.x/src/lib/libc/net/ns_addr.c",
+    "freebsd/3.x/src/lib/libc/net/ns_name.c",
+    "freebsd/3.x/src/lib/libc/net/ns_netint.c",
+    "freebsd/3.x/src/lib/libc/net/ns_ntoa.c",
+    "freebsd/3.x/src/lib/libc/net/ns_parse.c",
+    "freebsd/3.x/src/lib/libc/net/ns_print.c",
+    "freebsd/3.x/src/lib/libc/net/ns_ttl.c",
+    "freebsd/3.x/src/lib/libc/net/nsap_addr.c",
+    "freebsd/3.x/src/lib/libc/net/recv.c",
+    "freebsd/3.x/src/lib/libc/net/res_comp.c",
+    "freebsd/3.x/src/lib/libc/net/res_data.c",
+    "freebsd/3.x/src/lib/libc/net/res_debug.c",
+    "freebsd/3.x/src/lib/libc/net/res_init.c",
+    "freebsd/3.x/src/lib/libc/net/res_mkquery.c",
+    "freebsd/3.x/src/lib/libc/net/res_mkupdate.c",
+    "freebsd/3.x/src/lib/libc/net/res_update.c",
+    "freebsd/3.x/src/lib/libc/net/res_query.c",
+    "freebsd/3.x/src/lib/libc/net/res_send.c",
+    "freebsd/3.x/src/lib/libc/net/send.c",
+  } with flags freebsd_libc;
+}
+
+unit linux_devices = {
+  imports[ osenv_driver: OSEnvDriver_T,
+           osenv_device: OSEnvDevice_T,
+           intr        : OSEnvIntr_T,
+           ioport      : OSEnvIOPort_T,
+           irq         : OSEnvIRQ_T,
+           softirq     : OSEnvSoftIRQ_T,
+           isa         : OSEnvISA_T,
+           log         : OSEnvLog_T,
+           osenv_mem   : OSEnvMem_T,
+           osenv_panic : OSEnvPanic_T,
+           osenv_sleep : OSEnvSleep_T,
+           timer       : OSEnvTimer_T,
+           pci         : OSEnvPCI_T,
+           cpu         : CPU_T,
+           string      : String_T,
+           iids : { oskit_bufio_iid
+                  , oskit_device_iid
+                  , oskit_etherdev_iid
+                  , oskit_iunknown_iid
+                  , oskit_netdev_iid
+                  , oskit_netio_iid
+                  , oskit_driver_iid
+                  , oskit_isa_driver_iid
+                  , oskit_bus_iid
+                  , oskit_blkio_iid
+                  , oskit_idebus_iid
+                  , oskit_blkdev_iid
+                  , oskit_skbufio_iid
+                  },
+         ];
+  exports[ dev     : LinuxDeviceSupport_T,
+           eth     : LinuxEtherSupport_T,
+           ide     : IDE_T,
+           drivers : {drivers}, // virtual symbol
+         ];
+  link{
+    [eth,drivers] <- linux_ether_support <- {dev,
+                   driver=osenv_driver,device=osenv_device,isa,log,timer,
+                   osenv_sleep,panic=osenv_panic,
+                   iids,string};
+
+//    // This wrapping is a little strange because the initializer is shared
+//    // with the IDE device probing...
+//    [linux_eth,drivers] <- wrap prepost{funs={pre =osenv_sleep.osenv_process_lock,
+//                                             post=osenv_sleep.osenv_process_unlock}}(
+//                  linux_ether_support <- {linux_dev,
+//                   osenv_driver,osenv_device,isa,log,timer,
+//                   iids,string});
+
+    // IDE driver
+    [ide]        <- linux_ide <- {driver=osenv_driver,isa,log,timer,osenv_sleep,iids,dev,string};
+
+//     // Here's that same initializer being wrapped again
+//     [ide]        <- wrap prepost{funs={pre =osenv_sleep.osenv_process_lock,
+//                                     post=osenv_sleep.osenv_process_unlock}}(
+//                   linux_ide{driver=osenv_driver,isa,log,timer,iids,dev,string});
+
+
+    [dev]   <- linux_dev <- { log, osenv_sleep, isa, intr, irq, softirq,
+                              pci, mem=osenv_mem, 
+                              driver=osenv_driver,
+                              ioport, timer, panic=osenv_panic,
+                              cpu, iids, string};
+
+  }
+}
+
+
+unit osenv_layer = {
+  imports[ string   : String_T,
+           iids     : { oskit_iunknown_iid, oskit_isabus_iid,
+                        oskit_isa_driver_iid, oskit_driver_iid, 
+                        oskit_device_iid,
+                        oskit_bus_iid, oskit_timer_iid, oskit_clock_iid,
+                        oskit_mem_iid, oskit_services_iid,
+                      },
+           panic    : Panic_T,
+           stdout   : Stdout_T,
+           raw_rtc  : RTC_T,
+           base_irq : IRQ_T,
+           softint  : SoftInt_T,
+           pic      : PIC_T,
+           memobj   : MemObj_T,
+           malloc   : Malloc_T,
+           phys_lmm : PhysLMM_T,
+           vm       : VM_T,
+           sprintf  : Sprintf_T,
+         ];
+  exports[ clock       : OSEnvClock_T ,
+           driver      : OSEnvDriver_T ,
+           device      : OSEnvDevice_T ,
+           intr        : OSEnvIntr_T ,
+           ioport      : OSEnvIOPort_T ,
+           irq         : OSEnvIRQ_T ,
+           softirq     : OSEnvSoftIRQ_T ,
+           isa         : OSEnvISA_T ,
+           log         : OSEnvLog_T ,
+           mem         : OSEnvMem_T ,
+           panic2      : OSEnvPanic_T ,
+           rtc         : OSEnvRTC_T ,
+// not exported  services 
+           timer       : OSEnvTimer_T ,
+           pci         : OSEnvPCI_T ,
+         ];
+  link{
+    [clock]       <- osenv_clock  <- {string,intr,mem,timer,iids};
+    [device]      <- osenv_device <- {iids,services,panic=panic2}; 
+    [driver]      <- osenv_driver <- {iids,services,panic=panic2};
+    [intr]        <- osenv_intr   <- {};
+    [ioport]      <- osenv_ioport <- {};
+    [irq]         <- osenv_irq    <- {base_irq, log, mem, pic};
+    [softirq]     <- osenv_softirq<- {intr,log,mem,panic,softint,irq=base_irq};
+    [isa]         <- osenv_isa    <- {driver, free=malloc, mem, panic=panic2, sprintf, string, iids};
+    [log]         <- osenv_log    <- {stdout};
+    [mem]         <- osenv_mem    <- {memobj,vm,phys_lmm};
+    [panic2]      <- osenv_panic  <- {log,panic};
+    [rtc]         <- osenv_rtc    <- {intr,log,rtc=raw_rtc};    
+    [services]    <- services     <- {malloc, panic, iids, memobj};
+    [timer]       <- osenv_timer  <- {intr, irq, log, panic=panic2 };
+    [pci]         <- osenv_pci    <- {ioport,log}; 
+  }
+}
+
+/************************************************************/
+// Posix Lib
+/************************************************************/
+
+/************************************************************/
+// LibC - a minimal C library
+/************************************************************/
+
+// ToDo: not clear whether to glom all exports together into one thing
+unit libc = {
+  imports[ _exit    : _Exit_T,
+           console  : Console_T,
+           memobj   : MemObj_T,
+           cmdline  : CmdLine_T,
+           fds      : PosixFD_T,
+           files    : PosixFiles_T,
+           panic    : Panic_T,
+           iids     : { oskit_stream_iid },
+         ];
+  exports[ string  : String_T,
+           env     : GetEnv_T,
+           sprintf : Sprintf_T,
+           exit    : Exit_T,
+           atexit  : AtExit_T,
+           stdout  : Stdout_T,
+           stdin   : Stdin_T,
+           malloc  : Malloc_T,
+           net     : Net_T,
+           longjmp : LongJmp_T,
+           cfiles  : CFiles_T,
+           error   : Error_T,
+         ];
+  link{
+    [string]  <- libc_string  <- [];
+    [env]     <- libc_env     <- [string,cmdline];
+    [sprintf] <- libc_sprintf <- [];
+    [exit, atexit] <- libc_exit <- [_exit];
+    [stdout]  <- libc_stdout  <- [console];
+    [stdin]   <- libc_stdin   <- [console, stdout];
+    [malloc]  <- libc_malloc  <- [memobj, panic, string];
+    [net]     <- libc_net     <- [sprintf];
+    [longjmp] <- libc_longjmp <- [];
+    [cfiles]  <- libc_files   <- [files,fds,error,malloc,iids];
+    [error]   <- libc_error   <- [stdout,sprintf];
+  }
+}
+
+// mk_unit -o -n libc_error libc/perror.o libc/errno.o libc/strerror.o
+unit libc_error = {
+  imports[ stdout   : Stdout_T,
+	   sprintf  : Sprintf_T,
+         ];
+  exports[ out : Error_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/string/strerror.c",
+         "libc/stdio/perror.c",
+         "libc/stdlib/errno.c",
+  } with flags libc;
+}
+
+// ToDo: can't use both this and libc_error
+// mk_unit -o -n libc_errno libc/errno.o
+unit libc_errno = {
+  imports[];
+  exports[ out : Errno_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdlib/errno.c" } with flags libc;
+}
+
+// mk_unit -o -n libc_string libc/memchr.o libc/memcmp.o libc/memset.o libc/bcmp.o libc/bcopy.o libc/rindex.o libc/strcasecmp.o libc/strcat.o libc/strchr.o libc/strcmp.o libc/strcpy.o libc/strcspn.o libc/strlen.o libc/strncat.o libc/strncmp.o libc/strncpy.o libc/strpbrk.o libc/strrchr.o libc/strsep.o libc/strspn.o libc/strstr.o libc/strtok.o libc/strtok_r.o libc/strtol.o libc/strtoul.o libc/atol.o
+unit libc_string = {
+  imports[];
+  exports[ out : String_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/string/memchr.c",
+         "libc/string/memcmp.c",
+         "libc/string/memset.c",
+         "libc/string/bcmp.c",
+         "libc/string/rindex.c",
+         "libc/string/strcasecmp.c",
+         "libc/string/strcat.c",
+         "libc/string/strchr.c",
+         "libc/string/strcmp.c",
+         "libc/string/strcpy.c",
+         "libc/string/strcspn.c",
+         "libc/string/strlen.c",
+         "libc/string/strncat.c",
+         "libc/string/strncmp.c",
+         "libc/string/strncpy.c",
+         "libc/string/strpbrk.c",
+         "libc/string/strrchr.c",
+         "libc/string/strsep.c",
+         "libc/string/strspn.c",
+         "libc/string/strstr.c",
+         "libc/string/strtok.c",
+         "libc/string/strtok_r.c",
+         "libc/stdlib/strtol.c",
+         "libc/stdlib/strtoul.c",
+         "libc/stdlib/atol.c",
+  } with flags libc;
+  files{ "libc/x86/bcopy.S",
+         "libc/x86/bzero.S",
+  } with flags { flags libc, flags asm };
+}
+
+// mk_unit -o -nlibc_sprintf libc/sprintf.o libc/doprnt.o
+unit libc_sprintf = {
+  imports[];
+  exports[ out : Sprintf_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdio/sprintf.c"
+       , "libc/stdio/doprnt.c"
+       }
+   with flags libc;
+}
+
+// mk_unit -o -nlibc_sscanf libc/sscanf.o libc/doscan.o
+unit libc_sscanf = {
+  imports[];
+  exports[ out : Sscanf_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdio/sscanf.c",
+         "libc/stdio/doscan.c",
+  } with flags libc;
+}
+
+
+// mk_unit -o -n libc_exit libc/exit.o libc/abort.o libc/atexit.o
+unit libc_exit = {
+  imports[ _exit  : _Exit_T ];
+  exports[ exit   : Exit_T,
+           atexit : AtExit_T,
+         ];
+  depends{ exports + inits + finis needs imports };
+//   finalizer exit ToDo: ????
+  files{ "libc/stdlib/exit.c",
+         "libc/stdlib/abort.c",
+         "libc/stdlib/atexit.c",
+  } with flags libc;
+}
+
+// mk_unit -o -n stack_trace libc/stack_trace.o
+unit stack_trace = {
+  imports[ stdout : Stdout_T ];
+  exports[ out : StackTrace_T ];
+  constraints{ context exports <= context imports };
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/x86/stack_trace.c"
+  } with flags libc;
+}
+
+// mk_unit -o -n version kern/version.o
+unit version = {
+  imports[ ];
+  exports[ version : Version_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/version.c",
+  } with flags kern;
+}
+
+// mk_unit -o -n version_print kern/version_print.o
+unit version_print = {
+  imports[ stdout : Stdout_T ];
+  exports[ out : VersionPrint_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/version_print.c",
+  } with flags kern;
+}
+
+// mk_unit -o -n null_issetugid freebsd/libc/issetugid.o 
+unit null_issetugid = {
+  imports[];
+  exports[ out : { issetugid  } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/libc/glue/issetugid.c",
+  } with flags freebsd_libc;
+}
+
+unit qsort = {
+  imports[];
+  exports[ out : { qsort  } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/stdlib/qsort.c",
+  } with flags freebsd_libc;
+}
+
+unit ntoh = {
+  imports[];
+  exports[ out : { htonl, htons, ntohl, ntohs } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/x86/ntoh.S",
+  } with flags libc;
+}
+
+// mk_unit -o -nfreebsd_rand freebsd/libc/rand.c
+unit freebsd_rand = {
+  imports[];
+  exports[ out : { rand, srand, } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/stdlib/rand.c" 
+  } with flags freebsd_libc;
+}
+
+
+// mk_unit -o -nfreebsd_random freebsd/libc/_rand48.o freebsd/libc/arc4random.o freebsd/libc/drand48.o freebsd/libc/erand48.o freebsd/libc/jrand48.o freebsd/libc/lcong48.o freebsd/libc/lrand48.o freebsd/libc/mrand48.o freebsd/libc/nrand48.o freebsd/libc/rand.o freebsd/libc/random.o freebsd/libc/srand48.o freebsd/libc/seed48.o           
+
+
+/************************************************************/
+//
+/************************************************************/
+
+// mk_unit -o -n base_crit kern/base_critical.o
+unit base_critical = {
+  imports[];
+  exports[ out : Critical_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/base_critical.c",
+  } with flags kern;
+}
+
+// ToDo: a useful variant of this would maintain a counter and report an error
+// if the counter goes -ve.
+unit null_critical = {
+  imports[];
+  exports[ out : Critical_T ];
+  depends{ exports + inits + finis needs imports };
+//  files{ "knit/c/null_crit.c" }
+  %{
+    void base_critical_enter(void)
+    {
+    }
+    
+    void base_critical_leave(void)
+    {
+    }
+  %} with flags libc;
+}
+
+/************************************************************/
+//
+/************************************************************/
+
+// mk_unit -o -n base_anno kern/anno_find_lower.o kern/anno_intr.o kern/anno_find_exact.o kern/anno_trap.o kern/anno_init.o
+unit base_anno = {
+  imports[ ld_symbols : { __ANNO_START__, __ANNO_END__ } // for anno_init
+         ];
+  exports[ anno : Anno_T ];
+  constraints{ context exports <= NoContext };
+  initializer init for anno;
+  depends{ inits needs imports };
+  files{ "kern/anno_find_lower.c",
+         "kern/anno_intr.c",
+         "kern/anno_find_exact.c",
+         "kern/anno_trap.c",
+         "kern/anno_init.c",
+         "knit/c/anno_init2.c",
+  } with flags kern;
+}
+
+/*#
+Address Map Manager
+#*/
+
+// pure component - so no initialiser
+// mk_unit -o -n AMM amm/*.o
+unit AMM = {
+  imports[ panic  : Panic_T,
+           stdout : Stdout_T,
+           malloc : Malloc_T, // smalloc, sfree
+         ];
+  exports[ out : AMM_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "amm/amm_alloc_entry.c",
+         "amm/amm_allocate.c",
+         "amm/amm_deallocate.c",
+         "amm/amm_destroy.c",
+         "amm/amm_dump.c",
+         "amm/amm_find_addr.c",
+         "amm/amm_find_gen.c",
+         "amm/amm_free_entry.c",
+         "amm/amm_init.c",
+         "amm/amm_init_gen.c",
+         "amm/amm_iterate.c",
+         "amm/amm_iterate_gen.c",
+         "amm/amm_join.c",
+         "amm/amm_modify.c",
+         "amm/amm_protect.c",
+         "amm/amm_reserve.c",
+         "amm/amm_select.c",
+         "amm/amm_split.c",
+  } with flags amm;
+}
+
+/************************************************************/
+// COM related grab-bag
+/************************************************************/
+
+bundletype BufIO_T =
+{ include "${OSKITDIR}/oskit/io/bufio.h",
+  oskit_bufio_create 
+} with flags libc
+
+// mk_unit -o -n buf_io com/buf_io.o 
+unit buf_io = {
+  imports[ string : String_T,
+           iids   : { oskit_iunknown_iid
+                    , oskit_bufio_iid
+                    },
+           panic  : Panic_T,
+           mem    : OSEnvMem_T,
+         ];
+  exports[ out : BufIO_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/buf_io.c"
+  } with flags com;
+}
+
+// mk_unit -o -n listener_mgr  com/listener_mgr.o
+unit listener_mgr = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+         ];
+  exports[ out : ListenerMgr_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/listener_mgr.c",
+  } with flags com;
+}
+
+// mk_unit -o -n listener com/create_listener.o 
+unit listener = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+           iids   : {
+               oskit_iunknown_iid,
+               oskit_listener_iid,
+             },
+         ];
+  exports[ out : CreateListener_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/create_listener.c",
+  } with flags com;
+}
+      
+// mk_unit -o -n principal com/principal.o 
+unit principal = {
+  imports[ malloc : Malloc_T,
+           panic  : Panic_T,
+           iids   : {
+               oskit_iunknown_iid,
+               oskit_comsid_iid,
+               oskit_principal_iid,
+             },
+         ];
+  exports[ out : CreatePrincipal_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/principal.c",
+  } with flags com;
+}
+
+// In theory, these are two independent parts.
+// In practice, they depend on symbols the other exports.
+// mk_unit -o -n services com/services.o com/register.o
+unit services = {
+  imports[ malloc : Malloc_T,   // malloc
+           panic  : Panic_T,
+           iids   : { oskit_iunknown_iid
+           	     , oskit_services_iid
+           	     , oskit_mem_iid
+                    },
+           memobj : MemObj_T,
+         ];
+  exports[ services : Services_T ];
+  initializer init for services;
+  depends{ exports needs imports - memobj };
+  depends{ inits   needs memobj };
+  files{ "com/services.c",
+         "com/register.c",
+         "knit/c/services_init.c",
+  } with flags com;
+}
+
+unit base_stack = {
+  imports[];
+  exports[ out : Stack_T ];
+  depends{ exports + inits + finis needs imports };
+  files { "kern/x86/base_stack.S" 
+  } with flags { flags kern, flags asm };
+}
+
+
+/************************************************************/
+// Virtual Memory
+/************************************************************/
+
+// mk_unit -o -n null_VM kern/phys_mem_va.o
+unit null_VM = {
+  imports[];
+  exports[ out : VM_T ];
+  constraints{ context exports <= NoContext };
+  depends{ exports + inits + finis needs imports };
+  files{ "kern/x86/phys_mem_va.c" 
+  } with flags kern;
+}
+
+
+// Questions by ADR, answers by LBS.  Suggests directions we might take in
+// the future.
+//
+// > Is there any subset of this code that might be useful by itself?
+// > (Ideally a subset with different semantics or which imports fewer
+// > units.)
+//
+// I view it as two pieces: 1) The basic alloc/dealloc/protect interface, and
+// 2) the addition of paging, which is turned on when svm_init is given an
+// absio to use as the pager device. The code is not well enough structured
+// along that line, but there is no reason why it could not be, with a little
+// effort.
+//
+// > Is there some part of svm that people might try to override?
+//
+// Again, I think the pager stuff is what might be overridden, but its not
+// that way right now.
+//
+// > I think svm, posix_vm and osenv_mem are legitimate exports.
+// > Can you confirm?
+//
+// Yes. posix_vm is quite kludgy though. Roland added that so that mmap would
+// use svm_alloc. Should be hooked in more cleanly. The osenv_mem override is
+// so that osenv_mem_map_phys will do the right thing when called by a driver
+// to map some I/O space into the kernel.
+//
+// > Documentation says hitting the stack redzone is fatal because "there
+// > is not enough support to allow recovery"
+// > Is there a hook to plug in support for doing something else?
+//
+// On the x86 its fatal because without a kernel/user boundry, all traps
+// drop stuff onto the current stack. If the stack has overflowed, the stack
+// overflow results in another trap, which becomes a double fault, which is
+// fatal to the current thread. I suppose a lot more work could be done, but
+// its not worth it so it ain't going to happen.
+//
+// > On a similar tack, are there hooks to extend this into a non-simple VM
+// > system?  Would we have to start from scratch or could we just replace
+// > selected parts?
+//
+// Start from scratch. The key issue is how the VM system relates to the
+// process model. There is no process model in the basic oskit kernel. Just
+// threads. No context switches, no copyin/copyout, etc. Very simple. The
+// point was to give us a bigger address space plus paging.
+
+/*#
+Implements the Posix VM interface on top of SVM.
+#*/
+
+// mk_unit -o -n SVM_to_Posix svm/mincore.o svm/mmap.o
+unit SVM_to_Posix = {
+  imports[ posix : { errno },
+           svm   : SVM_T,
+         ];
+  exports[ posix_vm
+            : { mincore  // overrides
+              , mmap
+              , mprotect
+              , munmap
+              }
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "svm/mincore.c",
+         "svm/mmap.c",
+  };
+}
+
+// Could do this as well - not so clear
+// mk_unit -o -n SVM_to_OSEnv svm/mem.o svm/osenv_mem.o
+
+/*#
+Simple Virtual Memory unit.
+
+Has complex interconnections with threads.  eg threads provide lockmgr,
+which svm uses, and svm exports mprotect which threads use.
+#*/
+
+// mk_unit -o -n SVM kern/phys_mem_va.o svm/svm_map_range.o svm/svm_mapped.o svm/svm_mem.o svm/svm_pagein.o svm/svm_pageout.o svm/svm_alloc.o svm/svm_pager_init.o svm/svm_change_mapping.o svm/svm_pfault_handler.o svm/svm_dealloc.o svm/svm_physmem.o svm/svm_fault.o svm/svm_prot_range.o svm/svm_find_mapping.o svm/svm_protect.o svm/svm_incore.o svm/svm_redzone.o svm/svm_init.o svm/svm_segv_handler.o svm/svm_machdep_init.o svm/svm_unmap_range.o svm/mem.o svm/osenv_mem.o
+
+unit SVM = {
+  imports[ amm   : AMM_T,
+           lmm   : LMM_T,
+           segments : Segments_T,
+           intr  : OSEnvIntr_T,
+           iids  : { oskit_absio_iid
+                   , oskit_blkio_iid
+                   , oskit_iunknown_iid
+                   , oskit_lock_mgr_iid
+                   , oskit_lookup_first
+                   , oskit_mem_iid
+                   , oskit_osenv_mem_iid
+                   },
+           phys_lmm : PhysLMM_T,
+           stdout   : Stdout_T,
+           malloc   : Malloc_T,  // smalloc but not sfree!!
+           panic    : Panic_T,
+           string   : String_T,
+           ld_symbols : LDSymbols_T,
+           gdb   : { enable_gdb },
+  // got tired of organising here...
+           x : { base_gdt
+             , base_gdt_load
+             , base_idt
+             , base_idt_load
+             , base_stack_start
+             , base_trap_handlers
+             , base_tss
+             , tss_dump
+             },
+           y : { base_paging_load
+             , base_pdir_pa
+             , pdir_map_page
+             , pdir_unmap_range
+             , ptab_alloc
+             },
+           z : { oskit_sendsig
+             , sendsig_trap_handler
+             },
+         ];
+  exports[ svm : SVM_T
+          , osenv_mem : OSEnvMem_T  // overrides
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "svm/osenv_mem.c",
+         "svm/svm_alloc.c",
+         "svm/svm_change_mapping.c",
+         "svm/svm_dealloc.c",
+         "svm/svm_fault.c",
+         "svm/svm_find_mapping.c",
+         "svm/svm_incore.c",
+         "svm/svm_init.c",
+         "svm/svm_machdep_init.c",
+         "svm/svm_map_range.c",
+         "svm/svm_mapped.c",
+         "svm/svm_mem.c",
+         "svm/svm_pagein.c",
+         "svm/svm_pageout.c",
+         "svm/svm_pager_init.c",
+         "svm/svm_pfault_handler.c",
+         "svm/svm_physmem.c",
+         "svm/svm_prot_range.c",
+         "svm/svm_protect.c",
+         "svm/svm_redzone.c",
+         "svm/svm_segv_handler.c",
+         "svm/svm_unmap_range.c",
+  };
+}
+
+
+/************************************************************/
+// Base environment/bootstrapping (raw hardware or Unix host)
+/************************************************************/
+
+/*#
+Compound unit gluing together most of the standard stuff needed to
+get a kernel up and running.
+#*/
+
+unit OSKit_Bootstrap = {
+  imports[ string : String_T,
+           ld_symbols : LDSymbols_T,
+           panic  : Panic_T,
+           cpu    : CPU_T,
+           gdt    : GDT_T,
+           stdout : Stdout_T,
+         ];
+  exports[ reset   : Reset_T,
+           stack   : Stack_T,
+           multiboot : { multiboot_main_wrapped, boot_info },
+           cmdline : CmdLine_T,
+           vm      : VM_T,
+           segments: Segments_T,
+           anno    : Anno_T,
+           phys_lmm: PhysLMM_T,
+           lmm     : LMM_T,
+           usermode: { oskit_usermode_simulation },
+           delay   : { pthread_delay },
+         ];
+  link{
+    // realmode environment (ie not running under Unix)
+    [delay]    <- null_delay <- [];  // busyloop - used by pthreads
+    [usermode] <- %{ int oskit_usermode_simulation = 0; %};     
+                                                                
+    [multiboot]<- multiboot_main2 <- [string,vm];               
+    [cmdline]  <- cmdline <- [multiboot,lmm,phys_lmm,panic,vm,string];
+                                                                
+    [anno]     <- base_anno <- [ld_symbols];                    
+    [segments] <- null_segments <- [];                          
+    [vm]       <- null_VM <- [];                                
+    [stack]    <- base_stack <- []; // can this be reclaimed after pthreads kick in?
+                                                                
+    reset      = reset2;                                       
+    // reset by rebooting machine                               
+    [reset1]   <- base_reset <- [vm];                           
+    // reset using netboot hack                                 
+    [reset2]   <- netboot_reset <- [cpu,gdt,segments,reset1,vm,cmdline,string];
+                                                                
+    [phys_lmm]  <- multiboot_physlmm <- [multiboot,ld_symbols,lmm,vm];
+    [lmm]       <- LMM        <- {panic,stdout};                           
+  }
+}
+
+unit not_simulation = {
+  imports[];
+  exports[ usermode : { oskit_usermode_simulation } ];
+  depends{ exports + inits + finis needs imports };
+  %{ int oskit_usermode_simulation = 0; %}
+}
+
+/************************************************************/
+// Multiboot
+/************************************************************/
+
+unit multiboot = {
+  imports[ main   : Main_T,
+           exit   : Exit_T,
+           atexit : AtExit_T,
+           panic  : Panic_T,
+           string : String_T,
+           lmm    : LMM_T,
+           vm     : VM_T,
+           ld_symbols : LDSymbols_T,
+           cpu    : CPU_T,
+           
+           // the following are for netboot_reset
+           gdt       : { base_gdt_init },
+           segments  : Segments_T,
+         ];
+  exports[ multiboot : { multiboot_main_wrapped, boot_info },
+           phys_lmm  : PhysLMM_T,
+           cmdline   : CmdLine_T,
+           invoke    : { invoke_main },
+           reset     : Reset_T
+         ];
+  link{
+    [multiboot] <- multiboot_main <- [string,vm,cpu];
+    [phys_lmm]  <- multiboot_physlmm <- [multiboot,ld_symbols,lmm,vm];
+    [cmdline]   <- cmdline <- [multiboot,lmm,phys_lmm,panic,vm,string];
+    [invoke]    <- invoke_main <- [main,cmdline,ld_symbols,exit,atexit];
+    [reset]     <- netboot_reset <- [cpu,gdt,segments,reset2,vm,cmdline,string];
+    [reset2]    <- base_reset <- [vm];  // used if return_address not available
+  }
+}
+
+/*#
+The "Netboot hack".
+
+If it has a non-zero return address (usually from base_multiboot), it
+uses it otherwise it resets the machine.  
+
+This unit uses code scavenged from base_console_init.
+#*/
+
+// mk_unit -o -n my_exit cpu/my_return_address.o
+unit netboot_reset = {
+   imports[ cpu       : { base_cpu_load },
+            gdt       : { base_gdt_init },
+            segments  : Segments_T,
+            raw_reset : Reset_T,
+            vm        : VM_T,
+            cmdline   : CmdLine_T,
+            string    : String_T,
+          ];
+   exports[ reset : Reset_T ];
+   initializer init for raw_reset;
+   depends{ exports needs imports - (cmdline + string) };
+   depends{ inits   needs cmdline + string };
+   files{ "knit/c/multiboot__exit.c" } with flags kern;
+   rename{ raw_reset with suffix _in };
+//   rename{ raw_reset.pc_reset to pc_reset_in };
+}
+
+/************************************************************/
+// Reusable Unix emulation code
+/************************************************************/
+
+/*#
+Implements the blkio interface on top of a normal file.
+#*/
+
+// mk_unit -o -nBlkIO_on_FS unix/oskit_linux_block.o 
+unit BlkIO_on_FS = {
+  imports[ malloc    : Malloc_T,     // malloc, free
+           panic     : Panic_T,
+           posix_fs  : PosixFile_T,  // open, close, lseek, read, write
+           posix_err : PosixError_T, // perror
+           iids      : { oskit_blkio_iid, oskit_iunknown_iid },
+         ];
+  exports[ out : { oskit_linux_block_open
+                 , oskit_linux_init_ide
+                 , oskit_linux_init_scsi
+                 }
+         ];
+  depends{ exports + inits + finis needs imports };
+  files{ "unix/oskit_linux_block.c" } with flags basic;
+}
+
+// mk_unit -o -nHexDump unix/hexdump.o
+
+// build COM objects from non-COMified osenv bits
+// mk_unit -o -nwrap_osenv_intr  unix/osenv_intr.o
+// mk_unit -o -nwrap_osenv_rtc   unix/osenv_rtc.o
+// mk_unit -o -nstdio unix/osenv.o
+// mk_unit -o -nversion unix/version.o
+
+// mmap/sbrk needs Malloc_T converter
+// (can be compiled with various options to have different requirements
+// and behave in different ways)
+// we could probably revert to the original source code
+// mk_unit -o -nDougLea'sMalloc unix/dlmalloc.o
+
+/************************************************************/
+// Unix emulation code - code that ain't much use for anything else
+/************************************************************/
+
+// redundant??
+// mk_unit -o -nstdio unix/stdio.o
+
+// mk_unit -o -nXXX unix/unix_mem.o
+
+
+bundletype GetOpt_T = 
+{ include "${OSKITDIR}/oskit/c/unistd.h",
+  getopt,
+  optarg,
+  opterr,
+  optind,
+  optopt,
+  optreset,
+} with flags libc
+
+unit getopt = {
+  imports[ files    : CFiles_T, // fprintf(stderr,...)
+           string   : String_T,
+           progname : { __progname },
+         ];
+  exports[ out : GetOpt_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "freebsd/3.x/src/lib/libc/stdlib/getopt.c" 
+  } with flags freebsd_libc;
+}  
+
+/************************************************************/
+// Progress
+/************************************************************/
+
+/*#
+CpU calls the "progress" function after calling each initialiser.
+#*/
+
+unit progress = {
+  imports[ stdout : Stdout_T
+         ];
+  exports[ out : Progress_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/progress.c"
+  } with flags libc;
+}
+
+/************************************************************/
+// GDB and gprof support
+/************************************************************/
+
+flags gprof = {
+  flags libc,      // ????
+  "-Di386",
+  "-DELF",
+  "-DBUFSIZ=1024",
+  "-Dprintf=gprof_printf",
+  "-DGPROF",
+}
+
+/*#
+This is just the gprof application which processes profiling output
+and generates useful summaries/guesses about program behaviour.
+
+gprof (which takes an argc/argv pair) is usually invoked (with no
+arguments) by a finaliser to process the file gmon.out generated by
+gprof_support.  It needs access to the a.out file which is the kernel
+you just ran.
+#*/
+
+// mk_unit -n gprof_output gprof/arcs.o gprof/gprof_printf.o gprof/printgprof.o gprof/dfn.o gprof/i386.o gprof/printlist.o gprof/gprof.o gprof/lookup.o gprof/qsort.o
+unit gprof = {
+  imports[ malloc  : Malloc_T,
+           longjmp : LongJmp_T,
+           string  : String_T,
+           exit    : Exit_T,
+           error   : Error_T,
+           cfiles  : CFiles_T,
+           sprintf : Sprintf_T,
+           console : Stdout_T, // puts, putbytes and putchar
+         ];
+  exports[ out : { gprof } ];
+  depends{ exports + inits + finis needs imports };
+  files{
+    "gprof/arcs.c",
+    "gprof/gprof_printf.c",
+    "gprof/dfn.c",
+    "gprof/i386.c",
+    "gprof/printgprof.c",
+    "gprof/gprof.c",
+    "gprof/printlist.c",
+    "gprof/lookup.c",
+    "gprof/qsort.c",
+  } with flags gprof;
+  rename{ longjmp with prefix _};
+  rename{ console.putbytes to console_putbytes };
+} 
+
+// ToDo: the initialisers only really need malloc, irq (and friends)
+// and maybe panic and stdout.  It's the finalisers that need the 
+// filesystem.  .mcount and _mcount don't need to be initialised
+// at all.
+
+// ToDo: how do we specify that _mcleanup is a finaliser for
+// gprof_support but an initialiser for gprof?
+// One way is to wire them together - though that's a bit unsatisfying.
+
+// init = 
+// /*
+//  * Special symbols.
+//  */
+// extern unsigned long _start;
+// extern unsigned long end;
+// extern unsigned long etext;
+//         monstartup((unsigned long)&_start, (unsigned long)&etext);
+
+// fini = 
+//   char *foo[] = {"gprof",NULL};
+//   _mcleanup();
+//   gprof(1, foo);
+
+// looks like the freebsd and libc versions are identical
+// mk_unit -n gprof libc/gmon.po libc/mcount.po libc/mcount_md.o kern/profil.o
+unit gprof_support = {
+  imports[ fd     : PosixFD_T,
+           files  : PosixFiles_T,
+           stdout : Stdout_T,
+           panic  : Panic_T,
+           error  : Error_T,
+           malloc : Malloc_T,
+           irq    : OSEnvIRQ_T,
+           pic    : PIC_T,
+           rtc    : RTC_T,
+         ];
+  exports[ mcount  : { '.mcount', '_mcount' },
+           control : {moncontrol},
+           enabled : {enabled},     // dummy - attach it to main (or whatever)
+         ];
+  // may want to test enable_gprof flag
+  initializer init      for control + enabled;
+  finalizer   _mcleanup for control + enabled;
+  finalizer   fini      for control + enabled;
+  depends{ control + inits + finis needs imports };
+  files{ 
+    "libc/gmon/gmon.c",
+    "libc/gmon/mcount.c",
+    "kern/x86/pc/profil.c",
+  } with flags { flags libc, "-DGPROF" };
+  files{
+    "libc/x86/mcount_md.S",
+  } with flags { flags asm, flags libc, "-DGPROF" };
+}
+
+/************************************************************/
+// Wrappers
+/************************************************************/
+
+// mk_unit -n wrap_sockio com/sockio_wrapper.o
+unit wrap_sockio = {
+  imports[ malloc : Malloc_T,
+           string : String_T,
+           iids : {
+                   oskit_asyncio_iid,
+                   oskit_bufio_stream_iid,
+                   oskit_iunknown_iid,
+                   oskit_posixio_iid,
+                   oskit_socket_iid,
+                   oskit_stream_iid,
+                  },
+           wrap_stream : { oskit_wrap_stream },
+         ];
+  exports[ out : { oskit_wrap_sockio } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/sockio_wrapper.c" } with flags com;
+}
+
+// mk_unit -n wrap_stream com/stream_wrapper.o
+unit wrap_stream = {
+  imports[ malloc : Malloc_T,
+           iids : {
+                    oskit_iunknown_iid,
+                    oskit_stream_iid,
+                  },
+         ];
+  exports[ out : { oskit_wrap_stream } ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/stream_wrapper.c" } with flags com;
+}
+
+unit prepost = {
+  imports[in : {in}, funs : {pre,post}];
+  exports[out: {out}];
+  depends{ exports + inits + finis needs imports };
+  files{ "knit/c/prepost.c" } with flags libc;
+}
+
+//
+// Profiling.
+// 
+unit null_profile = {
+	imports[];
+	exports[ out : Profile_T ];
+	depends{ exports + inits + finis needs imports };
+	%{
+	%} with flags libc;
+}
+
+/************************************************************/
+// End
+/************************************************************/

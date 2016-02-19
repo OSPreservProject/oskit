@@ -1,0 +1,1000 @@
+# Copyright (c) 1999, 2000 The University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# Contributed by the Computer Security Research division,
+# INFOSEC Research and Technology Office, NSA.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+
+# Define domains/types 
+#
+# Domains are not distinguished from types, except through the
+# actual type enforcement tables (i.e. a type that can be
+# associated with a process is also a domain).
+# 
+# type typename ; 
+# type typename alias alias_set ;
+
+type kernel_t;
+type security_t;
+type unlabeled_t;
+type fs_t;
+type file_t;
+type file_labels_t;
+type init_t;
+type proc_t;
+type daemon_t;
+type login_t;
+type user_t alias { application_t untrusted_t };
+type public_t;
+type private_t;
+type admin_t;
+type tmp_t;
+type ld_so_t;
+type any_socket_t;
+type port_t;
+type netif_t;
+type netif_eth0_t;
+type netif_eth1_t;
+type netif_lo_t;
+type netmsg_t;
+type netmsg_eth0_t;
+type netmsg_eth1_t;
+type netmsg_lo_t;
+type node_t;
+type node_lo_t;
+type node_tycho_t;
+type node_internal_t;
+type icmp_socket_t;
+type tcp_socket_t;
+type ftp_t;
+type telnet_t;
+type smtp_t;
+type http_t;
+
+############################################################################
+# Types for system testing
+type test_t;
+type test_fdclose_t;
+type test_nofork_t;
+type test_signal_t;
+type test_uselib_t;
+
+############################################################################
+# The hospital database types
+# - One for each type of information
+type hospital_admin_t;
+type hospital_billings_t;
+type hospital_diagnosis_t;
+type hospital_vitals_t;
+
+# The hospital database domains
+# - One for each legal pairing of a type and a set of access rights
+# - c = create, d = unlink, r = read, w = write
+type hospital_admin_c_d;
+type hospital_admin_d_d;
+type hospital_admin_r_d;
+type hospital_admin_rw_d;
+type hospital_vitals_c_d;
+type hospital_vitals_d_d;
+type hospital_vitals_r_d;
+type hospital_vitals_rw_d;
+type hospital_diagnosis_c_d;
+type hospital_diagnosis_d_d;
+type hospital_diagnosis_r_d;
+type hospital_diagnosis_rw_d;
+type hospital_billings_c_d;
+type hospital_billings_d_d;
+type hospital_billings_r_d;
+type hospital_billings_rw_d;
+############################################################################
+
+
+# Define the type transitions 
+#
+# type_transition process_type old_object_type : new_object_class new_object_type ;
+#
+# A type transition specifies a default rule for determining:
+# (1) the type of a process transformed by execve, based on
+#     the type of the invoking process and the type of the file.
+#     If no transition is explicitly specified, then the default
+#     rule is to use the type of the invoking process for the transformed
+#     process.		
+#
+# (2) the type of a newly created file, based on the type of
+#     of the creating process and the type of the parent directory.
+#     If no transition is explicitly specified, then the default rule
+#     is to use the type of the parent directory for the newly created
+#     file.	
+#
+# The default rules may be overridden by clients via the _secure interfaces.
+
+type_transition init_t daemon_t:process daemon_t;
+type_transition init_t login_t:process  login_t;
+type_transition login_t file_t:process  user_t;
+
+
+############################################################################
+# The hospital database type transitions
+
+# Transition to the appropriate hospital program domain when
+# executing a hospital application.
+type_transition user_t hospital_admin_c_d:process hospital_admin_c_d;
+type_transition user_t hospital_admin_d_d:process hospital_admin_d_d;
+type_transition user_t hospital_admin_r_d:process hospital_admin_r_d;
+type_transition user_t hospital_admin_rw_d:process hospital_admin_rw_d;
+type_transition user_t hospital_vitals_c_d:process hospital_vitals_c_d;
+type_transition user_t hospital_vitals_d_d:process hospital_vitals_d_d;
+type_transition user_t hospital_vitals_r_d:process hospital_vitals_r_d;
+type_transition user_t hospital_vitals_rw_d:process hospital_vitals_rw_d;
+type_transition user_t hospital_diagnosis_c_d:process hospital_diagnosis_c_d;
+type_transition user_t hospital_diagnosis_d_d:process hospital_diagnosis_d_d;
+type_transition user_t hospital_diagnosis_r_d:process hospital_diagnosis_r_d;
+type_transition user_t hospital_diagnosis_rw_d:process hospital_diagnosis_rw_d;
+type_transition user_t hospital_billings_c_d:process hospital_billings_c_d;
+type_transition user_t hospital_billings_d_d:process hospital_billings_d_d;
+type_transition user_t hospital_billings_r_d:process hospital_billings_r_d;
+type_transition user_t hospital_billings_rw_d:process hospital_billings_rw_d;
+
+# Transition to the appropriate type of information when
+# creating a file with a hospital application.
+type_transition hospital_billings_c_d file_t:file hospital_billings_t;
+type_transition hospital_diagnosis_c_d file_t:file hospital_diagnosis_t;
+type_transition hospital_vitals_c_d file_t:file hospital_vitals_t;
+type_transition hospital_admin_c_d file_t:file hospital_admin_t;
+############################################################################
+
+#
+# Define the default behavior for permissions that are not
+# explicitly specified in the type enforcement tables.
+#
+# default [allow|auditallow|auditdeny|notify] [none|all|self] ;
+# default [allow|auditallow|auditdeny|notify] [none|all|self] exclude class_set ;
+#
+# The default for allow may be one of:
+# 1) 'none' - Deny all permissions.
+# 2) 'all' -  Grant all permission.
+# 3) 'self' - Grant all permissions within a type, but deny
+#	all permissions between types.
+#
+# For auditallow, auditdeny and notify, the defaults mean:
+# 1) 'none' - Audit/notify no permissions.
+# 2) 'all' -  Audit/notify all permissions.
+# 3) 'self' - Audit/notify all permissions between types, but no
+#		permissions within a type.
+
+default allow self exclude { chr_file blk_file rawip_socket packet_socket node netif };
+default auditallow none;
+default auditdeny all;
+default notify none;
+
+
+#
+# Define m4 macros for the type enforcement tables
+#
+
+define(`file_class_set', `{ file lnk_file sock_file fifo_file chr_file blk_file }')
+
+define(`all_subject_file_perms', `{ create read write append execute access getattr setattr unlink link rename lock relabelfrom relabelto }')
+
+define(`all_subject_dir_perms', `{ create read access getattr setattr rename relabelfrom relabelto add_name remove_name reparent search rmdir mounton }')
+
+define(`all_fs_perms', `{ associate mount remount unmount getattr relabelfrom relabelto }')
+
+define(`all_subject_fs_perms', `{ mount remount unmount getattr relabelfrom relabelto }')
+
+define(`all_subject_pipe_perms', `{ read write getattr }')
+
+define(`all_subject_fd_perms', `{ create getattr setattr inherit }')
+
+
+define(`socket_class_set', `{ tcp_socket udp_socket rawip_socket netlink_socket packet_socket unix_stream_socket unix_dgram_socket }')
+
+define(`all_subject_socket_perms', `{ create read write getattr setattr lock bind connect getopt setopt shutdown }')
+
+define(`all_netif_perms', `{ getattr setattr tcp_recv tcp_send udp_recv udp_send rawip_recv rawip_send }')
+
+define(`all_node_perms',`{ tcp_recv tcp_send udp_recv udp_send rawip_recv rawip_send }')
+
+
+#
+# Define the type enforcement tables
+#
+# allow domain type:class_set perm_set ;
+# auditallow domain type:class_set perm_set ;
+# auditdeny domain type:class_set perm_set ;
+# notify domain type:class_set perm_set ;
+
+
+#
+# Allow files with the default file type to be in 
+# filesystems with the default file system type.
+#
+allow file_t fs_t:filesystem associate;
+
+allow file_t init_t:unix_stream_socket name_bind;
+
+
+#
+# Allow ld.so to exist in the file system
+#
+allow ld_so_t fs_t:filesystem associate;
+
+
+#
+# Allow other types of directories to be mounted on 
+# directories with the default file type.
+#
+allow unlabeled_t file_t:dir mountassociate;
+allow proc_t file_t:dir mountassociate;
+
+
+#
+# Allow kernel_t to do things.
+#
+allow kernel_t file_labels_t:dir all_subject_dir_perms;
+allow kernel_t file_labels_t:file_class_set all_subject_file_perms;
+
+allow kernel_t file_t:dir all_subject_dir_perms;
+allow kernel_t file_t:file_class_set all_subject_file_perms;
+
+allow kernel_t init_t:process { transition } ;
+
+allow kernel_t unlabeled_t:dir all_subject_dir_perms;
+allow kernel_t unlabeled_t:file_class_set all_subject_file_perms;
+
+allow kernel_t ld_so_t:process	execute;
+allow kernel_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow init_t to do things.
+#
+allow init_t init_t:rawip_socket all_subject_socket_perms;
+
+allow init_t file_t:dir all_subject_dir_perms;
+allow init_t file_t:file_class_set all_subject_file_perms;
+allow init_t file_t:process execute;
+
+allow init_t file_labels_t:dir { read search getattr };
+allow init_t file_labels_t:file { read getattr };
+
+allow init_t fs_t:filesystem all_fs_perms;
+
+allow init_t kernel_t:dir all_subject_dir_perms;
+allow init_t kernel_t:fd all_subject_fd_perms;
+allow init_t kernel_t:file all_subject_file_perms;
+allow init_t kernel_t:system { reboot net_io_control route_control arp_control };
+
+allow init_t login_t:process { transition  setid} ;
+
+allow init_t private_t:process { transition } ;
+
+allow init_t proc_t:dir all_subject_dir_perms;
+allow init_t proc_t:file_class_set all_subject_file_perms;
+allow init_t proc_t:filesystem all_fs_perms;
+
+allow init_t public_t:process { transition } ;
+
+allow init_t unlabeled_t:dir all_subject_dir_perms;
+allow init_t unlabeled_t:file_class_set all_subject_file_perms;
+allow init_t unlabeled_t:filesystem all_subject_fs_perms;
+allow init_t unlabeled_t:process execute;
+
+allow init_t user_t:process { transition } ;
+allow init_t user_t:tcp_socket { getattr read write acceptfrom connectto };
+allow init_t user_t:udp_socket { recvfrom sendto send_msg recv_msg };
+allow init_t user_t:security { sid_to_context };
+
+allow init_t ld_so_t:process	execute;
+allow init_t ld_so_t:file	{ read execute };
+
+allow init_t netif_t:netif all_netif_perms;
+allow init_t netif_eth0_t:netif all_netif_perms;
+allow init_t netif_eth1_t:netif all_netif_perms;
+allow init_t netif_lo_t:netif all_netif_perms;
+
+allow init_t node_t:node all_node_perms;
+allow init_t node_lo_t:node all_node_perms;
+allow init_t node_internal_t:node all_node_perms;
+
+
+#
+# Allow login_t to do things.
+#
+allow login_t file_t:dir all_subject_dir_perms;
+allow login_t file_t:file_class_set all_subject_file_perms;
+
+allow login_t fs_t:filesystem all_fs_perms;
+
+allow login_t init_t:fd all_subject_fd_perms;
+allow login_t init_t:process { sigkill sigstop signal };
+
+allow login_t public_t:process { transition } ;
+
+allow login_t private_t:process { transition } ;
+
+allow login_t unlabeled_t:dir all_subject_dir_perms;
+allow login_t unlabeled_t:filesystem all_subject_fs_perms;
+allow login_t unlabeled_t:file_class_set all_subject_file_perms;
+
+allow login_t proc_t:dir all_subject_dir_perms;
+allow login_t proc_t:file_class_set all_subject_file_perms;
+allow login_t proc_t:filesystem all_fs_perms;
+
+allow login_t user_t:process { transition } ;
+
+allow login_t ld_so_t:process	execute;
+allow login_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow user_t to do things.
+#
+allow user_t fs_t:filesystem all_fs_perms;
+
+allow user_t file_t:dir 	all_subject_dir_perms;
+allow user_t file_t:file_class_set all_subject_file_perms;
+allow user_t file_t:process	execute;
+
+allow user_t init_t:fd all_subject_fd_perms;
+allow user_t init_t:process { sigkill sigstop signal };
+allow user_t init_t:tcp_socket { newconn acceptfrom connectto };
+allow user_t init_t:udp_socket { write sendto recvfrom send_msg recv_msg };
+allow user_t init_t:security { sid_to_context };
+
+allow user_t login_t:fd all_subject_fd_perms;
+allow user_t login_t:process signal;
+
+allow user_t proc_t:dir all_subject_dir_perms;
+allow user_t proc_t:file_class_set all_subject_file_perms;
+allow user_t proc_t:filesystem all_fs_perms;
+
+allow user_t unlabeled_t:dir all_subject_dir_perms;
+allow user_t unlabeled_t:file_class_set all_subject_file_perms;
+allow user_t unlabeled_t:filesystem all_subject_fs_perms;
+allow user_t unlabeled_t:process execute;
+
+allow user_t ld_so_t:process	execute;
+allow user_t ld_so_t:file	{ read execute };
+
+allow user_t netif_t:netif { tcp_recv tcp_send udp_recv udp_send };
+allow user_t netif_eth0_t:netif { tcp_recv tcp_send udp_recv udp_send };
+allow user_t netif_eth1_t:netif { tcp_recv tcp_send udp_recv udp_send };
+allow user_t netif_lo_t:netif { tcp_recv tcp_send udp_recv udp_send };
+
+allow user_t node_t:node { tcp_recv tcp_send udp_recv udp_send };
+allow user_t node_lo_t:node { tcp_recv tcp_send udp_recv udp_send };
+allow user_t node_internal_t:node { tcp_recv tcp_send udp_recv udp_send };
+
+
+#
+# Allow public_t to do things.
+#
+allow public_t file_t:dir all_subject_dir_perms;
+allow public_t file_t:file_class_set all_subject_file_perms;
+allow public_t file_t:process execute;
+
+allow public_t fs_t:filesystem all_fs_perms;
+
+allow public_t init_t:fd all_subject_fd_perms;
+allow public_t init_t:process { sigkill sigstop signal };
+
+allow public_t login_t:fd all_subject_fd_perms;
+
+allow public_t private_t:file { relabelto transition };
+
+allow public_t proc_t:dir all_subject_dir_perms;
+allow public_t proc_t:file_class_set all_subject_file_perms;
+allow public_t proc_t:filesystem all_fs_perms;
+
+allow public_t unlabeled_t:dir all_subject_dir_perms;
+allow public_t unlabeled_t:file_class_set all_subject_file_perms;
+allow public_t unlabeled_t:filesystem all_subject_fs_perms;
+allow public_t unlabeled_t:process execute;
+
+allow public_t ld_so_t:process	execute;
+allow public_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow private_t to do things.
+#
+allow private_t file_t:dir all_subject_dir_perms;
+allow private_t file_t:file_class_set all_subject_file_perms;
+allow private_t file_t:process execute;
+
+allow private_t fs_t:filesystem all_fs_perms;
+
+allow private_t init_t:fd all_subject_fd_perms;
+allow private_t init_t:process { sigkill sigstop signal };
+
+allow private_t login_t:fd all_subject_fd_perms;
+
+allow private_t proc_t:dir all_subject_dir_perms;
+allow private_t proc_t:file_class_set all_subject_file_perms;
+allow private_t proc_t:filesystem all_fs_perms;
+
+allow private_t unlabeled_t:dir all_subject_dir_perms;
+allow private_t unlabeled_t:file_class_set all_subject_file_perms;
+allow private_t unlabeled_t:filesystem all_subject_fs_perms;
+allow private_t unlabeled_t:process execute;
+allow private_t ld_so_t:process	execute;
+allow private_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow any_socket_t to do things
+#
+allow any_socket_t init_t:udp_socket sendto;
+allow any_socket_t init_t:rawip_socket sendto;
+allow any_socket_t user_t:udp_socket sendto;
+
+#
+# Allow icmp_socket_t to do things
+#
+allow icmp_socket_t netif_t:netif { rawip_recv rawip_send };
+allow icmp_socket_t netif_eth0_t:netif { rawip_recv rawip_send };
+allow icmp_socket_t netif_eth1_t:netif { rawip_recv rawip_send };
+allow icmp_socket_t netif_lo_t:netif { rawip_recv rawip_send };
+allow icmp_socket_t node_t:node { rawip_recv rawip_send };
+allow icmp_socket_t node_lo_t:node { rawip_recv rawip_send };
+allow icmp_socket_t node_internal_t:node { rawip_recv rawip_send };
+allow icmp_socket_t node_tycho_t:node { rawip_recv rawip_send };
+
+
+#
+# Allow tcp_socket_t to do things
+#
+allow tcp_socket_t netif_t:netif { tcp_send tcp_recv };
+allow tcp_socket_t netif_eth0_t:netif { tcp_send tcp_recv };
+allow tcp_socket_t netif_eth1_t:netif { tcp_send tcp_recv };
+allow tcp_socket_t netif_lo_t:netif { tcp_send tcp_recv };
+allow tcp_socket_t node_t:node { tcp_send tcp_recv };
+allow tcp_socket_t node_lo_t:node { tcp_send tcp_recv };
+allow tcp_socket_t node_internal_t:node { tcp_send tcp_recv };
+
+
+#
+# Allow netmsg_t to do things
+#
+allow netmsg_t netif_t:netif { tcp_recv udp_recv rawip_recv };
+allow netmsg_t node_t:node { tcp_recv udp_recv rawip_recv };
+allow netmsg_t init_t:tcp_socket { connectto acceptfrom };
+allow netmsg_t init_t:udp_socket { recvfrom };
+allow netmsg_t init_t:rawip_socket { recvfrom };
+allow netmsg_t user_t:tcp_socket { connectto acceptfrom };
+allow netmsg_t user_t:udp_socket { recvfrom };
+
+
+#
+# Allow netmsg_eth0_t to do things
+#
+allow netmsg_eth0_t netif_eth0_t:netif { tcp_recv udp_recv rawip_recv };
+allow netmsg_eth0_t node_internal_t:node { tcp_recv udp_recv rawip_recv };
+allow netmsg_eth0_t node_t:node { tcp_recv udp_recv rawip_recv };
+allow netmsg_eth0_t init_t:tcp_socket { connectto acceptfrom };
+allow netmsg_eth0_t init_t:udp_socket { recvfrom };
+allow netmsg_eth0_t init_t:rawip_socket { recvfrom };
+allow netmsg_eth0_t user_t:tcp_socket { connectto acceptfrom };
+allow netmsg_eth0_t user_t:udp_socket { recvfrom };
+
+
+#
+# Allow netmsg_eth1_t to do things
+#
+allow netmsg_eth1_t netif_eth1_t:netif { tcp_recv udp_recv rawip_recv };
+allow netmsg_eth1_t node_t:node { tcp_recv udp_recv rawip_recv };
+allow netmsg_eth1_t init_t:tcp_socket { connectto acceptfrom };
+allow netmsg_eth1_t init_t:udp_socket { recvfrom };
+allow netmsg_eth1_t init_t:rawip_socket { recvfrom };
+allow netmsg_eth1_t user_t:tcp_socket { connectto acceptfrom };
+allow netmsg_eth1_t user_t:udp_socket { recvfrom };
+
+
+#
+# Allow netmsg_lo_t to do things
+#
+allow netmsg_lo_t netif_lo_t:netif { tcp_recv udp_recv rawip_recv };
+allow netmsg_lo_t node_lo_t:node { tcp_recv udp_recv rawip_recv };
+allow netmsg_lo_t init_t:tcp_socket { connectto acceptfrom };
+allow netmsg_lo_t init_t:udp_socket { recvfrom };
+allow netmsg_lo_t user_t:tcp_socket { connectto acceptfrom };
+allow netmsg_lo_t user_t:udp_socket { recvfrom };
+
+
+#
+# Allow port_t to do things
+#
+allow port_t init_t:tcp_socket name_bind;
+allow port_t init_t:udp_socket name_bind;
+allow port_t user_t:tcp_socket name_bind;
+allow port_t user_t:udp_socket name_bind;
+
+#
+# Allow telnet_t to do things
+#
+allow telnet_t init_t:tcp_socket name_bind;
+
+#
+# Allow ftp_t to do things
+#
+allow ftp_t init_t:tcp_socket name_bind;
+
+#
+# Allow smtp_t to do things
+#
+allow smtp_t init_t:tcp_socket name_bind;
+
+
+######################################################################################
+
+# Grant users access to security calls
+allow init_t security_t:security { context_to_sid };
+allow init_t file_t:security { load_policy };
+allow user_t security_t:security { context_to_sid };
+allow user_t file_t:security { load_policy };
+
+######################################################################################
+#
+# System testing type enforcement rules
+#
+
+#
+# Allow user_t to do things wrt system testing
+#
+allow user_t test_t:fd all_subject_fd_perms;
+allow user_t test_t:process {transition };
+
+allow user_t test_fdclose_t:fd all_subject_fd_perms;
+allow user_t test_fdclose_t:process {transition sigkill signal};
+
+allow user_t test_nofork_t:fd all_subject_fd_perms;
+allow user_t test_nofork_t:process { transition sigkill signal };
+
+allow user_t test_signal_t:fd all_subject_fd_perms;
+allow user_t test_signal_t:process { transition sigkill signal } ;
+
+#
+# Allow test_t to do things.
+#
+allow test_t file_t:dir all_subject_dir_perms;
+allow test_t file_t:file_class_set all_subject_file_perms;
+allow test_t file_t:process execute;
+
+allow test_t init_t:fd all_subject_fd_perms;
+allow test_t init_t:process { sigkill sigstop signal };
+
+allow test_t user_t:fd all_subject_fd_perms;
+
+allow test_t unlabeled_t:dir all_subject_dir_perms;
+allow test_t unlabeled_t:file_class_set all_subject_file_perms;
+allow test_t unlabeled_t:process execute;
+
+allow test_t ld_so_t:process	execute;
+allow test_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow test_fdclose_t to do things.
+#
+allow test_fdclose_t file_t:dir all_subject_dir_perms;
+allow test_fdclose_t file_t:file_class_set all_subject_file_perms;
+allow test_fdclose_t file_t:process execute;
+
+allow test_fdclose_t init_t:process { sigkill sigstop signal };
+
+allow test_fdclose_t unlabeled_t:dir all_subject_dir_perms;
+allow test_fdclose_t unlabeled_t:file_class_set all_subject_file_perms;
+allow test_fdclose_t unlabeled_t:process execute;
+
+allow test_fdclose_t ld_so_t:process	execute;
+allow test_fdclose_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow test_signal_t to do things.
+#
+allow test_signal_t file_t:dir all_subject_dir_perms;
+allow test_signal_t file_t:file_class_set all_subject_file_perms;
+allow test_signal_t file_t:process execute;
+
+allow test_signal_t init_t:fd { inherit getattr setattr };
+allow test_signal_t init_t:process { sigkill sigstop signal };
+
+allow test_signal_t unlabeled_t:dir all_subject_dir_perms;
+allow test_signal_t unlabeled_t:file_class_set all_subject_file_perms;
+allow test_signal_t unlabeled_t:process execute;
+
+allow test_signal_t user_t:fd { inherit getattr setattr };
+allow test_signal_t user_t:process { sigkill sigstop signal };
+
+allow test_signal_t ld_so_t:process	execute;
+allow test_signal_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow test_uselib_t to do things.
+#
+allow test_uselib_t file_t:dir all_subject_dir_perms;
+allow test_uselib_t file_t:file_class_set all_subject_file_perms;
+allow test_uselib_t file_t:process execute;
+
+allow test_uselib_t init_t:process { sigkill sigstop signal };
+
+allow test_uselib_t unlabeled_t:dir all_subject_dir_perms;
+allow test_uselib_t unlabeled_t:file_class_set all_subject_file_perms;
+allow test_uselib_t unlabeled_t:process execute;
+
+allow test_uselib_t user_t:fd { inherit getattr setattr };
+allow test_uselib_t user_t:process signal;
+
+allow test_uselib_t ld_so_t:process	execute;
+allow test_uselib_t ld_so_t:file	{ read execute };
+
+
+#
+# Allow test_nofork_t to do things.
+#
+allow test_nofork_t file_t:dir all_subject_dir_perms;
+allow test_nofork_t file_t:file_class_set all_subject_file_perms;
+allow test_nofork_t file_t:process execute;
+
+allow test_nofork_t init_t:fd { inherit getattr setattr };
+allow test_nofork_t init_t:process { sigkill sigstop signal };
+
+allow test_nofork_t test_nofork_t:process { execute transition sigkill 
+			sigstop signal chroot setid };
+
+allow test_nofork_t unlabeled_t:dir all_subject_dir_perms;
+allow test_nofork_t unlabeled_t:file_class_set all_subject_file_perms;
+allow test_nofork_t unlabeled_t:process execute;
+
+allow test_nofork_t user_t:fd { inherit getattr setattr };
+allow test_nofork_t user_t:process signal;
+allow test_nofork_t ld_so_t:process	execute;
+allow test_nofork_t ld_so_t:file	{ read execute };
+
+#
+######################################################################################
+#
+# The hospital database type enforcement rules
+#
+
+#
+# Allow file_t to do things wrt the hospital policy
+#
+allow file_t hospital_admin_c_d:file { transition };
+allow file_t hospital_admin_d_d:file { transition };
+allow file_t hospital_admin_r_d:file { transition };
+allow file_t hospital_admin_rw_d:file { transition };
+
+allow file_t hospital_billings_c_d:file { transition };
+allow file_t hospital_billings_d_d:file { transition };
+allow file_t hospital_billings_r_d:file { transition };
+allow file_t hospital_billings_rw_d:file { transition };
+
+allow file_t hospital_diagnosis_c_d:file { transition };
+allow file_t hospital_diagnosis_d_d:file { transition };
+allow file_t hospital_diagnosis_r_d:file { transition };
+allow file_t hospital_diagnosis_rw_d:file { transition };
+
+allow file_t hospital_vitals_c_d:file { transition };
+allow file_t hospital_vitals_d_d:file { transition };
+allow file_t hospital_vitals_r_d:file { transition };
+allow file_t hospital_vitals_rw_d:file { transition };
+
+#
+# Allow hospital_admin_t to do things.
+#
+allow hospital_admin_t fs_t:filesystem associate;
+
+#
+# Allow hospital_admin_c_d to do things.
+#
+allow hospital_admin_c_d file_t:dir all_subject_dir_perms;
+allow hospital_admin_c_d file_t:file_class_set all_subject_file_perms;
+allow hospital_admin_c_d fs_t:filesystem associate;
+allow hospital_admin_c_d hospital_admin_t:file { create setattr access getattr };
+allow hospital_admin_c_d init_t:fd all_subject_fd_perms;
+allow hospital_admin_c_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_admin_c_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_admin_c_d user_t:process { signal };
+allow hospital_admin_c_d user_t:fd all_subject_fd_perms;
+allow hospital_admin_c_d ld_so_t:process execute;
+allow hospital_admin_c_d ld_so_t:file { read execute };
+
+
+#
+# Allow hospital_admin_d_d to do things.
+#
+allow hospital_admin_d_d file_t:dir all_subject_dir_perms;
+allow hospital_admin_d_d file_t:file_class_set all_subject_file_perms;
+allow hospital_admin_d_d fs_t:filesystem associate;
+allow hospital_admin_d_d hospital_admin_t:file { unlink access getattr };
+allow hospital_admin_d_d init_t:fd all_subject_fd_perms;
+allow hospital_admin_d_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_admin_d_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_admin_d_d user_t:process { signal };
+allow hospital_admin_d_d user_t:fd all_subject_fd_perms;
+allow hospital_admin_d_d ld_so_t:process execute;
+allow hospital_admin_d_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_admin_r_d to do things.
+#
+allow hospital_admin_r_d file_t:dir all_subject_dir_perms;
+allow hospital_admin_r_d file_t:file_class_set all_subject_file_perms;
+allow hospital_admin_r_d fs_t:filesystem associate;
+allow hospital_admin_r_d hospital_admin_t:file { read access getattr };
+allow hospital_admin_r_d init_t:fd all_subject_fd_perms;
+allow hospital_admin_r_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_admin_r_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_admin_r_d user_t:process { signal };
+allow hospital_admin_r_d user_t:fd all_subject_fd_perms;
+allow hospital_admin_r_d ld_so_t:process execute;
+allow hospital_admin_r_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_admin_rw_d to do things.
+#
+allow hospital_admin_rw_d file_t:dir all_subject_dir_perms;
+allow hospital_admin_rw_d file_t:file_class_set all_subject_file_perms;
+allow hospital_admin_rw_d fs_t:filesystem associate;
+allow hospital_admin_rw_d hospital_admin_t:file { read access getattr write setattr };
+allow hospital_admin_rw_d init_t:fd all_subject_fd_perms;
+allow hospital_admin_rw_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_admin_rw_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_admin_rw_d user_t:process { signal };
+allow hospital_admin_rw_d user_t:fd all_subject_fd_perms;
+allow hospital_admin_rw_d ld_so_t:process execute;
+allow hospital_admin_rw_d ld_so_t:file { read execute };
+
+
+#
+# Allow hospital_billings_t to do things.
+#
+allow hospital_billings_t fs_t:filesystem associate;
+
+#
+# Allow hospital_billings_c_d to do things.
+#
+allow hospital_billings_c_d file_t:dir all_subject_dir_perms;
+allow hospital_billings_c_d file_t:file_class_set all_subject_file_perms;
+allow hospital_billings_c_d fs_t:filesystem associate;
+allow hospital_billings_c_d hospital_billings_t:file { create access getattr setattr };
+allow hospital_billings_c_d init_t:fd all_subject_fd_perms;
+allow hospital_billings_c_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_billings_c_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_billings_c_d user_t:process { signal };
+allow hospital_billings_c_d user_t:fd all_subject_fd_perms;
+allow hospital_billings_c_d ld_so_t:process execute;
+allow hospital_billings_c_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_billings_d_d to do things.
+#
+allow hospital_billings_d_d file_t:dir all_subject_dir_perms;
+allow hospital_billings_d_d file_t:file_class_set all_subject_file_perms;
+allow hospital_billings_d_d fs_t:filesystem associate;
+allow hospital_billings_d_d hospital_billings_t:file { unlink access getattr };
+allow hospital_billings_d_d init_t:fd all_subject_fd_perms;
+allow hospital_billings_d_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_billings_d_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_billings_d_d user_t:process { signal };
+allow hospital_billings_d_d user_t:fd all_subject_fd_perms;
+allow hospital_billings_d_d ld_so_t:process execute;
+allow hospital_billings_d_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_billings_r_d to do things.
+#
+allow hospital_billings_r_d file_t:dir all_subject_dir_perms;
+allow hospital_billings_r_d file_t:file_class_set all_subject_file_perms;
+allow hospital_billings_r_d fs_t:filesystem associate;
+allow hospital_billings_r_d hospital_billings_t:file { read access getattr };
+allow hospital_billings_r_d init_t:fd all_subject_fd_perms;
+allow hospital_billings_r_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_billings_r_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_billings_r_d user_t:process { signal };
+allow hospital_billings_r_d user_t:fd all_subject_fd_perms;
+allow hospital_billings_r_d ld_so_t:process execute;
+allow hospital_billings_r_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_billings_rw_d to do things.
+#
+allow hospital_billings_rw_d file_t:dir all_subject_dir_perms;
+allow hospital_billings_rw_d file_t:file_class_set all_subject_file_perms;
+allow hospital_billings_rw_d fs_t:filesystem associate;
+allow hospital_billings_rw_d hospital_billings_t:file { read access getattr write setattr };
+allow hospital_billings_rw_d init_t:fd all_subject_fd_perms;
+allow hospital_billings_rw_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_billings_rw_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_billings_rw_d user_t:process { signal };
+allow hospital_billings_rw_d user_t:fd all_subject_fd_perms;
+allow hospital_billings_rw_d ld_so_t:process execute;
+allow hospital_billings_rw_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_diagnosis_t to do things.
+#
+allow hospital_diagnosis_t fs_t:filesystem associate;
+
+#
+# Allow hospital_diagnosis_c_d to do things.
+#
+allow hospital_diagnosis_c_d file_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_c_d file_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_c_d fs_t:filesystem associate;
+allow hospital_diagnosis_c_d hospital_diagnosis_t:file { create access getattr setattr };
+allow hospital_diagnosis_c_d init_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_c_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_c_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_c_d user_t:process { signal };
+allow hospital_diagnosis_c_d user_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_c_d ld_so_t:process execute;
+allow hospital_diagnosis_c_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_diagnosis_d_d to do things.
+#
+allow hospital_diagnosis_d_d file_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_d_d file_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_d_d fs_t:filesystem associate;
+allow hospital_diagnosis_d_d hospital_diagnosis_t:file { unlink access getattr };
+allow hospital_diagnosis_d_d init_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_d_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_d_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_d_d user_t:process { signal };
+allow hospital_diagnosis_d_d user_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_d_d ld_so_t:process execute;
+allow hospital_diagnosis_d_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_diagnosis_r_d to do things.
+#
+allow hospital_diagnosis_r_d file_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_r_d file_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_r_d fs_t:filesystem associate;
+allow hospital_diagnosis_r_d hospital_diagnosis_t:file { read access getattr };
+allow hospital_diagnosis_r_d init_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_r_d user_t:process { signal };
+allow hospital_diagnosis_r_d user_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_r_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_r_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_r_d ld_so_t:process execute;
+allow hospital_diagnosis_r_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_diagnosis_rw_d to do things.
+#
+allow hospital_diagnosis_rw_d file_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_rw_d file_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_rw_d fs_t:filesystem associate;
+allow hospital_diagnosis_rw_d hospital_diagnosis_t:file { read access getattr write setattr };
+allow hospital_diagnosis_rw_d init_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_rw_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_diagnosis_rw_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_diagnosis_rw_d user_t:process { signal };
+allow hospital_diagnosis_rw_d user_t:fd all_subject_fd_perms;
+allow hospital_diagnosis_rw_d ld_so_t:process execute;
+allow hospital_diagnosis_rw_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_vitals_t to do things.
+#
+allow hospital_vitals_t fs_t:filesystem associate;
+
+#
+# Allow hospital_vitals_c_d to do things.
+#
+allow hospital_vitals_c_d file_t:dir all_subject_dir_perms;
+allow hospital_vitals_c_d file_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_c_d fs_t:filesystem associate;
+allow hospital_vitals_c_d hospital_vitals_t:file { create access getattr setattr };
+allow hospital_vitals_c_d init_t:fd all_subject_fd_perms;
+allow hospital_vitals_c_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_vitals_c_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_c_d user_t:process { signal };
+allow hospital_vitals_c_d user_t:fd all_subject_fd_perms;
+allow hospital_vitals_c_d ld_so_t:process execute;
+allow hospital_vitals_c_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_vitals_d_d to do things.
+#
+allow hospital_vitals_d_d file_t:dir all_subject_dir_perms;
+allow hospital_vitals_d_d file_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_d_d fs_t:filesystem associate;
+allow hospital_vitals_d_d hospital_vitals_t:file { unlink access getattr };
+allow hospital_vitals_d_d init_t:fd all_subject_fd_perms;
+allow hospital_vitals_d_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_vitals_d_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_d_d user_t:process { signal };
+allow hospital_vitals_d_d user_t:fd all_subject_fd_perms;
+allow hospital_vitals_d_d ld_so_t:process execute;
+allow hospital_vitals_d_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_vitals_r_d to do things.
+#
+allow hospital_vitals_r_d file_t:dir all_subject_dir_perms;
+allow hospital_vitals_r_d file_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_r_d fs_t:filesystem associate;
+allow hospital_vitals_r_d hospital_vitals_t:file { read access getattr };
+allow hospital_vitals_r_d init_t:fd all_subject_fd_perms;
+allow hospital_vitals_r_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_vitals_r_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_r_d user_t:process { signal };
+allow hospital_vitals_r_d user_t:fd all_subject_fd_perms;
+allow hospital_vitals_r_d ld_so_t:process execute;
+allow hospital_vitals_r_d ld_so_t:file { read execute };
+
+#
+# Allow hospital_vitals_rw_d to do things.
+#
+allow hospital_vitals_rw_d file_t:dir all_subject_dir_perms;
+allow hospital_vitals_rw_d file_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_rw_d fs_t:filesystem associate;
+allow hospital_vitals_rw_d hospital_vitals_t:file { read access getattr write setattr };
+allow hospital_vitals_rw_d init_t:fd all_subject_fd_perms;
+allow hospital_vitals_rw_d unlabeled_t:dir all_subject_dir_perms;
+allow hospital_vitals_rw_d unlabeled_t:file_class_set all_subject_file_perms;
+allow hospital_vitals_rw_d user_t:process { signal };
+allow hospital_vitals_rw_d user_t:fd all_subject_fd_perms;
+allow hospital_vitals_rw_d ld_so_t:process execute;
+allow hospital_vitals_rw_d ld_so_t:file { read execute };
+
+#
+# Allow user_t to do things wrt the hosptial pollicy
+#
+allow user_t hospital_admin_c_d:file { relabelto read write getattr execute };
+allow user_t hospital_admin_c_d:process { transition sigkill sigstop signal };
+allow user_t hospital_admin_d_d:file { relabelto read write getattr execute };
+allow user_t hospital_admin_d_d:process { transition sigkill sigstop signal };
+allow user_t hospital_admin_r_d:file { relabelto read write getattr execute };
+allow user_t hospital_admin_r_d:process { transition sigkill sigstop signal };
+allow user_t hospital_admin_rw_d:file { relabelto read write getattr execute };
+allow user_t hospital_admin_rw_d:process { transition sigkill sigstop signal };
+
+allow user_t hospital_billings_c_d:file { relabelto read write getattr execute };
+allow user_t hospital_billings_c_d:process { transition sigkill sigstop signal };
+allow user_t hospital_billings_d_d:file { relabelto read write getattr execute };
+allow user_t hospital_billings_d_d:process { transition sigkill sigstop signal };
+allow user_t hospital_billings_r_d:file { relabelto read write getattr execute };
+allow user_t hospital_billings_r_d:process { transition sigkill sigstop signal };
+allow user_t hospital_billings_rw_d:file { relabelto read write getattr execute };
+allow user_t hospital_billings_rw_d:process { transition sigkill sigstop signal };
+
+allow user_t hospital_diagnosis_c_d:file { relabelto read write getattr execute };
+allow user_t hospital_diagnosis_c_d:process { transition sigkill sigstop signal };
+allow user_t hospital_diagnosis_d_d:file { relabelto read write getattr execute };
+allow user_t hospital_diagnosis_d_d:process { transition sigkill sigstop signal };
+allow user_t hospital_diagnosis_r_d:file { relabelto read write getattr execute };
+allow user_t hospital_diagnosis_r_d:process { transition sigkill sigstop signal };
+allow user_t hospital_diagnosis_rw_d:file { relabelto read write getattr execute };
+allow user_t hospital_diagnosis_rw_d:process { transition sigkill sigstop signal };
+
+allow user_t hospital_vitals_c_d:file { relabelto read write getattr execute };
+allow user_t hospital_vitals_c_d:process { transition sigkill sigstop signal };
+allow user_t hospital_vitals_d_d:file { relabelto read write getattr execute };
+allow user_t hospital_vitals_d_d:process { transition sigkill sigstop signal };
+allow user_t hospital_vitals_r_d:file { relabelto read write getattr execute };
+allow user_t hospital_vitals_r_d:process { transition sigkill sigstop signal };
+allow user_t hospital_vitals_rw_d:file { relabelto read write getattr execute };
+allow user_t hospital_vitals_rw_d:process { transition sigkill sigstop signal };
+
+#
+######################################################################################
+

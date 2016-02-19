@@ -1,0 +1,34 @@
+%
+% Copyright (c) 1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{video}
+
+\section{Introduction}
+
+Video support is currently a three-way mishmash and it's incomplete, but it
+provides useful services for some popular boards.
+
+The first way provides the XFree86 S3 driver and its normal XFree86
+interface, along with a few other functions.
+
+The second way provides the VGA portion of the well known ``Svgalib''
+library for Linux.
+
+The third way for \oskit{} kernels to access video (and the keyboard and
+mouse) is via X11 client support.  Through this support \oskit{} kernels
+can interact (like any other X client) with remote machines running an
+X server.  In the {\tt x11/client} source directory we provide patches against
+both the stock XFree86 X11R6.3 and XConsortium X11R6.3 distributions,
+along with helper functions specific to the \oskit.  See the README's there.
+
+\input{xvideo.tex}
+
+\input{svgalib.tex}

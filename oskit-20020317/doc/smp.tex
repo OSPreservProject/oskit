@@ -1,0 +1,341 @@
+%
+% Copyright (c) 1997-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{smp}
+
+\section{Introduction}
+
+This library is designed to simplify the startup and use
+of multiprocessors.  It defines a common interface to 
+multiprocessor machines that is fairly platform independent.
+
+Combined with the spin-locks provided in {\tt libkern},
+it is possible to implement a complete symmetric multiprocessor (SMP)
+based system using the \oskit{} code.
+
+There is currently one machine-dependent interface,
+{\tt smp_apic_ack} for the x86.
+
+\section{Supported Systems}
+
+Currently, SMP support is only provided for Intel x86
+systems conforming to the Intel Multiprocessor Specification.
+
+\subsection{Intel x86}
+
+Systems which fully comply to the Intel MultiProcessing Specification (IMPS)
+should be supported.  Since some of the code is based on Linux 2.0,
+some features (such as dual I/O APICs) are not fully supported.
+The APIC (Advanced Programmable Interrupt Controller)
+is not yet used for general interrupt delivery.
+Instead, all hardware interrupts are sent to the
+BootStrap Processor (BSP).
+
+If a machine works with 
+Linux 2.0 it should work with the \oskit; however, testing
+has been limited to a few dual-processor machines.
+
+The SMP code must be compiled with a compiler that supports
+\emph{.code16} for full functionality.
+The smp library will compile without it,
+but it will only support a single processor.
+
+Inter-processor interrupts (IPIs) are implemented.  These are currently the
+only interrupts received by the Application Processors (APs).  IPIs
+allow the client OS to implement TLB-shoot-down and reschedule
+requests.
+
+It is important to note that if more than one processor wishes
+to run in ``user mode,'' that the per-processor data structures
+in {\tt libkern} (such as {\tt base_tss}, {\tt base_idt}, and {\tt base_gdt})
+will have to be made per-processor.
+
+The \oskit{} code has not been tested with more than two processors.
+Success (and failure) reports for systems with three or more processors
+would be appreciated.
+
+{\tt smp_apic_ack} mentions a potential pitfall with Intel x86 SMPs.
+If more than one processor tries to send an IPI to a target processor,
+or if a processor sends multiple IPIs without waiting for them to
+be processed, IPIs can get lost.  It is up to the programmer to
+deal with this limitation.
+
+\subsection{External dependencies}
+
+The SMP library assumes that the base environment is usable.
+It starts up the Application Processors on the kernel support library's
+``base'' data structures.  It is possible (in fact required in many cases)
+to reload per-processor copies.
+
+The following are symbols from the kernel support library required by
+the SMP library:
+\begin{apidep}
+	\item[base_gdt]		\S~\ref{base-gdt}
+	\item[base_idt]		\S~\ref{base-idt}
+	\item[base_tss_load]	\S~\ref{base-tss-load}
+	\item[boot_info]	\S~\ref{boot-info}
+	\item[phys_mem_va]	\S~\ref{phys-mem-va}
+\end{apidep}
+
+The LMM library is used to allocate pages of memory below 1MB\@.
+This requires the symbols:
+\begin{apidep}
+	\item[lmm_alloc_page]	\S~\ref{lmm-alloc-page}
+	\item[malloc_lmm]	\S~\ref{malloc-lmm}
+\end{apidep}
+
+These minimal C library symbols are pulled in by the SMP support code:
+\begin{apidep}
+	\item[panic]		\S~\ref{panic}
+	\item[printf]		\S~\ref{printf}
+\end{apidep}
+
+This library provides SMP-safe implementations for:
+\begin{apidep}
+	\item[base_critical_enter]	\S~\ref{base-critical-enter}
+	\item[base_critical_leave]	\S~\ref{base-critical-leave}
+\end{apidep}
+
+\section{API reference}
+
+\api{smp_init}{Initializes the SMP startup code}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto int smp_init(void);
+\end{apisyn}
+\begin{apidesc}
+	This function does the initial setup for the SMP support.
+	It should be called before any other SMP library routines are
+	used.  It identifies the processors and gets them ready
+	and waiting in a busy-loop for a ``go'' from the boot
+	processor.  
+
+	Note that success \emph{does not} necessarily mean the system
+	has multiple processors.  Rather, failure indicates that
+	the machine does not support multiple processors.
+	{\tt smp_get_num_cpus} should be used to determine the
+	number of CPUs present.
+
+	Don't call this more than once\ldots{}yet.
+\end{apidesc}
+\begin{apiret}
+	It returns 0 on success (SMP-capable system is found).
+	E_SMP_NO_CONFIG is returned on non-IMPS-compliant x86 machines.
+\end{apiret}
+
+
+
+\api{smp_find_cur_cpu}{Return the processor ID of the current processor.}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto int smp_find_cur_cpu(void);
+\end{apisyn}
+\begin{apidesc}
+	This function returns a unique (per-processor) integer 
+	representing the current processor.  Note that the numbers
+	are \emph{not} guaranteed to be sequential or starting from 0,
+	although that may be a common case.
+
+	On the x86, these numbers correspond to the processor's
+	APIC ID, which is set by the hardware.
+	However, these are to be treated as logical processor numbers
+	since the smp library may do a transformation in the future.
+\end{apidesc}
+\begin{apiret}
+	The processor's ID.
+\end{apiret}
+
+
+
+\api{smp_find_cpu}{Return the next processor ID}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto int smp_find_cpu(int first);
+\end{apisyn}
+\begin{apidesc}
+	Given a number \emph{first}, it returns the first processor ID
+	such that the ID is greater than or equal to that number.
+
+	In order to be assured of finding all the CPUs,
+	the initial call should be made with an argument of 0
+	and subsequent calls should be made with one more than the
+	previously returned value.
+
+	This is designed to be used as an iterator function for
+	the client OS to determine which processor numbers
+	are present.
+\end{apidesc}
+\begin{apiparm}
+        \item[first]
+		The processor number at which to start searching.
+\end{apiparm}
+\begin{apiret}
+	Returns E_SMP_NO_PROC if there are no more processors,
+	otherwise the ID of the next processor.
+\end{apiret}
+
+
+
+
+\api{smp_start_cpu}{Starts a processor running a specified function}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto void smp_start_cpu(int processor_id,
+				void (*func)(void~*data),
+				void *data,
+				void *stack_ptr);
+\end{apisyn}
+\begin{apidesc}
+	This releases the specified processor to start running
+	a function with the specified stack.
+
+	Results are undefined if:
+	\begin{enumerate}
+	\item the processor indicated does not exist,
+	\item a processor attempts to start itself,
+	\item any processor is started more than once, or
+	\item any of the parameters is invalid.
+	\end{enumerate}
+
+	{\tt smp_find_cur_cpu} can be 
+	used to prevent calling {\tt smp_start_cpu} on yourself.
+	This function must be called for each processor started
+	up by {\tt smp_init}; if the processor is not used,
+	then {\tt func} should execute the halt instruction
+	immediately.
+
+	It is up to the user to verify that the processor is
+	started up correctly.
+\end{apidesc}
+\begin{apiparm}
+	\item[processor_id]
+		The ID of a processor found by the startup code.
+	\item[func]
+		A function pointer to be called by the processor
+		after it has set up its stack.
+	\item[data]
+		A pointer to some structure that is placed on
+		that stack before {\tt func} is called.
+	\item[stack_ptr]
+		The stack pointer to be used by the processor.
+		This should point to the top of the stack to be
+		used by the processor, and should be large enough
+		for {\tt func}'s requirements.
+\end{apiparm}
+
+
+
+\api{smp_get_num_cpus}{Returns the total number of processors}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto int smp_get_num_cpus(void);
+\end{apisyn}
+\begin{apidesc}
+	This returns the number of processors that exist.
+\end{apidesc}
+\begin{apiret}
+	The number of processors that have been found.
+	In a non-SMP-capable system, this will always return one.
+\end{apiret}
+
+
+\api{smp_map_range}{Request the OS map physical memory}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto oskit_addr_t smp_map_range(oskit_addr_t start,
+		oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This function is a hook provided by the host OS to allow the SMP
+	library to request physical memory be mapped into its virtual
+	address space.
+	This is called by {\tt smp_init_paging}.
+
+	Note that this could be implemented using {\tt osenv_mem_map_phys}.
+\end{apidesc}
+\begin{apiret}
+	The virtual address where the physical pages are mapped.
+	Returns zero if unable to map the memory.
+\end{apiret}
+
+
+\api{smp_init_paging}{Tell the SMP code that paging is being enabled}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto int smp_init_paging(void);
+\end{apisyn}
+\begin{apidesc}
+	This routine is called by the OS when it is ready to turn on paging.
+	This call causes the SMP library to make call-backs to the OS
+	to map the regions that are SMP-specific.
+	On Intel x86 processors, this means the APICS.
+\end{apidesc}
+\begin{apiret}
+	Zero on success, non-zero on failure.
+\end{apiret}
+
+
+\api{smp_message_pass}{Send an inter-processor interrupt to another CPU}
+\begin{apisyn}
+	\cinclude{oskit/smp.h}
+
+        \funcproto void smp_message_pass(int cpunum);
+\end{apisyn}
+\begin{apidesc}
+	This causes the target processor to run its interrupt
+	handler for the IPI vector, if the appropriate entry of
+	{\tt smp_message_pass_enable} has been set to non-zero by
+	that processor.  A processor should
+	only modify its own {\tt smp_message_pass_enable} entry after
+	it is ready to start receiving IPIs.
+
+	This call offers very limited functionality.
+	The expectation is that the OS writer will
+	implement the desired functionality on top of this primitive.
+\end{apidesc}
+
+
+\api{smp_message_pass_enable}{}
+\begin{apisyn} 
+        smp_message_pass_enable[CPUID]
+\end{apisyn}
+\begin{apidesc}
+	This array contains an entry for each processor.
+	If a processor is ready to start receiving inter-processor
+	interrupts, it should set
+	smp_message_pass_enable[smp_find_cur_cpu()] to non-zero.
+	This is used internally by the SMP library to prevent
+	interrupts from being delivered before the processor has
+	set up enough state to receive them.
+\end{apidesc} 
+
+
+\api{smp_apic_ack}{\intel\ acknowledge an inter-processor interrupt}
+\begin{apisyn}
+	\cinclude{oskit/x86/smp.h}
+
+        \funcproto void smp_apic_ack(void);
+\end{apisyn}
+\begin{apidesc}
+	This routine ACKs the local APIC\@.
+	The APIC must be ACKed before returning from the IPI handler.
+	Due to limitations in the APIC design,
+	IPIs can be lost if sent too closely together,
+	as the APIC only handles two outstanding requests.
+\end{apidesc}
+

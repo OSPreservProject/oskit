@@ -1,0 +1,12 @@
+
+Directories: oskit/fsread
+Target: liboskit_fsread.a
+Documentation:
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Linux v??, Linux Project (ext2 fs and minix fs headers)
+	Mach Project, Carnegie Mellon University (ffs support)
+Description:  
+
+	Provides read-only access to 
+	various filesystems, such as bootstrap code needs.

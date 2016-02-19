@@ -1,0 +1,343 @@
+%
+% Copyright (c) 1997-1999 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\long\def\lim#1{
+	% I want to start on a new line. How do I do that???
+	\ \\
+		\textbf{Limitation/pecularity of the current implementation:} 
+	\begin{quote} #1 \end{quote}}
+
+\label{freebsd-net}
+
+        \paragraph{A note of caution.} The design of the networking
+	framework is nowhere near where it should be. However, we, the
+	\oskit{} developers, felt that networking is important and
+	decided to release what we have. 
+
+	The current implementation has been tested with only the most 
+	frequently used 
+	calls for TCP and UDP over a single ethernet interface, 
+	with a default router on the subnet to which the interface is connected.
+	XXX We have done a simple router test with two interfaces.
+
+\section{Introduction}
+	This chapter describes the use and implementation of the 
+	\freebsd{} TCP/IP networking stack. 
+
+	\textbf{Note:}
+	The file \texttt{startup/start_network.c} provides a
+	convenience function \texttt{start_network()} to quickly
+	start up your network.
+	Then you may use the \texttt{socket} et al functions in
+	the C library, as demonstrated in 
+	\texttt{socket_bsd.c} in the example directory.
+	The file \texttt{socket_com.c} contains
+	the same example but uses the COM interfaces without
+	C library support.
+	
+	\lim{
+	We have not yet implemented ``principals'' as described in the 
+	filesystem framework.  All operations run with full privileges.
+
+	\texttt{oskit_socket_t} instances created by the networking
+	stack do not currently implement the following 
+	methods\footnote{An \texttt{OSKIT_E_NOTIMPL} error code will be
+	returned.}:
+	    \texttt{getsockopt},
+	    \texttt{recvmsg/sendmsg}
+
+	Also, the local loopback interface does not work because it is not
+	properly set up. If you try to connect to \texttt{127.0.0.1} or
+	to the local IP address, you'll see a division by zero trap in
+	\texttt{freebsd/src/sys/netinet/ip_output.c:302} because the
+	\texttt{if_mtu} field is uninitialized. Required fix is to call
+	the required "ifconfig" functions for the loopback interface.
+	%
+	% Shouldn't be hard. this only to save you hours of debugging
+	% if you see the div by zero trap.
+	}
+
+\apisec{Header Files}
+
+\api{freebsd.h}{definitions for the \freebsd{}-derived networking code}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+\end{apisyn}
+
+\begin{apidesc}
+	Contains function definitions for the functions needed to
+	initialize and use the \freebsd{} networking stack.
+
+	It defines some convenience functions to initialize the code,
+	to set up an interface and to establish a default route. 
+	It defines \texttt{struct oskit_freebsd_net_ether_if} which
+	is \textbf{opaque} to OS clients.
+\end{apidesc}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\apisec{Interfaces}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% oskit_freebsd_net_init
+%
+
+\api{oskit_freebsd_net_init}{initialize the networking code}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+        \funcproto oskit_error_t 
+		oskit_freebsd_net_init( 
+			\outparam oskit_socket_factory_t **outfact); 
+\end{apisyn} 
+\ostonet
+
+\begin{apidesc}
+	This function initializes the \freebsd{} networking code.
+
+\com{Apparently no longer true, because oskit_f_n_init calls oskit_f_init
+     right off the bat.
+	\lim{Must be called after the \freebsd{} dev library was initialized
+	using \texttt{oskit_freebsd_init}}
+}%com
+	
+\end{apidesc}
+
+\begin{apiparm}
+	\item[outfact] \emph{*outfact} will contain a 
+	\texttt{oskit_socket_factory_t *} which can be used according to the
+	specifications in the \oskit{} socket_factory COM interface in
+	Chapter~\ref{net}.
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+
+	\lim{\texttt{oskit_freebsd_net_init} will always succeed, 
+		and may panic otherwise.}
+\end{apiret}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%	oskit_freebsd_net_open_ether_if
+%
+
+\api{oskit_freebsd_net_open_ether_if}{find and open an ethernet interface}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+	\funcproto oskit_error_t
+		oskit_freebsd_net_open_ether_if(
+		struct oskit_etherdev *dev,
+		\outparam struct oskit_freebsd_net_ether_if ** out_eif);
+\end{apisyn}
+\ostonet
+
+\begin{apidesc}
+	This function is a convenience function to open an ethernet
+	device and create the necessary \texttt{oskit_netio_t} instances 
+	to ``connect'' the \texttt{netio} device drivers to the 
+	protocol stack. 
+
+	Note: The code uses the following internal structure to keep track
+	of an ethernet interface, defined in \texttt{oskit/net/freebsd.h}
+
+\cstruct{oskit_freebsd_net_ether_if}{
+    oskit_etherdev_t *dev;	/* ethernet device */
+    oskit_netio_t   *send_nio;  /* netio for sending packets */
+    oskit_netio_t   *recv_nio;  /* netio for receiving packets */
+    oskit_devinfo_t     info;	/* device info */
+    unsigned char   haddr[OSKIT_ETHERDEV_ADDR_SIZE]; /* MAC address */
+    struct ifnet    *ifp;	/* actual interface seen by BSD code */
+};
+
+	\emph{ifp} is the actual interface as seen by the BSD code.
+	\emph{recv_nio} points to the \texttt{netio} COM interface
+	receiving packets from the ethernet device \emph{dev} and
+	passing them to the BSD networking code. \emph{send_nio} is
+	the \texttt{netio} used by the code to send packets.
+	\emph{haddr} contains the MAC address, and \emph{info} the
+	device info associated with \emph{dev}.
+
+\end{apidesc}
+
+\begin{apiparm}
+	\item[dev] The ethernet device to be used with the interface.
+	Note that the \freebsd{} net library will take this reference
+	over. 
+	\item[out_eif] 
+        \emph{*out_eif} points to an \texttt{oskit_freebsd_net_ether_if} 
+	structure on success. 
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% oskit_freebsd_net_open_first_ether_if
+%
+\api{oskit_freebsd_net_open_first_ether_if}{find and open 
+	first ethernet interface}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+	\funcproto oskit_error_t
+		oskit_freebsd_net_open_first_ether_if(
+		\outparam struct oskit_freebsd_net_ether_if ** out_eif);
+\end{apisyn}
+\ostonet
+
+\begin{apidesc}
+	This function is a convenience function to find and open
+	the first ethernet device\footnote{according to 
+	\texttt{osenv_device_lookup} using an \texttt{oskit_etherdev_iid}}
+	and to create an associated \texttt{oskit_freebsd_net_ether_if}
+	structure.
+	\lim{It leaks references to other ethernet devices, if any.}
+
+\end{apidesc}
+
+\begin{apiparm}
+	\item[out_eif] 
+        \emph{*out_eif} points to an \texttt{oskit_freebsd_net_ether_if} 
+	structure on success. 
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% oskit_freebsd_net_close_ether_if
+%
+
+\api{oskit_freebsd_net_close_ether_if}{close an ethernet interface}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+        \funcproto void 
+	oskit_freebsd_net_close_ether_if(struct oskit_freebsd_net_ether_if *eif);
+\end{apisyn}
+\ostonet
+
+\begin{apidesc}
+	The function closes the interface and frees 
+	the oskit_freebsd_net_ether_if structure.
+
+	This is currently done by releasing the two \texttt{netio}
+	instances and the \texttt{oskit_etherdev_t} instance in 
+	\texttt{struct oskit_freebsd_net_ether_if}.
+	
+\end{apidesc}
+
+\begin{apiparm}
+	\item[eif] Interface to be closed.
+\end{apiparm}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% oskit_freebsd_net_ifconfig
+%
+
+\api{oskit_freebsd_net_ifconfig}{configure an interface}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+        \funcproto oskit_error_t  
+	oskit_freebsd_net_ifconfig(
+		struct oskit_freebsd_net_ether_if *eif,
+		char *name, char *ipaddr, char *netmask);
+\end{apisyn}
+\ostonet
+
+\begin{apidesc}
+	This is a temporary convenience function which does the
+	setup usually performed by \freebsd{}'s \texttt{ifconfig(8)} command.
+	This function is equivalent to the following command:
+	\begin{verbatim}
+	ifconfig de0 inet 155.99.214.164 link2 netmask 255.255.255.0
+	\end{verbatim}
+	with \texttt{155.99.214.164} being the IP address to be used
+	by the ethernet interface, \texttt{255.255.255.0} the
+	netmask of the local subnet, and \texttt{de0} the
+	(arbitrary) name of the interface. 
+
+	% Note: God knows why I set the link2/IFF_LINK2 flag. I believe
+	% it's a driver option and passed through, so its moot.
+	% But I report faithfully what I've done.
+	
+\end{apidesc}
+
+\begin{apiparm}
+	\item[eif] A structure describing the physical interface 
+	as returned by \texttt{oskit_freebsd_net_open_ether_if}.
+	
+	\item[name] The name of the interface. Should be a 3 byte string 
+	of the \texttt{"abn"} where \texttt{a} and \texttt{b} are letters
+	and \texttt{n} is a number. Use different names for different
+	interfaces.
+
+	\item[ipaddr]
+	The address to be used by the interface in \texttt{"xxx.xxx.xxx.xxx"}
+	notation.
+	
+	\item[netmask]
+	The netmask of the subnet to be used by the interface 
+	in \texttt{"xxx.xxx.xxx.xxx"} notation.
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% oskit_freebsd_net_add_default_route
+%
+
+\api{oskit_freebsd_net_add_default_route}{set a default route}
+\begin{apisyn}
+        \cinclude{oskit/net/freebsd.h}
+
+        \funcproto oskit_error_t
+		oskit_freebsd_net_add_default_route(char *gateway);
+\end{apisyn}
+\ostonet
+
+\begin{apidesc}
+	This function sets a default route.
+
+	\lim{Take a look at the implementation in
+	\texttt{freebsd/net/bsdnet_add_default_route.c}. 
+	}
+\end{apidesc}
+
+\begin{apiparm}
+	\item[gateway]
+	The IP address of the default gateway to be set in 
+	\texttt{"xxx.xxx.xxx.xxx"} notation.
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+

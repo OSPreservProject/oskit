@@ -1,0 +1,29 @@
+Copyright (c) 1994-1999 The University of Utah and the Flux Group.
+All rights reserved.
+
+The OSKit -- the Flux Operating System Toolkit.
+
+Developed by the University of Utah, Flux Research Group.
+http://www.cs.utah.edu/flux/
+
+The OSKit is free software -- also known as "open source" -- in general, you
+can redistribute it and/or modify it under the terms of the GNU General Public
+License, version 2, as published by the Free Software Foundation, and found in
+the file `COPYING'.  This license basically allows free use, modification, and
+redistribution, as long as the source to the OSKit and any code linked against
+it is made freely available.  (The license in `COPYING' is authoritative, not
+this interpretation of it.)  Individual files that we have not modified to form
+a derivative work will not contain a Utah copyright and retain their original
+license, whatever that is.  For credits and exceptions, see doc/licensing.tex.
+
+To pursue alternate licensing terms for code that we wrote, contact the
+University at csl-dist@cs.utah.edu or +1-801-585-3271.
+
+The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the OSKit; see the file COPYING.  If not, write to the Free Software
+Foundation, 59 Temple Place #330, Boston, MA 02111-1307, USA, or look
+at http://www.fsf.org/copyleft/gpl.html.

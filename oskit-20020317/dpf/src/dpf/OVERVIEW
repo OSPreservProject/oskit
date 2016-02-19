@@ -1,0 +1,106 @@
+			DPF 2.0 
+			Summary
+	
+High bit: 
+	DPF is a packet filter engine that compiles filters to machine
+	code.  The resultant code is fairly efficient.
+
+	For simplicity of support some of the more ambitious features
+	of the sigcomm paper have been eliminated.   The resultant
+	generated code is roughly a factor of two slower than that
+	described in the paper.  If this is a problem, or if you would
+	like other features described in the paper, please email
+	engler@lcs.mit.edu.
+
+	The biggest difference is that we use a totally different code
+	generation strategy in order to guard against bad performance
+	in cases that, while presumably rare, could conceivably occur.
+	These changes have revolved around attempting to make insertion
+	to have (for almost all cases) a constant overhead rather than
+	being proportional to the number of protocols or active
+	filters.  The two cases where insertion is not constant are:
+
+		1. when hash tables must be resized.  (resizing is
+		O(n) with the number of keys in the table)
+	
+		2. when a new protocol is inserted into an or list
+		we insert it after protocols that look at more
+		message bits for the given atom.  This is roughly 
+		O(protocols).
+
+	dpf-config.h holds various configuration parameters; these can
+	be redefined in order to fit dpf to site-specific features.
+
+Code generation is triggered by the following events:
+	+ when an atom is first created we generate its code.
+	
+	+ when an eq node becomes a disjunction (or disjunction 
+	is demoted to eq) we regenerate its code.
+
+	+ when collisions are introduced into hash table (or eliminated)
+	the hash table code is regenerated (since hash table lookup
+	code is optimized when no collisions occur).
+
+	+ when a hash table is expanded its code is regenerated (since
+	the hash table size is hard-wired in the generated code).
+
+	+ when a new ``first child'' of an atom is created, the atom
+	is regenerated (since it contains a direct jump to the first
+	child).
+
+Optimizations:
+	+ we coalesce atoms that look at adjacent fields in a message.
+
+	+ primitive instruction scheduling of delay slots.
+
+	+ compute minimum guarenteed alignment to perform fast loads
+
+	+ optimize bounds checks by aggregating message shifts and by
+	statically eliminating all checks before a shift that are
+	guarenteed to fit in a message buffer.
+
+	+ optimize hash table lookup for all terminals
+	
+	+ optimize hash table lookup for no collisions
+
+	+ an ambigous optimization: we use a fairly robust hash
+	function in order to limit pathological behavior in a simple
+	way.  The function uses a multiplication (read: is a bit
+	expensive) but currently seems a reasonable approach.  There
+	are a number of potential tricks that could be played in order
+	to only use it in cases where it is really required.
+	
+	+ if a hash table only has non-terms, we elide the intermediate
+	jump and go directly to child (otherwise we jump to the hte
+	which, if it contains a short filter, loads its pid).
+
+Code gen optimizations we do not do but could:
+	+ optimize across atoms (useful for multiple-issue chips)
+
+	+ special-case hash table functions to keys (e.g., use cheap one
+		for benign distribution, near-perfect hash functions for
+		pathological cases, etc).
+
+	+ use bin-search for hash tables that have a small number of entries
+
+	+ do better instruction scheduling
+
+	+ perhaps use more self-modifying code to eliminate the need
+	to regen so often
+
+	+ use dummy nodes in hash table to elide check for nil pointer.
+
+Implementation optimizations we could do but do not:
+	+ make data structures smaller (there is a lot of wasted bits
+	for each atom)
+
+	+ in general, can tune the code.  it is a bit slow.
+
+	+ make special hash table entries
+
+Limitations:
+	+ dpf 2.0 depends on vcode port that only works on mips and alpha.
+
+	+ restrictive language.  most glaring problem: no fragmentation
+	support.  other problems are that the number of operators are
+	quite limited.

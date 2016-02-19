@@ -1,0 +1,87 @@
+#
+# Copyright (c) 2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_uvm_uvm_makerules_
+_oskit_netbsd_uvm_uvm_makerules_ = yes
+
+TARGET = liboskit_netbsd_uvm.a
+
+SRCDIRS += $(OSKIT_SRCDIR)/uvm/uvm/$(HOST_ARCH) \
+	$(OSKIT_SRCDIR)/uvm/uvm 
+
+MOSTLY_SRCDIRS += $(OSKIT_SRCDIR)/uvm/netbsd/sys/kern \
+	   $(OSKIT_SRCDIR)/uvm/netbsd/sys/lib/libkern \
+	   $(OSKIT_SRCDIR)/uvm/netbsd/sys/uvm 
+
+ifeq ($(HOST_ARCH),x86)
+MOSTLY_SRCDIRS += $(OSKIT_SRCDIR)/uvm/netbsd/sys/arch/i386/i386
+OBJINC   = $(OSKIT_SRCDIR)/uvm/netbsd/sys/arch/i386/include
+endif
+ifeq ($(HOST_ARCH),arm32)
+MOSTLY_SRCDIRS += $(OSKIT_SRCDIR)/uvm/netbsd/sys/fs/arm32/arm32
+OBJINC   = $(OSKIT_SRCDIR)/uvm/netbsd/sys/arch/arm32/include
+endif
+
+INCDIRS += $(OSKIT_SRCDIR)/uvm/uvm/include \
+	$(OSKIT_SRCDIR)/uvm/netbsd/sys objinclude
+
+# OSKit-specific modifications to NetBSD sources
+DEFINES += -DOSKIT -DCOMPILING_UVM
+
+# NetBSD kernel build options
+DEFINES += -D_KERNEL -DDIAGNOSTIC
+#DEFINES += -DKMEMSTATS -DMALLOCLOG
+#DEFINES += -DUVMHIST -DUVMHIST_PRINT
+
+# Implicitly include the global.h header file at the top of _all_ sources.
+# This header #defines a bunch of global NetBSD symbols
+# to ensure linker namespace cleanliness and avoid conflicts.
+OSKIT_CPPFLAGS += -include $(OSKIT_SRCDIR)/uvm/uvm/global.h
+
+OBJFILES += pmap.o subr_pool.o __assert.o uvm_init.o uvm_page.o uvm_map.o \
+	uvm_aobj.o uvm_km.o uvm_amap.o uvm_anon.o uvm_stat.o uvm_fault.o \
+	uvm_pdaemon.o uvm_pager.o uvm_mmap.o \
+	uvm_swap.o uvm_vnode.o locore.o \
+	kern_lock.o kern_malloc.o kern_subr.o \
+	subr_extent.o  \
+	vfs_bio.o vfs_subr.o subr_prf.o
+
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+$(OBJFILES): objinclude/machine
+CLEAN_FILES += objinclude objinclude_machine oskit_uvm_asm.h
+
+# for locore.o
+vpath %.s $(SRCDIRS) $(MOSTLY_SRCDIRS)
+ASFLAGS += -x assembler-with-cpp -traditional-cpp -D_LOCORE
+locore.o : locore.s oskit_uvm_asm.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
+	$(CC) -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
+locore.po : locore.s oskit_uvm_asm.h
+	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
+	$(CC) -c -DGPROF -pg -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
+
+# Create the objinclude/machine symlink.
+# We have to kludge a little to get it to work right,
+# because OSKIT_SRCDIR might be either an absolute or a relative path
+# and it will only work reliably if interpreted from _this_ directory.
+objinclude/machine:
+	-mkdir -p objinclude
+	ln -s ../objinclude_machine objinclude/machine
+	ln -s $(OBJINC) objinclude_machine
+
+endif

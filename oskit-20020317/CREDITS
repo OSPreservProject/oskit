@@ -1,0 +1,36 @@
+OSKit Contributors
+
+While much of the code in the OSKit was developed outside the
+University of Utah, by large free operating systems projects-- most
+notable are the FreeBSD, Linux, Mach and NetBSD projects-- the OSKit
+proper was developed by members of the University of Utah's Flux
+Research Group, including (in alphabetical order):
+	Chris Alfeld
+	Dave Andersen
+	Godmar Back
+	Greg Benson (U.C. Davis on location at Utah)
+	Steve Clawson
+	Bryan Ford
+	Shantanu Goel
+	Mike Hibler
+	Jay Lepreau
+	Roland McGrath
+	Bart Robinson
+	Steve Smalley (on location at Utah)
+	Leigh Stoller
+	Sai Susarla
+	Patrick Tullmann
+	Kevin Van Maren
+While many of these made huge contributions, Bryan Ford stands out for
+conceiving the OSKit and doing most of the early development and
+architecture.  The majority of the OSKit work was done under DARPA
+support, which we gratefully acknowledge.  The GNU build tool chain
+was essential, as usual.  Finally, we thank our brave early users,
+especially the MIT Express Project.
+
+
+Jay Lepreau
+University of Utah		
+lepreau@cs.utah.edu
+
+December 17, 1998

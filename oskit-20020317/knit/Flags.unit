@@ -1,0 +1,382 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Compilation flags
+/************************************************************/
+
+
+flags defines = oskit_defines_flags  // for backwards compatability
+flags defincs = oskit_includes_flags 
+
+flags oskit_defines_flags = 
+  { 
+  "-DHAVE_CONFIG_H",
+  "-DOSKIT_X86",
+  "-DOSKIT_X86_PC",
+  "-DOSKIT",
+  "-DKNIT",
+
+  "-I-",
+  "-nostdinc",
+  
+// imports gcc 2.8.x or higher
+//  "-ffunction-sections",  // experiment
+
+// makes things bigger sometimes
+//  "-fomit-frame-pointer",
+
+  "-MD",
+
+// The following can be specified by setting CFLAGS when calling make
+//  "-Wall",
+//  "-O2",
+//  "-g",
+//  "-O",
+}
+
+flags oskit_includes_flags = 
+{ "-I${OSKITDIR}/oskit/c",
+  "-I${OSKITDIR}",
+  "-I${BUILDDIR}",
+}
+
+flags asm =
+  { "-DASSEMBLER"
+  }
+
+flags boot_linux =
+  { flags defines
+  , "-I${OSKITDIR}/boot/linux"
+  , "-I${OSKITDIR}/boot"
+  , "-DHAVE_STRING_H"
+  , "-DDYN_ALLOC"
+  , "-Dnear=''"
+  , flags defincs
+  } 
+
+flags boot_pxe =
+  { flags defines
+  , "-I${OSKITDIR}/boot/pxe"
+  , "-I${OSKITDIR}/boot"
+  , flags defincs
+  } 
+
+flags boot_net =
+  { flags defines
+  , "-I${OSKITDIR}/boot/net"
+  , "-I${OSKITDIR}/boot"
+  , flags defincs
+  } 
+
+flags bootp =
+  { flags defines
+  , "-I${OSKITDIR}/bootp"
+  , flags defincs
+  } 
+
+flags com =
+  { flags defines
+  , "-I${OSKITDIR}/com"
+  , flags defincs
+  } 
+
+flags diskpart =
+  { flags defines
+  , "-I${OSKITDIR}/diskpart"
+  , flags defincs
+  } 
+
+flags examples = {
+  flags oskit_defines_flags,
+  "-I${OSKITDIR}/examples/x86",
+  "-I${OSKITDIR}/examples/x86/more",
+  "-I${OSKITDIR}/examples/x86/shared",
+  flags oskit_includes_flags
+} 
+
+flags examples_threaded = {
+  flags oskit_defines_flags,
+  "-I${OSKITDIR}/examples/x86",
+  "-I${OSKITDIR}/examples/x86/threads",
+  "-I${OSKITDIR}/freebsd/libc/include",
+  "-I${OSKITDIR}/freebsd/3.x/src/include",
+  "-I${OSKITDIR}/freebsd/3.x/src/sys",
+  "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386",
+  "-I${BUILDDIR}/freebsd/libc_r/objinclude",
+  flags oskit_includes_flags
+} 
+
+flags exec =
+  { flags defines
+  , "-I${OSKITDIR}/exec"
+  , "-I${OSKITDIR}/exec/x86"
+  , flags defincs
+  } 
+
+flags fsread =
+  { flags defines
+  , "-I${OSKITDIR}/fsread"
+  , flags defincs
+  } 
+
+flags fudp =
+  { flags defines
+  , "-I${OSKITDIR}/fudp"
+  , flags defincs
+  } 
+
+flags hpfq =
+  { flags defines
+  , "-I${OSKITDIR}/hpfq"
+  , flags defincs
+  } 
+
+flags startup =
+  { flags defines
+  , "-I${OSKITDIR}/startup"
+  , flags defincs
+  } 
+
+flags libc = 
+  { flags defines
+  , "-I${OSKITDIR}/libc"
+  , "-I${OSKITDIR}/libc/x86"
+//  , "-I${OSKITDIR}/libc/x86/i16"
+  , "-I${OSKITDIR}/libc/stdio"
+  , "-I${OSKITDIR}/libc/stdtime"
+  , "-I${OSKITDIR}/libc/stdlib"
+  , "-I${OSKITDIR}/libc/string"
+  , "-I${OSKITDIR}/libc/wchar"
+  , "-I${OSKITDIR}/libc/gen"
+  , "-I${OSKITDIR}/libc/gmon"
+  , "-I${OSKITDIR}/libc/malloc"
+  , "-I${OSKITDIR}/libc/net"
+  , "-I${OSKITDIR}/com"
+  , flags defincs
+  }
+
+flags amm = 
+  { flags defines
+  , "-I${OSKITDIR}/amm"
+  , flags defincs
+  }
+
+flags clientos =
+  { flags defines
+  , "-I${OSKITDIR}/clientos"
+  , "-I${OSKITDIR}/com"
+  , flags defincs }
+
+flags lmm = 
+  { flags defines
+  , "-I${OSKITDIR}/lmm"
+  , flags defincs
+  }
+
+flags memfs = 
+  { flags defines
+  , "-I${OSKITDIR}/memfs"
+  , flags defincs
+  }
+
+flags netbsd = 
+  { flags defines
+  , "-DMAXUSERS=32"
+  , "-DNWDC=1"
+  , "-DNSD=1"
+  , "-DNBUF=16"
+  , "-D_KERNEL"
+  , "-DDIAGNOSTIC"
+  , "-DFFS"
+  , "-I-"
+  , "-nostdinc" 
+  , "-I${OSKITDIR}/netbsd/fs"
+  , "-I${OSKITDIR}/netbsd/src/sys"
+  , "-I${OSKITDIR}/netbsd/src/sys/conf"
+  , "-I${OSKITDIR}/netbsd/src/sys/kern"
+  , "-I${OSKITDIR}/netbsd/src/sys/lib/libkern"
+  , "-I${OSKITDIR}/netbsd/src/sys/miscfs/deadfs"
+  , "-I${OSKITDIR}/netbsd/src/sys/miscfs/specfs"
+  , "-I${OSKITDIR}/netbsd/src/sys/ufs/ffs"
+  , "-I${OSKITDIR}/netbsd/src/sys/ufs/ufs"
+  , "-I${OSKITDIR}/netbsd/src/sys/arch/i386/i386"
+  , "-I${BUILDDIR}/netbsd/fs"
+  , "-I${BUILDDIR}/netbsd/fs/objinclude"
+  , "-I${BUILDDIR}"
+  , "-I${OSKITDIR}"
+
+  // eliminating this isn't trivial since it turns some things into nops
+  , "-include ${OSKITDIR}/netbsd/fs/global.h"
+  , flags legacy_code
+  }
+
+flags osenv = 
+  { flags defines
+  , "-I${OSKITDIR}/dev"
+  , "-I${OSKITDIR}/dev/x86" 
+  , flags defincs
+  }
+
+flags posix = 
+  { flags defines
+  , "-I${OSKITDIR}/posix/sys"
+  , flags defincs
+  }
+
+flags pthread = 
+  { flags defines
+  , "-I${OSKITDIR}/threads/cpuinherit"
+  , "-I${OSKITDIR}/threads/sched_posix"
+  , "-I${OSKITDIR}/threads/sched_edf"
+//  , "-I${OSKITDIR}/threads/sched_realtime"
+//  , "-I${OSKITDIR}/threads/sched_rms"
+  , "-I${OSKITDIR}/threads"
+  , "-I${BUILDDIR}/threads/machine"
+  , "-I${BUILDDIR}/threads"
+  , flags defincs
+  }
+
+flags legacy_code =
+  { "-Wno-unused"
+  , "-Wno-uninitialized"
+  , "-Wno-implicit"
+  , "-Wno-parentheses"
+  , "-Wno-format"
+  }
+
+flags linux_dev_asm = 
+  { flags linux_dev
+  , "-DASSEMBLER"
+  , "-D__ASSEMBLY__"
+  }
+
+flags linux_dev = 
+  { flags defines
+  , "-DOSKIT_DEV"
+  , "-DAUTOCONF"
+  , "-D__KERNEL__"
+  , "-I-"
+  , "-nostdinc" 
+//no:    , "-I${OSKITDIR}/oskit/c" 
+  , "-I${OSKITDIR}/."
+  , "-I${BUILDDIR}/."
+  , "-I${OSKITDIR}/linux/dev"
+  , "-I${OSKITDIR}/linux/src/drivers/block"
+  , "-I${OSKITDIR}/linux/src/drivers/pci"
+  , "-I${OSKITDIR}/linux/src/drivers/cdrom"
+  , "-I${OSKITDIR}/linux/shared"
+  , "-I${OSKITDIR}/linux/shared/libc"
+  , "-I${OSKITDIR}/linux/shared/x86"
+  , "-I${OSKITDIR}/linux/src/lib"
+  , "-I${OSKITDIR}/linux/src/arch/i386/lib"
+  , "-I${OSKITDIR}/linux/src/drivers/net"
+  , "-I${OSKITDIR}/linux/src/drivers/scsi"
+  , "-I${OSKITDIR}/linux/src/include"
+  , "-I${OSKITDIR}/linux/shared/libc"
+  , "-I${BUILDDIR}/linux/dev/objinclude"
+  , flags legacy_code  // ToDo: only use this for the real legacy code
+  }
+
+flags kern = 
+  { flags defines
+  , "-I${BUILDDIR}/kern"
+  , "-I${OSKITDIR}/kern/x86"
+  , "-I${OSKITDIR}/kern/x86/pc"
+  , "-I${OSKITDIR}/kern/x86/dos"
+  , "-I${OSKITDIR}/kern/x86/i16"
+  , "-I${OSKITDIR}/kern/x86/pc/i16"
+  , "-I${OSKITDIR}/kern/x86/dos/i16"
+  , "-I${OSKITDIR}/kern"
+  , flags defincs 
+  }
+
+flags freebsd_net =
+  { flags defines
+  , "-DINET"
+  , "-DOSKIT"
+  , "-DKERNEL"
+//  , "-D__FreeBSD__=3"  // seems that is this defined somewhere else
+  , "-I-"
+  , "-nostdinc" 
+  , "-include ${OSKITDIR}/freebsd/net/include/global.h"
+  , "-I${BUILDDIR}/freebsd/net/objinclude"
+  , "-I${BUILDDIR}"
+  , "-I${OSKITDIR}"
+  , "-I${OSKITDIR}/freebsd/net"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/netinet"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/net"
+  , "-I${OSKITDIR}/freebsd/3.x/shared"
+  , "-I${OSKITDIR}/freebsd/3.x/shared/x86"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/kern"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/libkern"
+  , "-I${OSKITDIR}/freebsd/net/include"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/net"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys/netinet"
+  , "-I${OSKITDIR}/freebsd/3.x/shared/include"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys"
+  , "-I${OSKITDIR}/freebsd/3.x/src/include"
+  , flags legacy_code
+  }
+
+flags freebsd_libc =
+  { flags defines
+//  , "-D__FreeBSD__=3" // seems to be defined elsewhere
+  , "-DNOPOLL"
+  , "-DNO__GETCWD"
+  , "-D__DBINTERFACE_PRIVATE"
+  , "-D__MPOOLINTERFACE_PRIVATE"
+  , "-Wno-unused"
+  , "-Wno-uninitialized"
+  , "-Wno-implicit"
+  , "-Wno-parentheses"
+  , "-Wno-format"
+  , "-I${OSKITDIR}/freebsd/libc/gmon"
+  , "-I${OSKITDIR}/freebsd/libc/glue"
+  , "-I${OSKITDIR}/freebsd/libc/malloc"
+  , "-I${OSKITDIR}/freebsd/libc/x86/glue"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/db/btree"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/db/db"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/db/hash"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/db/mpool"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/db/recno"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386/net"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386/gen"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386/stdlib"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386/string"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/net"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/regex"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/stdio"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/stdlib"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/stdtime"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/locale"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/quad"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/string"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/gen"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/rpc"
+  , "-I${OSKITDIR}/freebsd/libc/include"
+  , "-I${OSKITDIR}/freebsd/3.x/src/include"
+  , "-I${OSKITDIR}/freebsd/3.x/src/sys"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/include"
+  , "-I${OSKITDIR}/freebsd/3.x/src/lib/libc/i386"
+  , "-I${BUILDDIR}/freebsd/libc"
+  , "-I${BUILDDIR}/freebsd/libc/objinclude"
+  , "-I${BUILDDIR}"
+  , "-I${OSKITDIR}"
+  }
+
+/************************************************************/
+// End
+/************************************************************/

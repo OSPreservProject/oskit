@@ -1,0 +1,1269 @@
+%
+% Copyright (c) 1997-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{oskit-io}
+
+This chapter defines the I/O-related COM interfaces
+which are defined by header files in the \texttt{oskit/io} directory.
+Most of these interfaces are fairly generic
+and can be used in a wide variety of situations.
+Some of these interfaces, such as the \texttt{bufio} interface,
+are extensions to other more primitive interfaces,
+and allow objects to export the same functionality in different forms,
+permitting clients to select the service that most directly meets their needs
+thereby reducing interface crossing overhead
+and increasing overall performance.
+
+
+\apiintf{oskit_absio}{Absolute I/O Interface}
+\label{oskit-absio}
+
+	The {\tt oskit_absio} interface supports reading from and writing to
+objects at specified absolute offsets, with no concept of a seek
+pointer.  The {\tt oskit_absio} interface is identical to the
+{\tt oskit_blkio} COM interface, except that the block size is always one,
+since absolute IO is byte-oriented.
+In fact, an object that supports byte-granularity reads and writes
+can easily export both {\tt oskit_blkio} and {\tt oskit_absio}
+using exactly the same function pointer table,
+simply by implementing an {\tt oskit_blkio} interface
+that always returns one from \texttt{getblocksize},
+and then returning a pointer to that interface
+on queries for either {\tt oskit_blkio} or {\tt oskit_absio}.
+
+	The {\tt oskit_absio} COM interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{csymlist}
+\item[read]
+	Read from this object, starting at the specified offset.
+\item[write]
+	Write to this object, starting at the specified offset.
+\item[getsize]
+	Get the current size of this object.
+\item[setsize]
+	Set the current size of this object.
+\end{csymlist}
+
+\api{read}{Read from this object, starting at specified offset}
+\begin{apisyn}
+	\cinclude{oskit/io/absio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_absio_read(oskit_absio_t *f, 
+		         void *buf,
+	                 oskit_off_t offset,
+			 oskit_size_t amount,
+			 \outparam oskit_size_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method reads no more than {\tt amount} bytes into
+	{\tt buf} from this object, starting at {\tt offset}.
+	{\tt out_actual} is set to the actual number of bytes read.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object from which to read.
+	\item[buf]
+		The buffer into which the data is to be copied.	
+	\item[offset]
+		The offset in this object at which to start reading.
+	\item[amount]
+		The maximum number of bytes to read.	
+	\item[out_actual]
+		The actual number of bytes read.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{write}{Write to this object, starting at specified offset}
+\begin{apisyn}
+	\cinclude{oskit/io/absio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_absio_write(oskit_absio_t *f, 
+		         const~void *buf,
+	                 oskit_off_t offset,
+			 oskit_size_t amount,
+			 \outparam oskit_size_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method writes no more than {\tt amount} bytes from
+	{\tt buf} into this object, starting at {\tt offset}.
+	{\tt out_actual} is set to the actual number of bytes written.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to which to write.
+	\item[buf]
+		The buffer from which the data is to be copied.	
+	\item[offset]
+		The offset in this object at which to start writing.
+	\item[amount]
+		The maximum number of bytes to write.	
+	\item[out_actual]
+		The actual number of bytes written.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getsize}{Get the size of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/absio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_absio_getsize(oskit_absio_t *f, 
+			   \outparam oskit_off_t *out_size);
+\end{apisyn}
+\begin{apidesc}
+	This method returns the current size of this object
+	in bytes. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose size is desired.
+	\item[out_size]
+		The current size in bytes of this object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{setsize}{Set the size of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/absio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_absio_setsize(oskit_absio_t *f, 
+			   oskit_off_t new_size);
+\end{apisyn}
+\begin{apidesc}
+	This method sets the size of this object to
+	{\tt new_size} bytes.  If {\tt new_size}
+	is larger than the former size of this object,
+	then the contents of the object between its
+	former end and its new end are undefined.
+
+	Note that some absolute I/O objects may be fixed-size,
+	such as objects representing preallocated memory buffers;
+	in such cases,
+	this method will always return \texttt{OSKIT_E_NOTIMPL}.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose size is to be changed.
+	\item[new_size]
+		The new size in bytes for this object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_asyncio}{Asynchronous I/O Interface}
+\label{oskit-asyncio}
+
+The {\tt oskit_asyncio} interface provides interfaces in support
+of basic asynchronous I/O, based on registered callback objects
+(see Section~\ref{oskit-listener}).
+This can be used, for example, to implement Unix {\tt SIGIO} or {\tt select}
+or {\tt POSIX.1b aio}.
+
+This interface supports a notion of three kinds of interesting events:
+readability, writeability, and ``other'' exceptional conditions.
+These are defined via the flags:
+\ttindex{OSKIT_ASYNCIO_READABLE}\texttt{OSKIT_ASYNCIO_READABLE},
+\ttindex{OSKIT_ASYNCIO_WRITEABLE}\texttt{OSKIT_ASYNCIO_WRITEABLE},
+and \ttindex{OSKIT_ASYNCIO_EXCEPTION}\texttt{OSKIT_ASYNCIO_EXCEPTION}
+which are passed and returned in a mask in the various methods. 
+
+The {\tt oskit_asyncio} COM interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{icsymlist}
+\item[poll]
+	Poll for currently pending asynchronous I/O conditions.
+\item[add_listener]
+	Add a callback object for async I/O events.
+\item[remove_listener]
+	Remove a previously registered callback object.
+\item[readable]
+	Returns the number of bytes that can be read. 
+\end{icsymlist}
+
+\api{poll}{Poll for pending asynchronous I/O conditions on this object}
+\begin{apisyn}
+	\cinclude{oskit/io/asyncio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_asyncio_poll(oskit_asyncio_t *io);
+\end{apisyn}
+\begin{apidesc}
+	Poll for currently pending asynchronous I/O conditions,
+	returning a mask indicating which conditions are currently present.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The async I/O object.
+\end{apiparm}
+\begin{apiret}
+	If successful, returns a mask of the \texttt{OSKIT_ASYNCIO} flags above.
+	Otherwise, returns an error code specified in
+	{\tt <oskit/error.h>}.
+\end{apiret}
+
+\api{add_listener}{Associate a callback with this object}
+\begin{apisyn}
+	\cinclude{oskit/io/asyncio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_asyncio_add_listener(oskit_asyncio_t *io, oskit_listener_t *l,
+				   oskit_s32_t mask);
+\end{apisyn}
+\begin{apidesc}
+	Add a callback listener object to handle asynchronous I/O events.
+	When an event of interest occurs on this I/O object
+	(i.e., when one of the one to three I/O conditions becomes true),
+	\emph{all} registered listeners will be called.
+
+	The \texttt{mask} parameter is an OR'ed combination of the
+	\texttt{OSKIT_ASYNCIO} flags above.
+	It specifies which events the listener is interested in.
+	Note that spurious notifications are possible, the listener
+	must use \texttt{oskit_asyncio_poll} to determine the actual state
+	of affairs.
+
+	Also, if successful, this method returns a mask
+	describing which of the \texttt{OSKIT_ASYNCIO} conditions are
+	already true,
+	which the caller must check in order to avoid missing events
+	that occur just before the listener is registered.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The async I/O object.
+	\item[l]
+		The \texttt{oskit_listener} object to call.
+	\item[mask]
+		A mask of flags indicating which events are of interest.
+\end{apiparm}
+\begin{apiret}
+	If successful, returns a mask of the \texttt{OSKIT_ASYNCIO}
+	currently pending.
+	Otherwise, returns an error code specified in
+	{\tt <oskit/error.h>}.
+\end{apiret}
+
+\api{remove_listener}{Disassociate a callback from this object}
+\begin{apisyn}
+	\cinclude{oskit/io/asyncio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_asyncio_remove_listener(oskit_asyncio_t *io, oskit_listener_t *l);
+\end{apisyn}
+\begin{apidesc}
+	Remove a previously registered listener callback object.
+	Returns an error if the specified callback has not been registered.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The async I/O object.
+	\item[l]
+		The \texttt{oskit_listener} object to call.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{readable}{Return the number of bytes available for reading from this object}
+\begin{apisyn}
+	\cinclude{oskit/io/asyncio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_asyncio_readable(oskit_asyncio_t *io);
+\end{apisyn}
+\begin{apidesc}
+	Returns the number of bytes that can be read from the I/O object.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The async I/O object.
+\end{apiparm}
+\begin{apiret}
+	The number of bytes available for reading.
+\end{apiret}
+
+
+\apiintf{oskit_blkio}{Block I/O Interface}
+\label{oskit-blkio}
+
+The {\tt oskit_blkio} interface supports reading and writing of raw data
+in units of fixed-sized blocks which are some power of two.
+This interface is identical to the {\tt oskit_absio} interface
+except for the addition of a \texttt{getblocksize} method;
+in fact, an object that supports byte-granularity reads and writes
+can easily export both {\tt oskit_blkio} and {\tt oskit_absio}
+using exactly the same function pointer table,
+simply by implementing an {\tt oskit_blkio} interface
+that always returns one from \texttt{getblocksize},
+and then returning a pointer to that interface
+on queries for either {\tt oskit_blkio} or {\tt oskit_absio}.
+
+The {\tt oskit_blkio} interface inherits from {\tt IUnknown},
+and has the following additional methods:	
+\begin{icsymlist}
+\item[getblocksize]
+	Return the minimum block size of this block I/O object.
+\item[read]
+	Read from this object, starting at the specified offset.
+\item[write]
+	Write to this object, starting at the specified offset.
+\item[getsize]
+	Get the current size of this object.
+\item[setsize]
+	Set the current size of this object.
+\end{icsymlist}
+
+\api{getblocksize}{Return the minimum block size of this block I/O object}
+\begin{apisyn}
+	\cinclude{oskit/io/blkio.h}
+
+	\funcproto OSKIT_COMDECL_U
+	oskit_blkio_getblocksize(oskit_blkio_t *f);
+\end{apisyn}
+\begin{apidesc}
+	This method simply returns the block size of the object,
+	which must be a power of two.
+	Calls by the client to read from or write to the object
+	must only use offsets and sizes
+	that are evenly divisible by this block size.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The block I/O object.
+\end{apiparm}
+\begin{apiret}
+	Returns the block size of the object.
+\end{apiret}
+
+
+\api{read}{Read from this object, starting at specified offset}
+\begin{apisyn}
+	\cinclude{oskit/io/blkio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_blkio_read(oskit_blkio_t *f, 
+		         void *buf,
+	                 oskit_off_t offset,
+			 oskit_size_t amount,
+			 \outparam oskit_size_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method reads no more than {\tt amount} bytes into
+	{\tt buf} from this object, starting at {\tt offset}.
+	{\tt out_actual} is set to the actual number of bytes read.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object from which to read.
+	\item[buf]
+		The buffer into which the data is to be copied.	
+	\item[offset]
+		The offset in this object at which to start reading.
+		Must be a multiple of the object's block size.
+	\item[amount]
+		The maximum number of bytes to read.	
+		Must be a multiple of the object's block size.
+	\item[out_actual]
+		The actual number of bytes read.
+		Must be a multiple of the object's block size.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{write}{Write to this object, starting at specified offset}
+\begin{apisyn}
+	\cinclude{oskit/io/blkio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_blkio_write(oskit_blkio_t *f, 
+		         const~void *buf,
+	                 oskit_off_t offset,
+			 oskit_size_t amount,
+			 \outparam oskit_size_t *out_actual);
+\end{apisyn}
+\begin{apidesc}
+	This method writes no more than {\tt amount} bytes from
+	{\tt buf} into this object, starting at {\tt offset}.
+	{\tt out_actual} is set to the actual number of bytes written.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object to which to write.
+	\item[buf]
+		The buffer from which the data is to be copied.	
+	\item[offset]
+		The offset in this object at which to start writing.
+		Must be a multiple of the object's block size.
+	\item[amount]
+		The maximum number of bytes to write.	
+		Must be a multiple of the object's block size.
+	\item[out_actual]
+		The actual number of bytes written.
+		Must be a multiple of the object's block size.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{getsize}{Get the size of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/blkio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_blkio_getsize(oskit_blkio_t *f, 
+			   \outparam oskit_off_t *out_size);
+\end{apisyn}
+\begin{apidesc}
+	This method returns the current size of this object
+	in bytes. 
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose size is desired.
+	\item[out_size]
+		The current size in bytes of this object.
+		Must be a multiple of the object's block size.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{setsize}{Set the size of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/blkio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_blkio_setsize(oskit_blkio_t *f, 
+			   oskit_off_t new_size);
+\end{apisyn}
+\begin{apidesc}
+	This method sets the size of this object to
+	{\tt new_size} bytes.  If {\tt new_size}
+	is larger than the former size of this object,
+	then the contents of the object between its
+	former end and its new end are undefined.
+
+	Note that some block I/O objects may be fixed-size,
+	such as objects representing physical disks or partitions;
+	in such cases,
+	this method will always return \texttt{OSKIT_E_NOTIMPL}.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose size is to be changed.
+	\item[new_size]
+		The new size in bytes for this object.
+		Must be a multiple of the object's block size.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_bufio}{Buffer-based I/O interface}
+\label{oskit-bufio}
+
+The \texttt{oskit_bufio} interface extends the \texttt{oskit_absio} interface,
+providing additional alternative methods of accessing the object's data.
+In particular,
+for objects whose data is stored in an in-memory buffer of some kind,
+this interface allows clients to obtain direct access to the buffer itself
+so that they can read and write data using
+% the former is a bizzare way to describe it, I prefer the latter --mike
+%ordinary C pointer arithmetic,
+loads and stores,
+rather than having to copy data into and out of the buffer
+using the \texttt{read} and \texttt{write} methods.
+In addition, this interface provides similar methods
+to allow clients to ``wire'' the buffer's contents to physical memory,
+enabling DMA-based hardware devices to access the buffer directly.
+
+However, note that only the read/write methods,
+inherited from \texttt{oskit_absio}, are mandatory;
+the others may consistently fail with \texttt{OSKIT_E_NOTIMPL}
+if they cannot be implemented efficiently in a particular situation.
+In that case, the caller must use
+the basic \texttt{read} and \texttt{write} methods instead to copy the data.
+In other words,
+\texttt{oskit_bufio} object implementations are not \emph{required}
+to implement direct buffer access, either software- or DMA-based;
+the purpose of this interface is merely to allow them
+to provide this optional functionality easily and consistently.
+In general,
+the \texttt{map} and \texttt{wire} methods should only be implemented
+if they can be done more efficiently than simply copying the data.
+Further, even if a buffer I/O implementation
+does implement \texttt{map} and/or \texttt{wire}
+it may allow only one mapping or wiring to be in effect at once,
+failing if the client attempts to map or wire the buffer a second time
+before the first mapping is undone.
+Similarly, on some buffer I/O implementations,
+these operations may only work on certain areas of the buffer
+or only when the request has certain size or alignment properties:
+for example, a buffer object that stores data in discontiguous segments,
+such as BSD's \texttt{mbuf} system,
+may only allow a buffer to be mapped
+if the requested region happens to fall entirely within one segment.
+Thus, the client of a \texttt{bufio} object
+should call the \texttt{map} or \texttt{wire} methods
+whenever it can take advantage of direct buffer access,
+but must always be prepared to fall back to the basic copying methods.
+
+A particular buffer object may be semantically read-only or write-only;
+it is assumed that parties passing \texttt{bufio} objects around
+will agree upon this as part of their protocols.
+For a read-only buffer, the \texttt{write} method may or may not fail,
+and a mapping established using the \texttt{map} method
+may or may not actually be a read-only memory mapping;
+it is the client's responsibility not to attempt to write to the buffer.
+Similarly, for a write-only buffer,
+the \texttt{read} method may or may not fail;
+it is the client's responsibility not to attempt to read from the buffer.
+
+The \texttt{oskit_bufio} interface
+extends the \texttt{oskit_absio} interface
+with the following additional methods:
+\begin{icsymlist}
+\item[map]	Map some or all of this buffer into locally accessible memory.
+\item[unmap]	Release a previously mapped region of this buffer.
+\item[wire]	Wire a region of this buffer into contiguous physical memory.
+\item[unwire]	Unwire a previously wired region of this buffer.
+\item[copy]	Create a copy of the specified portion of this buffer.
+\end{icsymlist}
+
+\api{map}{Map some or all of this buffer into locally accessible memory}
+\begin{apisyn}
+	\cinclude{oskit/io/bufio.h}
+
+	\funcproto OSKIT_COMDECL
+	map(oskit_bufio_t *io, \outparam void **addr,
+	    oskit_off_t offset, oskit_size_t amount);
+\end{apisyn}
+\begin{apidesc}
+	This method attempts to map some or all of this buffer
+	into memory directly accessible to the client,
+	so that the client can access it using
+	loads and stores.
+	%simple pointer arithmetic.
+	The operation may or may not succeed,
+	depending on the parameters and the implementation of the object;
+	if it fails, the client must be prepared
+	to fall back to the basic \texttt{read} and \texttt{write} methods.
+	If the mapping operation succeeds,
+	the pointer returned is not guaranteed to have any particular alignment.
+
+	If a call to the \texttt{map} method
+	requests only a subset of the buffer to be mapped,
+	the object may actually map more than the requested amount;
+	however, since no information is passed back
+	indicating how much of the buffer was actually mapped,
+	the client must only attempt to access the region it requested.
+
+	Note that this method does not necessarily twiddle with virtual memory,
+	as its name may seem to imply;
+	in fact in most cases in which it is implemented at all,
+	it just returns a pointer to a buffer
+	if the data is already in locally-accessible memory.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The object whose contents are to be mapped.
+	\item[addr]
+		On success,
+		the method returns in this parameter
+		the address at which the client
+		can directly access the requested buffer region.
+	\item[offset]
+		The offset into the buffer of the region to be mapped.
+	\item[size]
+		The size of the region to be mapped.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{unmap}{Release a previously mapped region of this buffer}
+\begin{apisyn}
+	\cinclude{oskit/io/bufio.h}
+
+	\funcproto OSKIT_COMDECL
+	unmap(oskit_bufio_t *io, void *addr,
+	      oskit_off_t offset, oskit_size_t amount);
+\end{apisyn}
+\begin{apidesc}
+	After a successful call to the \texttt{map} method,
+	the client should call this method
+	after it is finished accessing the buffer directly,
+	so that the buffer object can clean up
+	and free any resources that might be associated with the mapping.
+
+	The \emph{addr} parameter passed to this method
+	must be exactly the value returned by the \texttt{map} request,
+	and the \emph{offset} and \emph{amount} parameters
+	must be exactly the same as the values previously passed
+	in the corresponding \texttt{map} call.
+	In other words,
+	clients must only attempt to unmap whole regions;
+	they must not attempt to unmap only part of a region,
+	or to unmap two previously mapped regions in one call,
+	even if the two regions appear to be contiguous in memory.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The object whose contents are to be mapped.
+	\item[addr]
+		The address of the mapped region,
+		as returned from the corresponding \texttt{map} call.
+	\item[offset]
+		The offset into the buffer of the mapped region,
+		as passed to the corresponding \texttt{map} call.
+	\item[size]
+		The size of the mapped region,
+		as passed to the corresponding \texttt{map} call.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{wire}{Wire a region of this buffer into contiguous physical memory}
+\begin{apisyn}
+	\cinclude{oskit/io/bufio.h}
+
+	\funcproto OSKIT_COMDECL
+	wire(oskit_bufio_t *io, \outparam oskit_addr_t *phys_addr,
+	     oskit_off_t offset, oskit_size_t amount);
+\end{apisyn}
+\begin{apidesc}
+	This method attempts to wire down some or all of this buffer
+	into memory directly accessible by DMA hardware.
+	The operation may or may not succeed,
+	depending on the parameters and the implementation of the object;
+	if it fails, the client must be prepared
+	to fall back to the basic \texttt{read} and \texttt{write} methods.
+
+	If the wiring operation succeeds,
+	the physical address of the buffer
+	is guaranteed not to change or otherwise become invalid
+	until the region is unwired or the \texttt{bufio} object is released.
+	The wired buffer is not guaranteed
+	to have any particular alignment or location properties:
+	for example, on a PC,
+	if the device that is going to be accessing the buffer
+	requires memory below 16MB,
+	then it must be prepared to use appropriate bounce buffers
+	if the wired buffer turns out to be above 16MB.
+
+	If a call to the \texttt{wire} method
+	requests only a subset of the buffer to be mapped,
+	the object may actually wire more than the requested amount;
+	however, since no information is passed back
+	indicating how much of the buffer was actually wired,
+	the client must only attempt to use the region it requested.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The object whose contents are to be wired.
+	\item[addr]
+		On success,
+		the method returns in this parameter
+		the physical address at which DMA hardware
+		can directly access the requested buffer region.
+	\item[offset]
+		The offset into the buffer of the region to be wired.
+	\item[size]
+		The size of the region to be wired.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{unwire}{Unwire a previously wired region of this buffer}
+\begin{apisyn}
+	\cinclude{oskit/io/bufio.h}
+
+	\funcproto OSKIT_COMDECL
+	unwire(oskit_bufio_t *io, void *addr,
+	       oskit_off_t offset, oskit_size_t amount);
+\end{apisyn}
+\begin{apidesc}
+	After a successful call to the \texttt{wire} method,
+	the client should call this method
+	after the hardware is finished accessing the buffer directly,
+	so that the buffer object can clean up
+	and free any resources that might be associated with the wiring.
+
+	The \emph{addr} parameter passed to this method
+	must be exactly the value returned by the \texttt{wire} request,
+	and the \emph{offset} and \emph{amount} parameters
+	must be exactly the same as the values previously passed
+	in the corresponding \texttt{wire} call.
+	In other words,
+	clients must only attempt to unwire whole regions;
+	they must not attempt to unwire only part of a region,
+	or to unwire two previously wired regions in one call,
+	even if the two regions appear to be contiguous in physical memory.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The object whose contents are to be wired.
+	\item[addr]
+		The address of the wired region,
+		as returned from the corresponding \texttt{map} call.
+	\item[offset]
+		The offset into the buffer of the wired region,
+		as passed to the corresponding \texttt{wire} call.
+	\item[size]
+		The size of the wired region,
+		as passed to the corresponding \texttt{wire} call.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{copy}{Create a copy of the specified portion of this buffer}
+\begin{apisyn}
+	\cinclude{oskit/io/bufio.h}
+
+	\funcproto OSKIT_COMDECL
+	copy(oskit_bufio_t *io,
+	       oskit_off_t offset, oskit_size_t amount,
+	       \outparam oskit_bufio_t **out_io);
+\end{apisyn}
+\begin{apidesc}
+	This method attempts to create
+	a logical copy of a portion of this buffer object
+	(possibly the whole buffer),
+	returning a new \texttt{oskit_bufio} object representing the copy.
+	As with the \texttt{map} and \texttt{wire} methods,
+	this method should only be implemented by an object
+	if it can be done more efficiently
+	than a simple ``brute-force'' copy using \texttt{read}.
+	For example, in virtual memory environments,
+	the object may be able to use copy-on-write optimizations.
+	Similarly, if the buffer's contents are stored
+	in special memory not efficiently accessible to the processor,
+	such as memory on a video or coprocessor board,
+	this method could use on-board hardware to perform a much faster copy.
+	% XXX shouldn't there also be a copyto method, as in stream?
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The object whose contents are to be copied.
+	\item[offset]
+		The offset into the buffer of the region to be copied.
+	\item[size]
+		The size of the region to be copied.
+	\item[out_io]
+		On success,
+		this parameter holds the \texttt{bufio} object
+		representing the newly created copy of the buffer's contents.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_netio}{Network packet I/O interface}
+\label{oskit-netio}
+
+This interface builds on the above interfaces
+to provide a clean and simple but powerful interface
+for passing network packets between device drivers and protocol stacks,
+and possibly between layers of a protocol stack as well.
+
+The \texttt{oskit_netio} interface uses a symmetric sender-driven model
+for asynchronous communication.
+Each party involved
+(e.g., the network device driver and the protocol stack)
+must implement a \texttt{netio} object
+and pass a reference to its own \texttt{netio} object to the other party.
+For example,
+in the \texttt{oskit_netdev} interface,
+which represents a network device of some kind,
+this exchange of \texttt{netio} objects occurs
+when the protocol stack or other client opens the device.
+The \texttt{oskit_netio} interface defines
+only a single additional method
+beyond the basic methods inherited from \texttt{oskit_iunknown};
+this method, appropriately named \texttt{push},
+is used to ``push'' a network packet to the ``other'' party.
+For example, when a network device driver receives a packet from the hardware,
+the driver calls the \texttt{push} method
+on the \texttt{netio} object provided by the protocol stack;
+conversely, when the protocol stack needs to send a packet,
+it calls the \texttt{netio} object returned by the device driver
+at the time the device was opened.
+Thus, a \texttt{netio} object essentially represents a ``packet consumer.''
+
+The following section describes the specifics of the \texttt{push} method.
+
+\api{push}{Push a packet through to the packet consumer}
+\begin{apisyn}
+	\cinclude{oskit/io/netio.h}
+
+	\funcproto OSKIT_COMDECL
+	push(oskit_netio_t *io, oskit_bufio *buf, oskit_size_t size);
+\end{apisyn}
+\begin{apidesc}
+	This method feeds a network packet
+	to the packet consumer represented by the \texttt{netio} object;
+	what the consumer does with the packet
+	depends entirely on who the consumer is and how it is configured.
+	The packet is contained in a \texttt{bufio} object
+	which must be at least the size of the packet,
+	but may be larger;
+	the \emph{size} parameter on the \texttt{push} call
+	indicates the actual size of the packet.
+
+	If the consumer needs to hold on to the provided \texttt{bufio} object
+	after returning from the call,
+	it must call \texttt{addref} on the \texttt{bufio} object
+	to obtain its own reference;
+	then it must release this reference at some later time
+	when it is done with the buffer.
+	Otherwise, if the consumer doesn't obtain its own reference,
+	the caller may recycle the buffer as soon as the call returns.
+
+	The passed buffer object is logically read-only;
+	the consumer must not attempt to write to it.
+	The size parameter to this call is the actual size of the packet;
+	the size of the buffer, as returned by the \texttt{getsize} method,
+	may be larger than the size of the packet.
+\end{apidesc}
+\begin{apiparm}
+	\item[io]
+		The \texttt{oskit_netio} interface
+		representing the packet consumer.
+	\item[buf]
+		The \texttt{oskit_bufio} interface
+		to the buffer object containing the packet.
+	\item[size]
+		The actual size of the packet;
+		must be less than or equal to
+		the size of the buffer object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_posixio}{\textnormal{\posix{}} I/O interface}
+\label{oskit-posixio}
+
+	The {\tt oskit_posixio} interface defines the minimal \posix{} I/O
+interface that any \posix{} I/O object (file, device, pipe, socket, etc)
+can be expected to support.  Only per-object methods are provided by
+this interface.  Additional I/O operations are supported through
+separate interfaces, such as the {\tt oskit_stream} interface and
+{\tt oskit_absio} COM interface.
+
+	The {\tt oskit_posixio} COM interface inherits from {\tt oskit_iunknown},
+and has the following additional methods:	
+\begin{icsymlist}
+\item[stat]
+	Get this object's attributes.
+\item[setstat]
+	Set this object's attributes.
+\item[pathconf]
+	Get this object's value for a configuration option variable. 
+\end{icsymlist}
+
+\api{stat}{Get attributes of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/posixio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_posixio_stat(oskit_posixio_t *f, 
+			   \outparam oskit_stat_t *out_stats);
+\end{apisyn}
+\begin{apidesc}
+	This method returns the attributes of this object.
+	Depending on the type of object, only some of the attributes
+	may be meaningful.  {\tt out_stats} is a pointer to a 
+	{\tt oskit_stat_t} structure defined as follows: 
+\com{Cannot use cstruct macro: TeX capacity exceeded, sorry [parameter stack size=60].}%com
+{\par{\tt struct } {\large\bf oskit_stat} \{\\
+\begin{tabular}{lllll}
+\quad&{\tt oskit_dev_t}&{\tt	dev};&/* device on which inode resides &*/\\
+\quad&{\tt oskit_ino_t}&{\tt ino};&/* inode's number &*/\\
+\quad&{\tt oskit_mode_t}&{\tt mode};&/* file mode &*/\\
+\quad&{\tt oskit_nlink_t}&{\tt nlink};&/* number of hard links to file &*/\\
+\quad&{\tt oskit_uid_t}&{\tt uid};&/* user id of owner &*/\\
+\quad&{\tt oskit_gid_t}&{\tt gid};&/* group id of owner &*/\\
+\quad&{\tt oskit_dev_t}&{\tt rdev};&/* device number, for device files &*/\\
+\quad&{\tt oskit_timespec_t}&{\tt atime};&/* time of last access &*/\\
+\quad&{\tt oskit_timespec_t}&{\tt mtime};&/* time of last data modification &*/\\
+\quad&{\tt oskit_timespec_t}&{\tt ctime};&/* time of last attribute change &*/\\
+\quad&{\tt oskit_off_t}&{\tt size};&/* size in bytes &*/\\
+\quad&{\tt oskit_u64_t}&{\tt blocks};&/* blocks allocated for file &*/ \\
+\quad&{\tt oskit_u32_t}&{\tt blksize};&/* optimal block size in bytes &*/\\
+\end{tabular} \\ \}; }
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose attributes are desired.
+	\item[out_stats]
+		The attributes of the specified object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{setstat}{Set the attributes of this object}
+\begin{apisyn}
+	\cinclude{oskit/io/posixio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_posixio_setstat(oskit_posixio_t *f, 
+			      oskit_u32_t mask,
+			      const~oskit_stat_t *stat);
+\end{apisyn}
+\begin{apidesc}
+	This method sets the attributes specified in {\tt mask}
+	to the values specified in {\tt stat}.  {\tt mask} may
+	be any combination of the following:
+\begin{icsymlist}
+\item[OSKIT_STAT_MODE]
+	Set the file mode, except for the file type bits, as in
+	the Unix {\tt chmod} system call.  
+\item[OSKIT_STAT_UID]
+	Set the file user id, as in the Unix {\tt chown} system call.
+\item[OSKIT_STAT_GID]  
+	Set the file group id, as in the Unix {\tt chown} system call.
+\item[OSKIT_STAT_SIZE]
+	Set the file size, as in the Unix {\tt truncate} system call.
+\item[OSKIT_STAT_ATIME] 
+	Set the file's last access timestamp to a particular
+	value, as in the Unix {\tt utimes} system call with 
+	a non-{\tt NULL} parameter.
+\item[OSKIT_STAT_MTIME]
+	Set the file's last data modification timestamp to a particular
+	value, as in the Unix {\tt utimes} system call 
+	with a non-{\tt NULL} parameter. 
+\item[OSKIT_STAT_UTIMES_NULL]
+	Set the file's last access timestamp and data modification
+	timestamp to the current time, as in
+	the Unix {\tt utimes} system call with a {\tt NULL}
+	parameter.  
+\end{icsymlist}
+
+	Typically, this method is not supported for symbolic links.
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object whose attributes are to be changed.
+	\item[mask]
+		The attributes to be changed. 
+	\item[stat]
+		The new attribute values.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{pathconf}{Get value of a configuration option variable}
+\begin{apisyn}
+	\cinclude{oskit/io/posixio.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_posixio_pathconf(oskit_posixio_t *f, 
+			      oskit_s32_t option,
+			      \outparam oskit_s32_t *out_val);
+\end{apisyn}
+\begin{apidesc}
+	This method returns the value of the specified 
+	configuration option variable for this object.
+	The value of {\tt option} may be one of the following: 
+\begin{icsymlist}
+\item[OSKIT_PC_LINK_MAX]
+	Get the maximum file link count.
+\item[OSKIT_PC_MAX_CANON]
+	Get the maximum size of the terminal input line.
+\item[OSKIT_PC_MAX_INPUT]
+	Get the maximum input queue size.
+\item[OSKIT_PC_NAME_MAX]
+	Get the maximum number of bytes in a filename.
+\item[OSKIT_PC_PATH_MAX]
+	Get the maximum number of bytes in a pathname.
+\item[OSKIT_PC_PIPE_BUF]
+	Get the maximum atomic write size to a pipe.
+\item[OSKIT_PC_CHOWN_RESTRICTED]
+	Determine whether use of chown is restricted.
+\item[OSKIT_PC_NO_TRUNC]
+	Determine whether too-long pathnames produce errors.
+\item[OSKIT_PC_VDISABLE]
+	Get value to disable special terminal characters.
+\item[OSKIT_PC_ASYNC_IO]
+	Determine whether asynchronous IO is supported.
+\item[OSKIT_PC_PRIO_IO]
+	Determine whether prioritized IO is supported.
+\item[OSKIT_PC_SYNC_IO]
+	Determine whether synchronized IO is supported.
+\end{icsymlist}
+\end{apidesc}
+\begin{apiparm}
+	\item[f]
+		The object from which to obtain a configuration option value
+	\item[option]
+		The configuration option variable
+	\item[out_val]
+		The value of the configuration option value.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\apiintf{oskit_ttystream}{Interface to Unix TTY-like streams}
+\label{oskit-ttystream}
+
+This interface extends the standard COM \texttt{IStream} interface
+with \posix/Unix TTY functionality,
+such as methods to control serial port settings,
+enable, disable, and control line editing,
+flush the input and output queues, etc.
+
+This interface is currently exported by character-oriented device drivers
+incorporated into the \oskit{} from legacy systems such as BSD and Linux,
+in which full Unix TTY functionality can be provided easily.
+In the future,
+these drivers are expected to export more minimal, lower-level interfaces
+instead of or in addition to this interface;
+however, in the short term,
+this interface allows clients
+to obtain full Unix terminal functionality quickly and easily.
+
+The {\tt oskit_ttystream} interface inherits from {\tt oskit_stream},
+and has the following additional methods:	
+\begin{csymlist}
+\item[getattr]
+	Get the stream's current TTY attributes.
+\item[setattr]
+	Set the stream's TTY attributes.
+\item[sendbreak]
+	Send a break signal over the line.
+\item[drain]
+	Wait until all buffered output has been transmitted.
+\item[flush]
+	Discared buffered input and/or output data.
+\item[flow]
+	Suspend or resume data transmission or reception.
+% XXX more, which aren't used at the moment
+\end{csymlist}
+
+In addition,
+this header file defines a structure called \texttt{oskit_termios},
+corresponding to the standard \posix{} \texttt{termios} structure,
+and a set of related definitions
+used to specify terminal-related settings.
+See the \posix{} and Unix standards
+for details on the exact contents and meaning of this structure.
+
+\api{getattr}{Get the stream's current TTY attributes}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	getattr(oskit_ttystream_t *tty, 
+		\outparam struct~oskit_termios *attr);
+\end{apisyn}
+\begin{apidesc}
+	This method retrieves the current line settings of this stream
+	and returns them in the specified \texttt{oskit_termios} structure.
+	This method corresponds to the \posix{} \texttt{tcgetattr} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream object to query.
+	\item[attr]
+		The structure to be filled with the current line settings.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{setattr}{Set the stream's TTY attributes}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	setattr(oskit_ttystream_t *tty, 
+		const~struct~oskit_termios *attr);
+\end{apisyn}
+\begin{apidesc}
+	This method sets the line settings of this stream
+	based on the specified \texttt{oskit_termios} structure.
+	This method corresponds to the \posix{} \texttt{tcsetattr} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream object to modify.
+	\item[attr]
+		The structure containing the new line settings.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{sendbreak}{Send a break signal}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	sendbreak(oskit_ttystream_t *tty, oskit_u32_t duration);
+\end{apisyn}
+\begin{apidesc}
+	On streams controlling asynchronous serial communication,
+	this method sends a break signal
+	(a continuous stream of zero-valued bits)
+	for a specific duration.
+	This method corresponds to the \posix{} \texttt{tcsendbreak} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream on which to send the break.
+	\item[duration]
+		% XXX define the meaning of the duration parameter, or axe it.
+		The duration of the break signal to send.
+		If this parameter is zero,
+		then the duration will be
+		between 0.25 and 0.5 seconds.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{drain}{Wait until all buffered output has been transmitted}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	drain(oskit_ttystream_t *tty);
+\end{apisyn}
+\begin{apidesc}
+	This method waits until any buffered output data
+	that has been written to the stream
+	is successfully transmitted.
+	This method corresponds to the \posix{} \texttt{tcdrain} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream object to drain.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{flush}{Discared buffered input and/or output data}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	flush(oskit_ttystream_t *tty, int queue_selector);
+\end{apisyn}
+\begin{apidesc}
+	This method discards
+	any buffered output data that has not yet been transmitted,
+	and/or any buffered input data that has not yet been read,
+	depending on the \emph{queue_selector} parameter.
+	This method corresponds to the \posix{} \texttt{tcflush} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream object to flush.
+	\item[queue_selector]
+		Must be one of the following:
+		\begin{icsymlist}
+		\item[OSKIT_TCIFLUSH]	Flush the input buffer.
+		\item[OSKIT_TCOFLUSH]	Flush the output buffer.
+		\item[OSKIT_TCIOFLUSH]	Flush the input and output buffers.
+		\end{icsymlist}
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{flow}{Suspend or resume data transmission or reception}
+\begin{apisyn}
+	\cinclude{oskit/io/ttystream.h}
+
+	\funcproto OSKIT_COMDECL
+	flow(oskit_ttystream_t *tty, int action);
+\end{apisyn}
+\begin{apidesc}
+	This method controls the transmission or reception of data
+	on this TTY stream.
+	This method corresponds to the \posix{} \texttt{tcflow} function;
+	see the \posix{} standard for details.
+\end{apidesc}
+\begin{apiparm}
+	\item[tty]
+		The TTY stream object to control.
+	\item[action]
+		Must be one of the following:
+		\begin{icsymlist}
+		\item[OSKIT_TCOOFF]	Suspend output.
+		\item[OSKIT_TCOON]	Restart output.
+		\item[OSKIT_TCIOFF]	Transmit a STOP character.
+		\item[OSKIT_TCION]	Transmit a START character.
+		\end{icsymlist}
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+

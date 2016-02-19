@@ -1,0 +1,298 @@
+%
+% Copyright (c) 1997-2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{register}
+
+\apiintf{oskit_services}{registration database}
+\label{oskit-services}
+
+The \texttt{oskit_services} COM interface allows components to lookup and
+rendezvous with an arbitrary ``service'' using the interface ID (IID) of the
+desired interface. More than one interface supporting a particular IID can
+be registered. One particular implementation of a services registry is the
+\emph{global registry} object, which can be used by any library or
+component. The {\tt oskit_services} COM interface inherits from {\tt
+oskit_iunknown}, and has the following additional methods:
+\begin{icsymlist}
+\item[create]
+	Create a new services database.
+\item[addservice]
+	Register an interface in the services registry.
+\item[remservice]
+	Unregister a previously registered interface.
+\item[lookup]
+	Obtain a list of all the registered interfaces with a specified IID.
+\item[lookup_first]
+	Lookup the first interface registered for a specified IID.
+\end{icsymlist}
+
+\api{addservice}{Register an interface in the services registry}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_services_addservice(oskit_services_t *s,
+				  const struct oskit_guid *iid,
+				  void *interface);
+\end{apisyn}
+\begin{apidesc}
+	Register a COM interface in the services registry. An additional
+	reference on the interface is taken. More than one interface may be
+	registered for a particular IID\@. Attempts to register an interface
+	that is already registered will succeed, although the registry will
+	remain unchanged and no additional references will be taken.
+\end{apidesc}
+\begin{apiparm}
+	\item[s]
+		The services registry object.
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being registered.
+	\item[interface]
+		The COM interface being registered.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{remservice}{Unregister a previously registered interface}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_services_remservice(oskit_services_t *s,
+				  const struct oskit_guid *iid,
+				  void *interface);
+\end{apisyn}
+\begin{apidesc}
+	Unregister a COM interface that has been previously registered in
+	the services registry. The reference on the interface that was
+	taken in {\tt oskit_services_addservice} is released.
+\end{apidesc}
+\begin{apiparm}
+	\item[s]
+		The services registry object.
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being registered.
+	\item[interface]
+		The COM interface being registered.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or OSKIT_E_INVALIDARG if the specified IID
+	and COM interface is not in the registry.
+\end{apiret}
+
+
+\api{lookup}{Obtain a list of all COM interfaces registered for an IID}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_services_lookup(oskit_services_t *s,
+			  const struct oskit_guid *iid,
+                          \outparam void ***out_interface_array);
+\end{apisyn}
+\begin{apidesc}
+	Look up the set of interfaces that have been registered with a
+	particular IID, returning an array of COM interfaces. The client is
+	responsible for releasing the references on the interfaces, and
+	deallocating the array (with \texttt{free}). By default, the first
+	interface registered is the first interface placed in the array.
+\end{apidesc}
+\begin{apiparm}
+	\item[s]
+		The services registry object.
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being looked up..
+	\item[out_interface_array]
+		The array of COM interfaces registered for the given IID.
+\end{apiparm}
+\begin{apiret}
+	Returns the number of COM interfaces found, or 0 if there were no
+	matches.
+\end{apiret}
+
+
+\api{lookup_first}{Obtain the first COM interface registered for an IID}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto OSKIT_COMDECL
+	oskit_services_lookup(oskit_services_t *s,
+			  const struct oskit_guid *iid,
+                          \outparam void **out_interface);
+\end{apisyn}
+\begin{apidesc}
+	Look up the first COM interface that has been registered with a
+	particular IID\@. The client is responsible for releasing the
+	reference on the interface.
+\end{apidesc}
+\begin{apiparm}
+	\item[s]
+		The services registry object.
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being looked up..
+	\item[out_interface]
+		The first COM interface registered for the given IID.
+\end{apiparm}
+\begin{apiret}
+	Always returns 0, setting {\tt out_interface} to NULL if there was
+	no match.
+\end{apiret}
+
+\api{create}{Create a new services database object}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+	\cinclude{oskit/com/mem.h}
+
+	\funcproto oskit_error_t
+	oskit_services_create(struct oskit_mem *memobject,
+			      \outparam oskit_services_t **out_interface);
+\end{apisyn}
+\begin{apidesc}
+	Create a new \texttt{oskit_services} object. An optional
+	\texttt{oskit_mem} COM object, which if provided, is used to
+	satisfy memory requests inside the services object. If a memory
+	object is not provided, the global registry is consulted for the
+	default memory object.
+
+	The reason for the providing a memory object is so that the
+	internal implementation does not need to depend on \texttt{malloc}
+	for creating its internal data structures. This makes is possible
+	to use services objects in different environments, such as device
+	driver libraries. Note that the array returned from
+	\texttt{oskit_services_lookup} \emph{is} allocated with
+	\texttt{malloc}, and should be released with \texttt{free}
+\end{apidesc}
+\begin{apiparm}
+	\item[memobject]
+		An optional \texttt{oskit_mem} COM interface. May be NULL,
+		in which case the global registry is consulted for the
+		default memory object.
+	\item[out_interface]
+		The location to store the new \texttt{oskit_services} COM
+		interface object.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or OSKIT_E_OUTOFMEMORY if the services object
+	could not be created because of a memory shortage. 
+\end{apiret}
+
+\apisec{Global Registry}
+\label{glob-reg}
+
+The Global Registry is simply an instantiation of an
+\texttt{oskit_services} COM object, that can be accessed through a set of
+well known entrypoints. The global registry is created by the Client OS
+library when the kernel is initialized. The global registry supports the
+following interface functions, which chain directly to their
+\texttt{oskit_services} interface counterparts. Consult the interface
+descriptions in Section~\ref{oskit-services} for more details.
+\begin{icsymlist}
+\item[oskit_register]
+	Register an interface in the global registry.
+\item[oskit_unregister]
+	Unregister a previously registered interface.
+\item[oskit_lookup]
+	Obtain a list of all the registered interfaces with a specified IID.
+\item[oskit_lookup_first]
+	Lookup the first interface registered for a specified IID.
+\end{icsymlist}
+
+\api{oskit_register}{Register an interface in the services registry}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto oskit_error_t
+	oskit_register(const struct oskit_guid *iid, void *interface);
+\end{apisyn}
+\begin{apidesc}
+	Register a COM interface in the global registry using
+	\texttt{oskit_services_addservice}.
+\end{apidesc}
+\begin{apiparm}
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being registered.
+	\item[interface]
+		The COM interface being registered.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{oskit_unregister}{Unregister a previously registered interface}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto oskit_error_t
+	oskit_unregister(const struct oskit_guid *iid, void *interface);
+\end{apisyn}
+\begin{apidesc}
+	Unregister a COM interface using \texttt{oskit_services_remservice}.
+\end{apidesc}
+\begin{apiparm}
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being registered.
+	\item[interface]
+		The COM interface being registered.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or OSKIT_E_INVALIDARG if the specified IID
+	and COM interface is not in the registry.
+\end{apiret}
+
+
+\api{oskit_lookup}{Obtain a list of all COM interfaces registered for an IID}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto oskit_error_t
+	oskit_lookup(const struct oskit_guid *iid,
+                           \outparam void ***out_interface_array);
+\end{apisyn}
+\begin{apidesc}
+	Look up the set of interfaces using \texttt{oskit_services_lookup}.
+\end{apidesc}
+\begin{apiparm}
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being looked up..
+	\item[out_interface_array]
+		The array of COM interfaces registered for the given IID.
+\end{apiparm}
+\begin{apiret}
+	Returns the number of COM interfaces found, or 0 if there were no
+	matches.
+\end{apiret}
+
+
+\api{oskit_lookup_first}{Obtain the first COM interface registered for an IID}
+\begin{apisyn}
+	\cinclude{oskit/com/services.h}
+
+	\funcproto oskit_error_t
+	oskit_lookup_first(const struct oskit_guid *iid,
+                           \outparam void **out_interface);
+\end{apisyn}
+\begin{apidesc}
+	Look up the first COM interface using
+	\texttt{oskit_services_lookup_first}.
+\end{apidesc}
+\begin{apiparm}
+	\item[iid]
+		The {\tt oskit_guid} of the COM interface being looked up..
+	\item[out_interface]
+		The first COM interface registered for the given IID.
+\end{apiparm}
+\begin{apiret}
+	Always returns 0, setting {\tt out_interface} to NULL if there was
+	no match.
+\end{apiret}

@@ -1,0 +1,71 @@
+#
+# Copyright (c) 2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_libmad_minimad_makerules_
+_oskit_libmad_minimad_makerules_ = yes
+
+# mp3 files to include in the bootable OFW image
+MP3_FILE = file.mp3
+
+TARGETS = minimad
+
+all: $(TARGETS)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/libmad/minimad
+
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/c	\
+		$(OSKIT_SRCDIR)/libmad $(OSKIT_SRCDIR)/libmad/src \
+		$(OSKIT_SRCDIR)/linux/src/include \
+		$(OBJDIR)/linux/dev/objinclude
+
+CLEAN_FILES +=	$(TARGETS) *.image
+
+OSKIT_CFLAGS += -DOSKIT
+
+ifeq ($(HOST_ARCH),arm32)
+OSKIT_LDFLAGS += -X -Ttext 0x18100000
+else
+OSKIT_LDFLAGS += -Ttext 100000
+endif
+
+CLIB   = -loskit_c `$(CC) --print-libgcc-file-name`
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+minimad: $(OBJDIR)/lib/multiboot.o minimad.o $(DEPENDLIBS)
+	$(OSKIT_QUIET_MAKE_INFORM) "Linking $@"
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_memfs -loskit_fsnamespace \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		-loskit_libmad \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+
+$(MP3_FILE):
+	echo "need an mp3 file to play"
+
+minimad.image: minimad $(MP3_FILE)
+	$(OSKIT_QUIET_MAKE_INFORM) "Creating OFW image $@"
+	cp $< $<.strip
+	$(STRIP) $<.strip
+	$(OBJDIR)/boot/ofw/mkofwimage -o $@ -c $(MP3_FILE) $<.strip $(MP3_FILE)
+	rm -f $<.strip
+
+endif

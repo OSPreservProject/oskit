@@ -1,0 +1,110 @@
+%
+% Copyright (c) 1998 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{linux-fs}
+
+The Linux filesystem library consists of the Linux virtual and real
+filesystem code along with glue code to export the \oskit{} filesystem
+interface (See Chapter~\ref{fs}).
+
+The header file \texttt{<oskit/fs/linux_filesystems.h>} determines which
+of the real Linux real filesystems, e.g.\ \texttt{ext2}, \texttt{iso9660},
+are compiled into \texttt{liboskit_linux_fs.a}.
+All the filesystems listed in that file will compile,
+but only \texttt{ext2}, \texttt{msdos}, \texttt{vfat}, and \texttt{iso9660}
+have been tested.
+
+The Linux filesystem library provides two additional interfaces:
+\begin{icsymlist}
+\item[fs_linux_init]
+	Initialize the Linux fs library.
+\item[fs_linux_mount]
+	Mount a filesystem via the Linux fs library
+\end{icsymlist}
+
+\api{fs_linux_init}{Initialize the Linux fs library}
+\begin{apisyn}
+	\cinclude{oskit/fs/linux.h}
+
+	\funcproto oskit_error_t fs_linux_init(void);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+	This function initializes the Linux fs library,
+	and must be invoked prior to the first
+	call to {\tt fs_linux_mount}.  This function only
+	needs to be invoked once by the client
+	operating system.
+
+        All filesystems listed in \texttt{<oskit/fs/linux_filesystems.h>}
+        are initialized.
+\end{apidesc}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+
+\api{fs_linux_mount}{Mount a filesystem via the Linux fs library}
+\begin{apisyn}
+	\cinclude{oskit/fs/linux.h}
+
+	\funcproto oskit_error_t fs_linux_mount(oskit_blkio_t *bio,
+                                                oskit_u32_t flags,
+                                                oskit_filesystem_t **out_fs);
+\end{apisyn}
+\ostofs
+\begin{apidesc}
+        This function looks in the partition described by \texttt{bio}
+        for a filesystem superblock, calls the corresponding
+        filesystem mount code,
+        and returns a handle to an \texttt{oskit_filesystem_t} for
+        this filesystem.
+
+	This function may be used multiple times by a client
+	operating system to mount multiple file systems.
+
+	Note that this function does not graft the filesystem
+	into a namespace;  {\tt oskit_dir_reparent} or other layers
+	may be used for that purpose.
+
+	Typically, this interface is not exported to clients,
+	and is only used by the client operating system
+	during initialization.
+
+        This function is a wrapper for Linux's \texttt{mount_root}.
+\end{apidesc}
+\begin{apiparm}
+        \item[bio]
+              Describes the partition containing a filesytem.
+              Can be the whole disk like that returned from
+              \texttt{oskit_linux_block_open},
+              or a subset of one like what is given by
+              \texttt{diskpart_blkio_lookup_bsd_string}.
+
+        \item[flags]
+              The mount flags.
+              These are formed by or'ing the following values:
+              \begin{description}
+                \item[OSKIT_FS_RDONLY] Read only filesystem
+                \item[OSKIT_FS_NOEXEC] Can't exec from filesystem
+                \item[OSKIT_FS_NOSUID] Don't honor setuid bits on fs
+                \item[OSKIT_FS_NODEV]  Don't interpret special files
+              \end{description}
+
+        \item[out_fs]
+              Upon success, is set to point to an \texttt{oskit_filesystem_t}
+              for this filesystem.
+\end{apiparm}
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}

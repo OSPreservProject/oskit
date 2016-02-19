@@ -1,0 +1,186 @@
+%
+% Copyright (c) 1996-1998, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{svm}
+
+\section{Introduction}
+
+The Simple Virtual Memory (SVM) component provides very simple virtual
+memory management routines that are somewhat more application friendly than
+the extremely basic support provided by the kernel library (see
+Section~\ref{pdir-map-range}).
+Applications are able to allocate large contiguous
+blocks of virtual memory that are backed by physical memory. Applications
+may also control the page level protection of memory. In addition, there is
+optional pageout support that allows the application to allocate more
+virtual memory than physical memory on machines where a disk swap partition
+is available. The SVM component is thread safe, although only a single
+virtual memory context is provided; all threads share the same set of page
+tables. 
+
+The SVM manager makes use of the list-based memory manager (LMM) (see
+Section~\ref{lmm}), the address map manager (AMM) (see Section~\ref{amm}),
+and the page directory support in the kernel library. The LMM is used to to
+control physical memory, while the AMM is used to control the virtual
+memory mappings. The kernel paging support handles the details of
+manipulating the low level page tables. As a result, the SVM manager is
+very simple in its construction.
+
+Although on the surface it might appear that the SVM provides generalized
+VM support, nothing could be further from the truth. What is provided is a
+means to allocate memory in the range above existing physical memory, and
+map those ranges to physical pages. With paging enabled, the application is
+able to use more virtual memory than physical memory. It should be noted
+that the kernel remains where it was initially loaded, and that unused
+pages of physical memory are left accessible by the application. 
+
+\section{API reference}
+
+\api{svm_init}{initialize SVM system}
+\begin{apisyn}
+	\cinclude{oskit/svm/svm.h}
+
+	\funcproto void svm_init(oskit_absio_t *pager_absio);
+\end{apisyn}
+\begin{apidesc}
+	This function initializes the SVM system, turning on base paging
+	support (see Section~\ref{base-paging-init}), and optionally
+	configuring pageout support. The {\tt pager_absio} argument is
+	optional, and if specified should be a device suitable for use as
+	the swap area for the pager. {\tt pager_absio} may also be a {\tt
+	oskit_blkio_t}; the pager will query the object to determine which
+	type it is. Only a single paging area is supported. The
+	initialization code will create an initial set of page tables that
+	maps all of physical memory as readable and writable, except for
+	kernel text which is mapped read-only. A stack redzone is also
+	created, although stack overflows are fatal since there is not
+	enough support to allow recovery. The address range above the end
+	of physical memory is mapped as invalid so that accesses result in
+	a page fault trap (instead of silently returning bogus data).
+
+	In the case of a multi-threaded kernel, {\tt pager_absio} must be a
+	properly wrapped object (see Section~\ref{pthread-wrappers}).  The
+	current multi-threaded locking strategy is extremely simple; a
+	single lock protects the entire SVM module.
+\end{apidesc}
+\begin{apiparm}
+	\item[pager_absio]
+		An {oskit_absio_t *} or {oskit_blkio_t *} that is suitable
+		for use as the swap area.
+\end{apiparm}
+
+
+\api{svm_alloc}{allocate a region of virtual memory}
+\begin{apisyn}
+	\cinclude{oskit/svm/svm.h}
+
+	\funcproto int svm_alloc(oskit_addr_t *addr, oskit_size_t length,
+                                 int prot, int flags);
+\end{apisyn}
+\begin{apidesc}
+	Allocate a region of virtual memory, returning the base address of
+	the new region in {\tt addr}. The region is {\tt length} bytes in
+	size, and is initialized to the page level protection specified by
+	{\tt prot}. The size of the allocation must be an integral number
+	of pages. The caller can optionally specify the (page aligned) base
+	address at which to place the region by providing a non-zero value
+	in {\tt addr}. The actual base address might differ if the system
+	cannot place the region at that address. Alternatively, if the {\tt
+	flags} value contains {\tt SVM_ALLOC_FIXED}, and the region cannot
+	be placed at the requested address, the allocation will fail and
+	return an error code.
+\end{apidesc}
+\begin{apiparm}
+	\item[addr]
+		The location in which to store the base address of the new
+		region. Also used to provide an optional address.
+	\item[length]
+		The size of the new region in bytes. Must be an integral
+		number of pages.
+	\item[prot]
+		Page level protection of the new region, composed of
+		{\tt SVM_PROT_READ} and {\tt SVM_PROT_WRITE}.
+	\item[flags]
+		Optional flags.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns {\tt OSKIT_E_INVALIDARG} if either
+	the base address or the size of the allocation is not page aligned.
+	Returns {\tt OSKIT_E_OUTOFMEMORY} if the region cannpt be assigned
+	to the fixed location requested by the caller.
+\end{apiret}
+\begin{apirel}
+	{\tt svm_dealloc}, {\tt svm_protect}
+\end{apirel}
+
+
+\api{svm_dealloc}{deallocate a region of virtual memory}
+\begin{apisyn}
+	\cinclude{oskit/svm/svm.h}
+
+	\funcproto int svm_dealloc(oskit_addr_t addr, oskit_size_t length);
+\end{apisyn}
+\begin{apidesc}
+	Deallocate a range of memory that was previously allocated with
+	{\tt svm_alloc}. The range starts at {\tt addr}, and is {\tt
+	length} bytes in size. The base address must be page aligned, and
+	the length must be an integral number of pages. The range may be a
+	subset of a previously allocated range; only that subset is
+	deallocated. 
+\end{apidesc}
+\begin{apiparm}
+	\item[addr]
+		The address of the region to deallocate. 
+	\item[length]
+		The size in bytes of the region to deallocate.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns {\tt OSKIT_E_INVALIDARG} if either
+	the base address or the size of the allocation is not page aligned,
+	or if the range is not within an existing allocation.
+\end{apiret}
+\begin{apirel}
+	{\tt svm_alloc}, {\tt svm_protect}
+\end{apirel}
+
+
+\api{svm_protect}{control the protection of a region of virtual memory}
+\begin{apisyn}
+	\cinclude{oskit/svm/svm.h}
+
+	\funcproto int svm_protect(oskit_addr_t addr,
+                                   oskit_size_t length, int prot);
+\end{apisyn}
+\begin{apidesc}
+	Change the page level protection on a region of memory. The region
+	begins at {\tt addr} and extends for {\tt length} bytes. The base
+	address must be page aligned, and the length must be an integral
+	number of pages. The page level protection of each page in the
+	region is set to {\tt prot}. Unlike {\tt svm_dealloc}, this routine
+	may called on any region of memory, not just regions that were
+	allocated with {\tt svm_alloc}. 
+\end{apidesc}
+\begin{apiparm}
+	\item[addr]
+		The address of the region.
+	\item[length]
+		The size in bytes of the region.
+	\item[prot]
+		Page level protection of the new region, composed of
+		{\tt SVM_PROT_READ} and {\tt SVM_PROT_WRITE}.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success. Returns {\tt OSKIT_E_INVALIDARG} if either
+	the base address or the size of the allocation is not page aligned.
+\end{apiret}
+\begin{apirel}
+	{\tt svm_alloc}, {\tt svm_dealloc}
+\end{apirel}

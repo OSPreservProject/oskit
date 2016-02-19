@@ -1,0 +1,16 @@
+
+Directories: oskit/x11/client
+Target: liboskit_x11client.a
+Documentation: 
+	Flux Research Group, University of Utah
+	CSRG; University of California, Berkeley
+Description:  
+	Simple functions to add some missing functionality that the X
+	client code relies on.  Most of these are either very naive 
+	implementations, or are dependent on the workings of other 
+	parts of the oskit (libc mostly).  Feel free to replace them
+	with real functions.  There is also no guarantee that this
+	collection is complete, you may need to add more functions
+	when you run into them.
+
+

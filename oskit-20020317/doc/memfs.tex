@@ -1,0 +1,100 @@
+%
+% Copyright (c) 1999, 2000 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+\label{memfs}
+
+The memfs library contains an implementation of a trivial memory-based 
+filesystem.  It exports the standard \oskit{} filesystem interface,
+and depends on the underlying osenv interfaces.  (See
+Chapter~\ref{fs}).
+
+The header file \texttt{<oskit/fs/memfs.h>} must be included to use
+the memfs, and its derivative cousin, the bmodfs.  When first
+instantiated, a memfs filesystem is empty, and may be populated using
+the standard file access mechanisms.  A special function,
+oskit_memfs_file_set_contents is provided for convenience to replace
+the contents of a MEMFS filesystem.  Clients who wish to strictly use
+the \oskit{} filesystem interface to guarantee portability to other
+filesystems should not use this function.
+
+
+\api{oskit_memfs_init}{initialize MEMFS filesystem}
+\begin{apisyn}
+	\cinclude{oskit/fs/memfs.h}
+
+	\funcproto oskit_error_t oskit_memfs_init(oskit_osenv_t *osenv,
+                                                  oskit_filesystem_t **out_fs);
+\end{apisyn}
+\begin{apidesc}
+	Initialize the MEMFS filesystem.
+\end{apidesc}
+\begin{apiret}
+	Returns handle to an empty MEMFS filesystem.
+\end{apiret}
+
+\api{oskit_memfs_file_set_contents}{replace contents of a MEMFS file}
+\begin{apisyn}
+	\cinclude{oskit/fs/memfs.h}
+
+	\funcproto oskit_error_t
+		oskit_memfs_file_set_contents(oskit_file_t *file,
+			void *data, oskit_off_t size, oskit_off_t allocsize,
+			oskit_bool_t can_sfree, oskit_bool_t inhibit_resize);
+\end{apisyn}
+\begin{apidesc}
+	This function changes the indicated MEMFS file to use the memory
+	from [\emph{data} - \emph{data}+\emph{size}-1] as its contents.
+	\emph{File} must be a regular MEMFS file and not a directory.
+
+	\emph{Allocsize} indicates the total amount of memory available
+	for the file to use when growing and must be greater than or
+	equal to \emph{size}.
+	If an attempt is made to grow the file to a size greater than
+	\emph{allocsize}, new memory will be allocated with
+	\texttt{smemalign} and the file contents copied to the new memory.
+
+	If \emph{inhibit_resize} is true, attempts to change the size of
+	the file hereafter will fail with \texttt{OSKIT_EPERM}.
+
+	If \emph{can_sfree} is true, \texttt{sfree} is called on the
+	data buffer if the file grows beyond \emph{allocsize},
+	is truncated to zero-length or is removed.
+\end{apidesc}
+\begin{apiparm}
+	\item[file]
+		File in the memfs filesystem whose contents are being replaced.
+	\item[data]
+		Pointer to memory to be used as the new file contents.
+	\item[size]
+		The new size of the file.
+	\item[allocsize]
+		Size of writable memory available for the file.
+	\item[can_sfree]
+		If true, indicates that the memory pointed to by \emph{data}
+		can be released with \texttt{sfree} when the file grows
+		beyond \emph{allocsize}, is truncated to zero-length, or
+		is removed.
+	\item[inhibit_resize]
+		If true, fails any attempt to change the size of the file.
+\end{apiparm}
+\begin{apiret}
+	Returns zero on success, an error code otherwise.
+\end{apiret}
+
+\begin{apidep}
+	\item osenv_mem_alloc		\S~\ref{dev}
+	\item osenv_mem_free		\S~\ref{dev}
+	\item osenv_log			\S~\ref{dev}
+	\item osenv_assert		\S~\ref{dev}
+	\item memcpy			\S~\ref{memcpy}
+	\item memset			\S~\ref{memset}
+\end{apidep}
+

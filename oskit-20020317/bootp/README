@@ -1,0 +1,10 @@
+
+Directories: oskit/bootp
+Target: liboskit_bootp.a
+Documentation: doc/bootp.tex
+Original Code Source:
+	FreeBSD v2.1, FreeBSD Project
+	Flux Research Group, University of Utah
+Description: 
+	A library for contacting a bootp server to
+	obtain initial network parameters.

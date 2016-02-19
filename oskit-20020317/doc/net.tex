@@ -1,0 +1,1024 @@
+%
+% Copyright (c) 1997-1998, 2000, 2001 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% -*- LaTeX -*-
+
+\label{net}
+
+\section{Introduction}
+
+	The \oskit{} networking framework encompasses a collection of COM
+	interfaces used by the client operating system to invoke the 
+	networking libraries.
+	The individual networking libraries supply additional interfaces to
+	the client operating system for initialization, and may supply
+	additional interfaces for supporting extended features unique to
+	particular networking protocol implementations.
+
+%	COM is described at 
+%%	\htmladdnormallinkfoot{http://www.microsoft.com/oledev/olecom/title.htm}%
+%		{http://www.microsoft.com/oledev/olecom/title.htm}
+%	and in
+%	chapter (\ref{com}).
+
+	\emph{At this point, we have only one interface, the oskit_socket 
+	interface, defined. Additional interfaces for configuration, 
+	routing, etc., are future work.}
+
+\apiintf{oskit_socket}{Socket Interface}
+
+	The \texttt{oskit_socket} COM interface defines an interface which
+	capture the semantics of a socket as defined in the corresponding
+	POSIX/CAE standards.
+	The \texttt{oskit_socket} COM interface inherits from 
+	\texttt{oskit_posixio}. It can be queried for an \texttt{oskit_stream} 
+	interface. This query will always be successful, but the resulting
+	\texttt{oskit_stream} instance might not support all methods.
+	Generally, at least \texttt{read} and \texttt{write} will be supported.
+	The \texttt{oskit_socket} COM interface provides in addition to 
+	the \texttt{oskit_posixio} COM interface the following methods:
+
+\begin{csymlist}
+\item[accept]	
+	accept a connection on a socket
+
+\item[bind]
+	bind a name to a socket
+
+\item[connect]
+	initiate a connection on a socket
+
+\item[shutdown]
+	shut down part of a full-duplex connection
+
+\item[listen]
+	listen for connections on a socket	
+
+\item[getsockname]
+	get socket name
+
+\item[getpeername]
+	get name of connected peer
+
+\item[getsockopt]
+	get options on sockets
+
+\item[setsockopt]
+	set options on sockets
+
+\item[sendto]
+	send a message from a socket
+
+\item[recvfrom]
+	receive a message from a socket
+
+\item[sendmsg]
+	send a message from a socket
+
+\item[recvmsg]
+	receive a message from a socket
+
+\end{csymlist}
+
+	Note that these methods are not minimal, but correspond very 
+    closely to the traditional BSD interfaces.
+
+    \begin{quote}
+	{\bf Note:} the following paragraphs have a certain likelihood
+	to change. The main reason for this is the obviously undesirable
+	connection between the way socket factories and the socket interface
+	interact. On a more positive note, everything right now is so
+	close to the BSD interfaces that the reader familiar with those
+	shouldn't have any problems understanding these.
+    \end{quote}
+
+\api{oskit_socket_factory_t}{socket factories}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+	\funcproto oskit_error_t 
+		oskit_socket_factory_create(
+		    oskit_socket_factory_t *factory,
+		    oskit_u32_t domain, 
+		    oskit_u32_t type, 
+		    oskit_u32_t protocol,
+		    \outparam oskit_socket_t **newsocket);
+\end{apisyn}
+
+\begin{apidesc}
+    Socket instances are created by \emph{socket factories}. 
+
+    A socket factory is an instance of the \texttt{oskit_socket_factory}
+    COM interface.  Implementations of this interface will be provided
+    by the networking stack(s) included in the \oskit{}.
+    This interface implements a single method corresponding to the 
+    \texttt{socket(2)} call in addition to the \texttt{oskit_iunknown}
+    interface.
+
+    Each instance of socket has a type and a protocol associated with it. 
+    This type and protocol is given to the socket by its factory, and
+    cannot be changed during the lifetime of that socket instance.
+\end{apidesc}
+
+\begin{apiparm}
+	\item[factory] The socket factory used to create this socket.
+
+	\item[domain] The \emph{domain} parameter specifies a communications
+	domain within which communication will take place; 
+	this selects the protocol family which should be used.
+	Some common formats are
+
+	\begin{tabular}{ll}
+	\texttt{OSKIT_PF_LOCAL}     &   
+		Host-internal protocols \\
+	\texttt{OSKIT_PF_INET} 	   &
+		DARPA Internet protocols \\
+	\texttt{OSKIT_PF_ISO}       &   
+		ISO protocols \\
+	\texttt{OSKIT_PF_CCITT}     &   
+		ITU-T protocols, like X.25 \\
+	\texttt{OSKIT_PF_NS}        &   
+		Xerox Network Systems protocols \\
+	\end{tabular}
+
+	\texttt{OSKIT_PF_INET} is the only format for 
+	    which the \oskit{} currently contains an implementation.
+
+	\item[type] The socket will have the indicated \emph{type}, which
+	specifies the semantics of communication.  Currently defined types are
+
+	\begin{tabular}{ll}
+	\texttt{OSKIT_SOCK_STREAM}    &       stream socket \\
+	\texttt{OSKIT_SOCK_DGRAM}     &       datagram socket \\
+	\texttt{OSKIT_SOCK_RAW}       &       raw-protocol interface \\
+	\texttt{OSKIT_SOCK_RDM}       &       reliably-delivered message \\
+	\texttt{OSKIT_SOCK_SEQPACKET} &       sequenced packet stream \\
+	\end{tabular}
+
+	An \texttt{OSKIT_SOCK_STREAM} type provides sequenced, reliable, two-way
+	connection based byte streams.  An out-of-band data transmission 
+	mechanism may be supported.  An \texttt{OSKIT_SOCK_DGRAM} socket supports
+	datagrams (connectionless, unreliable messages of a fixed (typically 
+	small) maximum length).
+	An \texttt{OSKIT_SOCK_SEQPACKET} socket may provide a sequenced, 
+	reliable, two-way connection-based data transmission path for
+	datagrams of fixed maximum length.
+	\texttt{OSKIT_SOCK_RAW} sockets provide access to internal network 
+	protocols and interfaces.
+
+	\item[protocol]
+	The \emph{protocol} specifies a particular protocol to be used with the
+	socket.
+	Normally only a single protocol exists to support a particular socket
+	type within a given protocol family.  However, it is possible that 
+	many protocols may exist, in which case a particular protocol must 
+	be specified. The protocol number to use is particular to the
+	communication domain in which communication is to take place.
+
+	Protocols for the \texttt{OSKIT_PF_INET} protocol family are defined 
+	in \texttt{oskit/c/netinet/in.h}.
+
+	\item[newsocket] The new \texttt{oskit_socket_t} instance that
+		was created.
+\end{apiparm}
+
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% accept()
+%
+
+\api{accept}{accept a connection on a socket}
+\begin{apisyn}
+	\cinclude{oskit/net/socket.h}
+
+	\funcproto oskit_error_t
+	oskit_socket_accept(oskit_socket_t *s, 
+		\outparam struct oskit_sockaddr *name,
+		\inoutparam oskit_size_t *anamelen,
+		\outparam struct oskit_socket **newopenso);
+\end{apisyn}
+
+\begin{apidesc}
+	The \texttt{accept} method extracts the first connection request
+	on the queue of pending connections, creates a new socket 
+	with the same properties of s and returns it.
+	The socket must have been bound to an address with \texttt{bind}
+	and it must be listening for connections after a \texttt{listen}.
+
+	If no pending connections are present on the queue, \texttt{accept} 
+	blocks the caller until a connection is present.
+\end{apidesc}
+
+\begin{apiparm}
+	\item[s]
+		The socket from which connections are to accepted.
+
+	\item[name]
+		Filled with the address of the connecting entity as known
+		to the communication layer.
+
+	\item[anamelen]
+		Initially, the amount of space pointed to by name,
+		on return it will contain the amount actually used.
+
+	\item[newopenso]
+		Newly created socket.
+
+\end{apiparm}
+
+\begin{apiret}
+	Returns 0 on success, or an error code specified in
+	{\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% bind()
+%
+
+\api{bind}{bind a name to a socket}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_bind(oskit_socket_t *s,
+		const struct oskit_sockaddr *name,
+		oskit_size_t namelen);
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{bind} assigns a name to an unnamed socket.
+	When a socket is created, it exists in a name space (address family) 
+	but has no name assigned. \texttt{bind} requests that 
+	\emph{name} be assigned to the socket.
+
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket to which a name is to be bound.
+
+        \item[name]
+                The name to which the socket is to be bound.
+
+        \item[namelen]
+                The length of \emph{name} in bytes.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% connect()
+%
+
+\api{connect}{initiate a connection on a socket}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_connect(oskit_socket_t *s,
+		 const struct oskit_sockaddr *name,
+		 oskit_size_t namelen);
+\end{apisyn}
+
+\begin{apidesc}
+	If \emph{s} is of type \texttt{OSKIT_SOCK_DGRAM}, this call
+	specifies the peer with which the socket is to be associated; this 
+	address is that to which datagrams are to be sent, and the only address
+	from which datagrams are to be received.  If the socket is of type
+	\texttt{OSKIT_SOCK_STREAM}, this call attempts to make a connection 
+	to another socket.
+	The other socket is specified by \emph{name}, which is an address 
+	in the communications space of the socket. 
+	Each communications space interprets the \emph{name} parameter
+	in its own way. Generally, stream sockets may successfully
+	\texttt{connect} only once; datagram sockets may use 
+	\texttt{connect} multiple times to change their association.  
+	Datagram sockets may dissolve the association by connecting to 
+	an invalid address, such as a null address.
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket from which the connection is to be initiated.
+
+        \item[name]
+                The address of the entity to which the connection is
+		to be established. 
+
+	\item[namelen]
+		The length of \emph{name} in bytes.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% shutdown()
+%
+
+\api{shutdown}{shut down part of a full-duplex connection}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_shutdown(oskit_socket_t *s,
+		 oskit_u32_t how);
+\end{apisyn}
+
+\begin{apidesc}
+	The \texttt{shutdown} call causes all or part of a full-duplex 
+	connection on the socket \emph{s} to be shut down.  
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket which is to be shut down.
+
+        \item[how]
+                Specifies what is to be disallowed:
+		\begin{itemize}
+		\item[how = 0]	receives
+		\item[how = 1]	sends
+		\item[how = 2]	sends and receives
+		\end{itemize}
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% listen()
+%
+
+\api{listen}{listen for connections on a socket}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_listen(oskit_socket_t *s,
+		 oskit_u32_t backlog);
+\end{apisyn}
+
+\begin{apidesc}
+	A willingness to accept incoming connections and a queue limit 
+	for incoming connections are specified with \texttt{listen},
+	and then the connections are accepted with \texttt{accept}.
+	The \texttt{listen} call applies only to sockets of type
+	\texttt{OSKIT_SOCK_STREAM} or  \texttt{OSKIT_SOCK_SEQPACKET}.
+
+	The \emph{backlog} parameter defines the maximum length the queue of
+	pending connections may grow to. 
+	If a connection request arrives with the queue full the client may 
+	receive an error with an indication of connection refused, or, if
+	the underlying protocol supports retransmission, the request may
+	be ignored so that retries may succeed.
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket where connections will be accepted.
+
+        \item[backlog]
+		Maximum number of pending connections.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% getsockname()
+%
+
+\api{getsockname}{get socket name}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_getsockname(oskit_socket_t *s,
+		\outparam struct oskit_sockaddr *asa,
+                \inoutparam oskit_size_t *anamelen);
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{getsockname} returns the current name for the specified socket.
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket whose name is to be determined.
+
+        \item[name]
+                Contains the name of the socket upon return.
+
+        \item[anamelen]
+                Initially, the amount of space pointed to by name,
+                on return it will contain the amount actually used, i.e.,
+		the actual size of the name.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% getpeername()
+%
+
+\api{getpeername}{get name of connected peer}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_getpeername(oskit_socket_t *s,
+		\outparam struct oskit_sockaddr *asa,
+		\inoutparam oskit_size_t *anamelen);
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{getpeername} returns the name of the peer connected to socket
+	\emph{s}. 
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket connected to the peer whose name is to be returned. 
+
+        \item[name]
+		Contains the peer's name upon return.
+
+        \item[anamelen]
+                Initially, the amount of space pointed to by name,
+                on return it will contain the amount actually used.
+		The name is truncated if the buffer provided is too small.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% getsockoption()
+%
+
+\api{getsockopt}{get options on sockets}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_getsockopt(oskit_socket_t *s,
+		 oskit_u32_t level,
+		 oskit_u32_t name, 
+		\outparam void *val,
+		\inoutparam oskit_size_t *valsize);
+\end{apisyn}
+
+\begin{apidesc}
+	Get the current options
+	associated with a socket.  Options may exist at multiple protocol 
+	levels. 
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket whose options are to be queried or set.
+
+        \item[level]
+		The level at which the option resides.
+		See \texttt{setsockopt} for details.
+
+        \item[name]
+		\emph{name} and any specified options are passed
+		uninterpreted to the appropriate protocol module
+		for interpretation.
+		See \texttt{setsockopt} for details.
+
+        \item[val, valsize]
+		The parameters \emph{val} and \emph{valsize}
+		are used to access option values.
+		For \texttt{getsockopt}, \emph{valsize} initially contains the 
+		size of the buffer pointed to by \emph{val},
+		and modified on return
+		to indicate the actual size of the value returned.
+		If no option value is to be supplied or returned,
+		\emph{val} may be \texttt{NULL}.
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+\api{setsockopt}{set options on sockets}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+        oskit_socket_setsockopt(oskit_socket_t *s,
+		 oskit_u32_t level,
+		 oskit_u32_t name, 
+		 const void *val, 
+		 oskit_size_t valsize);
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{setsockopt} manipulates the options
+	associated with a socket.  Options may exist at multiple protocol 
+	levels. 
+
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket whose options are to be queried or set.
+
+        \item[level] When manipulating socket options the level at 
+	which the option resides and the name of the option must be 
+	specified.  To manipulate options at the socket level, \emph{level} 
+	is specified as \texttt{OSKIT_SOL_SOCKET}. To manipulate options
+	at any other level the protocol number of the appropriate protocol 
+	controlling the option is supplied.  For example, to indicate that an
+	option is to be interpreted by the TCP protocol, \emph{level} 
+	should be set to \texttt{IPPROTO_TCP}.
+
+        \item[name]
+	\emph{name} and any specified options are passed uninterpreted to the
+	appropriate protocol module for interpretation.
+	Definitions for socket level options are described below.
+	Options at other protocol levels vary in format and name.
+
+	Most socket-level options utilize an \texttt{int} parameter for 
+	\emph{val}. For \texttt{setsockopt}, the parameter should be
+	non-zero to enable a boolean option, or zero if the option is 
+	to be disabled.
+	\texttt{OSKIT_SO_LINGER} uses a \texttt{struct oskit_linger}
+	parameter, which specifies the desired state of the option
+	and the linger interval (see below).
+	%% is that really so?
+	\texttt{OSKIT_SO_SNDTIMEO} and \texttt{OSKIT_SO_RCVTIMEO}
+	use a \texttt{struct timeval} parameter, defined in 
+	\texttt{<oskit/c/sys/time.h>}
+
+	The following options are recognized at the socket level.  Except as 
+	noted, each may be examined with \texttt{getsockopt} and set with
+	\texttt{setsockopt}.
+
+	\begin{tabular}{ll}
+           \texttt{OSKIT_SO_DEBUG} &
+		        enables recording of debugging information \\
+           \texttt{OSKIT_SO_REUSEADDR} &
+		    enables local address reuse \\
+           \texttt{OSKIT_SO_REUSEPORT} &
+		    enables duplicate address and port bindings \\
+           \texttt{OSKIT_SO_KEEPALIVE} &
+		    enables keep connections alive \\
+           \texttt{OSKIT_SO_DONTROUTE} &
+		    enables routing bypass for outgoing messages \\
+           \texttt{OSKIT_SO_LINGER} &
+		       linger on close if data present \\
+           \texttt{OSKIT_SO_BROADCAST} &
+		    enables permission to transmit broadcast messages \\
+           \texttt{OSKIT_SO_OOBINLINE} &
+		    enables reception of out-of-band data in band \\
+           \texttt{OSKIT_SO_SNDBUF} &
+		       set buffer size for output \\
+           \texttt{OSKIT_SO_RCVBUF} &
+		       set buffer size for input \\
+
+           \texttt{OSKIT_SO_SNDLOWAT} &
+		     set minimum count for output \\
+           \texttt{OSKIT_SO_RCVLOWAT} &
+		     set minimum count for input \\
+           \texttt{OSKIT_SO_SNDTIMEO} &
+		     set timeout value for output \\
+           \texttt{OSKIT_SO_RCVTIMEO} &
+		     set timeout value for input \\
+           \texttt{OSKIT_SO_TYPE} &
+		         get the type of the socket (get only) \\
+           \texttt{OSKIT_SO_ERROR} &
+		        get and clear error on the socket (get only) \\
+	\end{tabular}
+
+	\texttt{OSKIT_SO_DEBUG} enables debugging in the underlying 
+   	protocol modules.
+	\texttt{OSKIT_SO_REUSEADDR} indicates that the rules used in 
+	validating addresses supplied in \texttt{bind}
+	should allow reuse of local addresses.
+	\texttt{OSKIT_SO_REUSEPORT} allows completely duplicate bindings 
+	by multiple clients if they all set \texttt{OSKIT_SO_REUSEPORT} 
+	before binding the port. This option permits multiple instances
+	of a program to each receive UDP/IP multicast or
+	broadcast datagrams destined for the bound port.
+	\texttt{OSKIT_SO_KEEPALIVE} enables the periodic transmission of 
+	messages on a connected socket. Should the
+	connected party fail to respond to these messages, the connection is 
+	considered broken and clients using the socket are notified
+	when attempting to send data.
+	% XXX:
+	% ...via a SIGPIPE signal. Yeah, right.
+	\texttt{OSKIT_SO_DONTROUTE} indicates that outgoing 
+	messages should bypass the standard routing facilities.
+	Instead, messages are directed to the appropriate network interface
+	according to the network portion of the destination address.
+
+	\texttt{OSKIT_SO_LINGER} controls the action taken when unsent 
+	messages are queued on a socket and the socket is released.
+	If the socket promises reliable delivery of data and 
+	\texttt{OSKIT_SO_LINGER} is set, the system will block on the last
+	\texttt{release} attempt until it is able to transmit the data
+	or until it decides it is unable to deliver the information
+	(a timeout period, termed the linger interval, is specified in the 
+	\texttt{setsockopt} call when \texttt{OSKIT_SO_LINGER} is requested.
+	If \texttt{OSKIT_SO_LINGER} is disabled, the last \texttt{release}
+	will succeed immediately. % is that really true???
+
+	The option \texttt{OSKIT_SO_BROADCAST} requests permission to send 
+	broadcast datagrams on the socket.  Broadcast was a privileged 
+	operation in earlier versions of the system.  With protocols that 
+	support out-of-band data, the \texttt{OSKIT_SO_OOBINLINE} option 
+	requests that out-of-band data be placed in the normal data input 
+	queue as received; it will then be accessible with \texttt{recv}
+	or \texttt{read} calls without the \texttt{OSKIT_MSG_OOB} flag.  
+	Some protocols always behave as if this option were set.  
+
+	\texttt{OSKIT_SO_SNDBUF} and \texttt{OSKIT_SO_RCVBUF} are options 
+	to adjust the normal buffer sizes allocated for output and input 
+	buffers, respectively.  The buffer size may be increased for 
+	high-volume connections, or may be decreased to limit the possible 
+	backlog of incoming data.  An absolute limit may be places on 
+	these values.
+
+	\texttt{OSKIT_SO_SNDLOWAT} is an option to set the minimum count 
+	for output operations. Most output operations process all of the 
+	data supplied by the call, delivering data to the protocol for 
+	transmission and blocking as necessary for flow control.  
+	Nonblocking output operations will process as much data as permitted 
+	subject to flow control without blocking, but will process no data 
+	if flow control does not allow the smaller of the low water
+	mark value or the entire request to be processed.  
+
+	% See, there you go: we NEED select().
+	% A select(2) operation
+        % testing the ability to write to a socket will return true only if 
+	% the low water mark amount could be processed.  
+
+	The default value for \texttt{OSKIT_SO_SNDLOWAT}
+	is set to a convenient size for network efficiency, often 1024.
+
+        \texttt{OSKIT_SO_RCVLOWAT} is an option to set the minimum count 
+	for input operations.
+	In general, receive calls will block until any (non-zero) amount of data
+	is received, then return with the smaller of the amount available or the
+	amount requested.  The default value for \texttt{OSKIT_SO_RCVLOWAT} is 1.
+	If \texttt{OSKIT_SO_RCVLOWAT} is set to a larger value, blocking 
+	receive calls normally wait until they have received the smaller of 
+	the low water mark value or the requested amount.  Receive calls may 
+	still return less than the low water mark if an error occurs, a signal 
+	is caught, or the type of data next in the receive queue is different 
+	than that returned.
+
+	\texttt{OSKIT_SO_SNDTIMEO} is an option to set a timeout value for 
+	output operations.
+	It accepts a \texttt{struct timeval} parameter with the number 
+	of seconds and microseconds used to limit waits for output operations 
+	to complete.  If a send operation has blocked for this much time, 
+	it returns with a partial count or with the error 
+	\texttt{OSKIT_EWOULDBLOCK} if no data were sent.  
+
+	% FreeBSD says: In the current implementation, 
+	This timer is restarted each time additional data 
+	are delivered to the protocol, implying that the limit applies to 
+	output portions ranging in size from the low water mark to the 
+	high water mark for output.  
+
+	\texttt{OSKIT_SO_RCVTIMEO} is an option to set a timeout value for 
+	input operations.  It accepts a struct timeval parameter with the 
+	number of seconds and microseconds used to limit waits for input 
+	operations to complete.
+
+	% FreeBSD says: In the current implementation, 
+	This timer is restarted each time additional data are received by 
+	the protocol, and thus the limit is in effect
+	an inactivity timer.  If a receive operation has been blocked for this
+	much time without receiving additional data, it returns with a short
+	count or with the error \texttt{OSKIT_EWOULDBLOCK} if no data were 
+	received.
+
+	Finally, \texttt{OSKIT_SO_TYPE} and \texttt{OSKIT_SO_ERROR} are options 
+	used only with \texttt{getsockopt}.
+	\texttt{OSKIT_SO_TYPE} returns the type of the socket, such as 
+	\texttt{OSKIT_SOCK_STREAM}.  
+	\texttt{OSKIT_SO_ERROR} returns any 
+	pending error on the socket and clears the error status.  
+	It may be used to check for asynchronous errors on connected datagram 
+	sockets or for other asynchronous errors.
+	
+        \item[val, valsize]
+	The parameters \emph{val} and \emph{valsize}
+	are used to access option values for \texttt{setsockopt}.
+	If no option value is to be supplied or returned, \emph{val} may be
+	\texttt{NULL}.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% recvfrom, recvmsg
+%
+
+\api{recvfrom, recvmsg}{receive a message from a socket}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+	\funcproto oskit_error_t
+	oskit_socket_recvfrom(oskit_socket_t *s, 
+			    \outparam void *buf,
+                            oskit_size_t len, oskit_u32_t flags,
+                            \outparam struct oskit_sockaddr *from, 
+			    \inoutparam oskit_size_t *fromlen,
+                            \outparam oskit_size_t *retval);
+
+        \funcproto oskit_error_t
+        oskit_socket_recvmsg(oskit_socket_t *s,
+                            \inoutparam struct oskit_msghdr *msg, 
+			    oskit_u32_t flags,
+                            \outparam oskit_size_t *retval);
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{recvfrom} and \texttt{recvmsg} are used to receive messages
+	from a socket, and may be used to receive data on a socket whether 
+	or not it is connection-oriented.
+
+	\textbf{Note: } The \texttt{recv} library function 
+	can be implemented using \texttt{recvfrom} with a nil \emph{from}
+	parameter. 
+	% BSD says:
+	% As it is redundant, it may not be supported in future releases.
+
+	If no messages are available at the socket, the receive call waits 
+	for a message to arrive.
+	% BSD says:
+	% unless the socket is nonblocking (see fcntl(2))  in
+	% which case the value -1 is returned and the external variable 
+	% errno set to EAGAIN. 
+	The receive calls normally return any data available,
+	up to the requested amount, rather than waiting for receipt of the 
+	full amount equested; this behavior is affected by the socket-level
+	options \texttt{OSKIT_SO_RCVLOWAT} and \texttt{OSKIT_SO_RCVTIMEO}
+	described in \texttt{getsockopt}.
+
+	% BSD says:
+	% The select(2) call may be used to determine when more data arrive.
+
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket from the message is to be received.
+
+	\item[buf] Buffer in which the message is to be copied.
+
+	\item[len] Length of the buffer provided.
+
+	\item[flags]
+		The \emph{flags} argument is formed by or'ing one or more 
+		of the values:
+
+		\begin{tabular}{ll}
+		\texttt{OSKIT_MSG_OOB} 	 & process out-of-band data
+		    \\
+		\texttt{OSKIT_MSG_PEEK} 	 & peek at incoming message
+		    \\
+		\texttt{OSKIT_MSG_WAITALL}& wait for full request or error
+		    \\
+		\end{tabular}
+
+		The \texttt{OSKIT_MSG_OOB} flag requests receipt of 
+		out-of-band data that would not be received in the normal 
+		data stream.
+		Some protocols place expedited data
+		at the head of the normal data queue, and thus this flag cannot
+		be used with such protocols.
+		The \texttt{OSKIT_MSG_PEEK} flag causes the receive 
+		operation to return data from the beginning of the receive
+		queue without removing that data from the queue.
+		Thus, a subsequent receive call will return the same data.
+		The \texttt{OSKIT_MSG_WAITALL} flag requests that the operation
+		block until the full request is satisfied. 
+		However, the call may still return less data than requested if
+		an error or disconnect occurs, or the next data to be received 
+		is of a different type than that returned.
+
+        \item[from]
+		If \emph{from} is non-nil, and the socket is not 
+		connection-oriented, the source address of the message is
+		filled in.  
+	\item[fromlen]
+		Initialized to the size of the buffer associated with 
+		\emph{from}, and modified on return to indicate the actual 
+		size of the address stored there.
+	
+	\item[msg] The \texttt{recvmsg} method uses a 
+		\texttt{struct oskit_msghdr} structure to minimize the number
+		of directly supplied parameters. 
+
+\cstruct{oskit_msghdr}{
+        oskit_addr_t     msg_name;               /* optional address */
+        oskit_u32_t      msg_namelen;            /* size of address */
+        struct  oskit_iovec *msg_iov;            /* scatter/gather array */
+        oskit_u32_t      msg_iovlen;             /* \# elements in msg_iov */
+        oskit_addr_t     msg_control;            /* ancillary data, see below */
+        oskit_u32_t      msg_controllen;         /* ancillary data buffer len */
+        oskit_u32_t      msg_flags;              /* flags on received message */
+};
+
+	Here \emph{msg_name} and \emph{msg_namelen} 
+	specify the destination address if the socket is unconnected;
+	\emph{msg_name} may be given as a null pointer if no names are desired 
+	or required.
+	\emph{msg_iov} and \emph{msg_iovlen} describe scatter gather
+	locations. 
+	
+	\emph{msg_control}, which has length \emph{msg_controllen},
+	points to a buffer for other protocol control related
+	messages or other miscellaneous ancillary data.
+
+    % BSD says:
+    % The messages are of the form:
+    %
+    % struct cmsghdr {
+    %     u_int   cmsg_len;       /* data byte count, including hdr */
+    %     int     cmsg_level;     /* originating protocol */
+    %     int     cmsg_type;      /* protocol-specific type */
+    % /* followed by
+    %     u_char  cmsg_data[]; */
+    % };
+    % As an example, one could use this to learn of changes in the data-stream
+    % in XNS/SPP, or in ISO, to obtain user-connection-request data by request-
+    % ing a recvmsg with no data buffer provided immediately after an accept()
+    % call.
+    %
+    % Open file descriptors are now passed as ancillary data for AF_UNIX domain
+    % sockets, with cmsg_level set to SOL_SOCKET and cmsg_type set to
+    % SCM_RIGHTS.
+
+	The \emph{msg_flags} field is set on return according to the message 
+	received. \texttt{OSKIT_MSG_EOR}  indicates end-of-record; the data 
+	returned completed a record (generally used with sockets of type
+	\texttt{OSKIT_SOCK_SEQPACKET}). \texttt{OSKIT_MSG_TRUNC} indicates
+	that the trailing portion of a datagram was discarded because
+	the datagram was larger than the buffer supplied.
+	\texttt{OSKIT_CMSG_TRUNC} indicates that some
+	control data were discarded due to lack of space in the
+	buffer for ancillary data. \texttt{OSKIT_MSG_OOB} is returned to
+	indicate that expedited or out-of-band data were received.
+
+        \item[retval]
+                Contains the number of characters received, i.e., the total
+		length of the message upon return.
+		If a message is too long to fit in the supplied buffer,
+		excess bytes may be discarded depending on the type of socket 
+		the message is received from.
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success, or an error code specified in
+        {\tt <oskit/error.h>}, on error.
+\end{apiret}
+
+%
+% sendto, sendmsg
+%
+
+\api{sendto, sendmsg}{send a message from a socket}
+\begin{apisyn}
+        \cinclude{oskit/net/socket.h}
+
+        \funcproto oskit_error_t
+	oskit_socket_sendto(oskit_socket_t *s, 
+		    const void *buf,
+                    oskit_size_t len, 
+		    oskit_u32_t flags,
+                    const struct oskit_sockaddr *to, 
+		    oskit_size_t tolen,
+                    \outparam oskit_size_t *retval);
+
+        \funcproto oskit_error_t
+        oskit_socket_sendmsg(oskit_socket_t *s,
+                    const struct oskit_msghdr *msg, 
+		    oskit_u32_t flags,
+                    \outparam oskit_size_t *retval);
+
+\end{apisyn}
+
+\begin{apidesc}
+	\texttt{sendto}, \texttt{sendmsg} are used to transmit
+	a message to another socket. 
+	The C library \texttt{send} may be implemented by passing a
+	NULL \emph{to} parameter. It may be used only when the socket 
+	is in a connected state, while \texttt{sendto} and 
+	\texttt{sendmsg} may generally be used at any time.
+
+	Send will block if no messages space is available at the socket 
+	to hold the message to be transmitted.
+	% in BSD 
+	% unless the socket has been placed in non-blocking I/O mode.
+	% The select(2) call may be used to determine when it is possible 
+	% to send more data.
+
+\end{apidesc}
+
+\begin{apiparm}
+        \item[s]
+                The socket from which the message is to be sent.
+
+	\item[buf]
+
+	\item[len] \emph{len} gives the length of the message.
+	If the message is too long to pass atomically through the underlying
+	protocol, the error \texttt{OSKIT_EMSGSIZE} is returned,
+	and the message is not transmitted.
+
+	\item[flags]
+	The \emph{flags}
+	parameter may include one or more of the following:
+
+	\begin{tabular}{ll}
+	\texttt{OSKIT_MSG_OOB} &
+	            process out-of-band data \\
+        \texttt{OSKIT_MSG_PEEK} &
+	            peek at incoming message \\
+        \texttt{OSKIT_MSG_DONTROUTE} &
+		    bypass routing, use direct interface \\
+        \texttt{OSKIT_MSG_EOR} &
+	            data completes record 	\\
+        \texttt{OSKIT_MSG_EOF} &
+	            data completes transaction \\
+	\end{tabular}
+	
+	The flag \texttt{OSKIT_MSG_OOB} is used to send ``out-of-band''
+	data on sockets that support this notion 
+	(e.g. \texttt{OSKIT_SOCK_STREAM}); the underlying protocol
+	must also support ``out-of-band'' data.
+	\texttt{OSKIT_MSG_EOR} is used to indicate a record
+	 mark for protocols which support the concept.
+	\texttt{OSKIT_MSG_EOF}  requests that the
+	sender side of a socket be shut down, and that an appropriate
+	indication be sent at the end of the specified data;
+	this flag is only implemented for \texttt{OSKIT_SOCK_STREAM}
+	sockets in the \texttt{OSKIT_PF_INET} protocol family.
+
+	\item[to, tolen]
+	  The address of the target is given by \emph{to} with \emph{tolen}
+	  specifying its size.
+
+	\item[msg] 
+	See \texttt{recvmsg} for a description of the 
+	\texttt{oskit_msghdr} structure.
+
+	\item[retval]
+	Upon return \emph{*retval} contains the number of characters sent. 
+
+\end{apiparm}
+
+\begin{apiret}
+        Returns 0 on success.
+	No indication of failure to deliver is implicit in a send.
+	Locally detected errors are indicated by an error code specified in
+        {\tt <oskit/error.h>}.
+\end{apiret}
+

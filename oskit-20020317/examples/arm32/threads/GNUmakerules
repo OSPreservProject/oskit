@@ -1,0 +1,194 @@
+#
+# Copyright (c) 1995-1996, 1998, 1999, 2000, 2001 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_examples_arm32_threads_makerules_
+_oskit_examples_arm32_threads_makerules__ = yes
+
+TARGETS = dphils sigtest ipctest disktest disknet http_proxy
+
+all: $(TARGETS)
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/examples/x86/threads
+
+INCDIRS +=	$(OSKIT_SRCDIR)/freebsd/libc/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/include			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/sys			\
+		$(OSKIT_SRCDIR)/freebsd/3.x/src/lib/libc/i386		\
+		$(OBJDIR)/freebsd/libc_r/objinclude
+
+CLEAN_FILES +=	$(TARGETS) *.gdb
+OSKIT_CFLAGS += -DOSKIT
+OSKIT_LDFLAGS += -static -Ttext 0x18100000
+
+#
+# The C library is made up of several pieces. The core library, the
+# POSIX interface that converts syscalls to COM, and the actual COM 
+# interfaces. Note that the C library uses pthread functions, so is
+# also dependent on the threads library. This needs to be fixed.
+#
+CLIB   = -loskit_freebsd_c_r -loskit_com -loskit_threads \
+	 `$(CC) --print-libgcc-file-name`
+CLIB_P = -loskit_freebsd_c_r_p -loskit_com_p -loskit_threads_p -loskit_gprof \
+	 -loskit_freebsd_c_r_p -loskit_kern_p
+
+include $(OSKIT_SRCDIR)/GNUmakerules
+
+DEPENDLIBS = $(filter %.a, $(foreach DIR,$(LIBDIRS),$(wildcard $(DIR)/*)))
+
+dphils: $(OBJDIR)/lib/multiboot.o dphils.o $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+dphils_p: $(OBJDIR)/lib/multiboot.o dphils.po $(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^)		\
+		-loskit_startup_p -loskit_clientos_p -loskit_memfs_p \
+		-loskit_fsnamespace_r_p \
+		-loskit_threads_p -loskit_svm_p -loskit_amm_p \
+		-loskit_smp_p -loskit_dev_p -loskit_kern_p -loskit_lmm_p \
+		$(CLIB_P) $(OBJDIR)/lib/crtn.o
+
+http_proxy: $(OBJDIR)/lib/multiboot.o http_proxy.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_fsnamespace_r -loskit_bootp -loskit_memfs \
+		-loskit_freebsd_net \
+		-loskit_linux_dev -loskit_dev -loskit_kern \
+		-loskit_lmm -loskit_netbsd_fs \
+		-loskit_diskpart \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+disktest: $(OBJDIR)/lib/multiboot.o disktest.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_memfs \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_bootp -loskit_freebsd_net -loskit_fsnamespace_r \
+		-loskit_linux_dev -loskit_dev -loskit_netbsd_fs \
+		-loskit_diskpart -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+disktest_p: $(OBJDIR)/lib/multiboot.o disktest.po \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup_p -loskit_clientos_p -loskit_memfs_p \
+		-loskit_threads_p -loskit_svm_p -loskit_amm_p \
+		-loskit_fsnamespace_r_p -loskit_bootp_p -loskit_freebsd_net_p \
+		-loskit_linux_dev_p -loskit_dev_p -loskit_netbsd_fs_p \
+		-loskit_diskpart_p -loskit_kern_p -loskit_lmm_p \
+		$(CLIB_P) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+disknet: $(OBJDIR)/lib/multiboot.o disknet.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos -loskit_memfs \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_bootp -loskit_fsnamespace_r \
+		-loskit_freebsd_net \
+		-loskit_linux_dev -loskit_dev -loskit_kern \
+		-loskit_lmm -loskit_netbsd_fs \
+		-loskit_diskpart \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+dopeyserver: $(OSKIT_SRCDIR)/examples/x86/threads/dopeyserver.c
+	cc -O -g -Wall -W -o $@ $^
+
+inherit-test1: $(OBJDIR)/lib/multiboot.o inherit-test1.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+ipctest: $(OBJDIR)/lib/multiboot.o ipctest.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+console_tty: $(OBJDIR)/lib/multiboot.o console_tty.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_fsnamespace_r -loskit_bootp \
+		-loskit_freebsd_dev \
+		-loskit_linux_dev -loskit_dev -loskit_kern -loskit_lmm \
+		-loskit_netbsd_fs -loskit_diskpart \
+		 $(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+sigtest: $(OBJDIR)/lib/multiboot.o sigtest.o \
+	$(DEPENDLIBS)
+	$(LD) $(LDFLAGS) $(OSKIT_LDFLAGS) \
+		-o $@ $(filter-out %.a,$^) \
+		-loskit_startup -loskit_clientos \
+		-loskit_threads -loskit_svm -loskit_amm \
+		-loskit_fsnamespace_r \
+		-loskit_dev -loskit_kern -loskit_lmm \
+		$(CLIB) $(OBJDIR)/lib/crtn.o
+	cp $@ $@.gdb
+	$(STRIP) $@
+
+#
+# Make OFW boot adaptor images.
+#
+IMAGES	    :=	$(foreach FILE, $(TARGETS), $(FILE).image)
+CLEAN_FILES +=	$(IMAGES)
+BOOTDIR      =	$(OBJDIR)/boot/ofw
+export BOOTDIR
+
+images:		$(IMAGES)
+
+%.image:	% $(OBJDIR)/boot/ofw/ofwboot.o
+	cp $< $<.strip
+	$(STRIP) $<.strip
+	$(OBJDIR)/boot/ofw/mkofwimage -o $@ $<.strip
+	rm -f $<.strip
+
+endif
+

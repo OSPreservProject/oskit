@@ -1,0 +1,15 @@
+
+Directories: oskit/svm and oskit/svm/x86 and oskit/svm/arm32
+Target: liboskit_svm.a
+Documentation: doc/svm.tex
+Original Code Source:
+	Flux Research Group, University of Utah
+Description:
+	The SVM library provides a *simple* virtual memory extension that
+	allows applications to allocate virtual memory and assign
+	protections to memory regions. A simple pager is also provided.
+	The interface is much like mmap/mprotect. The pthreads module
+	uses svm to implement stack guards.
+
+	The x86 and arm32 directory contains machine specific trap
+	code and code to interface to the kernel pdir routines.

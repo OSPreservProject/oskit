@@ -1,0 +1,20 @@
+
+Directories: oskit/oskit/arm32
+Target: Lots of stuff
+Documentation: 
+Original Code Source: 
+	Flux Research Group, University of Utah
+	Mach Project, Carnegie Mellon University
+	BSD Project, University of California, Berkeley
+	NetBSD Project, The NetBSD Foundation.
+Description:  
+	Machine dependent header files.
+
+	The c/, and exec/ directories contain
+	header files used by the machine-independent
+	versions.
+
+	The ofw/ directory contains OFW specific header files.
+
+	The shark/ directory contain definitions specific to
+	the Digital Dnard hardware in particular.

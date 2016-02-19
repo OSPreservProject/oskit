@@ -1,0 +1,9 @@
+
+Directories: oskit/oskit/smp
+Target: liboskit_smp.a
+Documentation:
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	Header files for the SMP library.
+	

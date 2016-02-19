@@ -1,0 +1,127 @@
+%
+% Copyright (c) 2000-2002 University of Utah and the Flux Group.
+% All rights reserved.
+% 
+% The University of Utah grants you the right to copy and reproduce this
+% document or portions thereof for academic, research, evaluation, and
+% personal use only, provided that (1) the title page appears prominently,
+% and (2) these copyright and permission notices are retained in all copies.
+% To arrange for alternate terms, contact the University of Utah at
+% csl-dist@cs.utah.edu or +1-801-585-3271.
+%
+% This file defines the body of the OSKit documentation.
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\libchap}[2]{\chapter{#1: \texttt{liboskit_#2.a}}
+			 \ttindex{liboskit_#2.a}
+			 \index{#2 library@{\texttt{#2} library}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{Design and Organization}
+\label{design-org}
+
+\chapter{Introduction}				\input{intro}
+\chapter{Execution Environments}		\input{env}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{Interfaces}
+\label{intf}
+
+\chapter{Introduction to \oskit{} Interfaces}	\input{intf}
+\chapter{The Component Object Model}		\input{com}
+\chapter{Interface Registration}		\input{register}
+\chapter{Synchronization Interfaces}		\input{synch}
+\chapter{Input/Output Interfaces}		\input{io}
+\chapter{\oskit{} Device Driver (OS Environment) Framework}	\input{dev}
+\chapter{\oskit{} File System Framework}	\input{fs}
+\chapter{\oskit{} Networking Framework}		\input{net}
+\chapter{Flask Security Framework}		\input{flask}
+\chapter{Miscellaneous \oskit{} Interfaces}     \input{intf-misc}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{Function Libraries}
+\label{function-libaries}
+
+\libchap{``Client OS'' Library}{clientos}	\input{clientos}
+\libchap{Minimal C Library}{c}			\input{libc}
+\libchap{Kernel Support Library}{kern}		\input{kern}
+\libchap{Symmetric Multiprocessing}{smp}	\input{smp}
+\libchap{Kernel Device Driver Support}{dev}	\input{libdev}
+\libchap{Unix User-Mode Environment}{unix}	\input{unix-support}
+\libchap{\oskit{} ``Quick Start'' Library}{startup}	\input{startup}
+
+%%%% Missing chapters:
+% startup
+% unsupp
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{Component Libraries}
+\label{comp-libraries}
+
+% Rough order: simple to complex, but grouped by functional area.
+
+% C/Math libraries
+\libchap{POSIX Interface Library}{posix}	\input{posix}
+\libchap{FreeBSD C Library}{freebsd_c}		\input{freebsd-libc}
+\libchap{FreeBSD Math Library}{freebsd_m}	\input{freebsd-math}
+\libchap{Filesystem Namespace}{fsnamespace}	\input{fsnamespace}
+\libchap{Runtime Linker/Loader}{rtld}		\input{rtld}
+
+% Memory management
+\libchap{List-based Memory Manager}{lmm}	\input{lmm}
+\libchap{Address Map Manager}{amm}		\input{amm}
+\libchap{Simple Virtual Memory}{svm}		\input{svm}
+\libchap{\intel NetBSD UVM}{netbsd_uvm}         \input{uvm}
+
+% Threads, processes, synchronization, and scheduling
+\libchap{POSIX Threads}{threads}		\input{pthread}
+\libchap{\intel Simple Process}{sproc}          \input{sproc}
+
+% Development tools
+\libchap{Memory Debugging Utilities}{memdebug}	\input{memdebug}
+\libchap{Profiling Support}{gprof}              \input{gprof}
+
+% Simple disk/file reading
+\libchap{Disk Partition Interpreter}{diskpart}	\input{diskpart}
+\libchap{File System Reader}{fsread}		\input{fsread}
+\libchap{Executable Program Interpreter}{exec}	\input{exec}
+
+% Filesystem implementations
+\libchap{Linux File Systems}{linux_fs}		\input{linux-fs}
+\libchap{NetBSD File Systems}{netbsd_fs}	\input{netbsd-fs}
+\libchap{Memory File System}{memfs}		\input{memfs}
+
+% Networking implementations
+\libchap{FreeBSD Networking}{freebsd_net}	\input{freebsd-net}
+\libchap{BOOTP Support}{bootp}			\input{bootp}
+\libchap{HPFQ: Hierarchical Network Link Sharing}{hpfq}	\input{hpfq}
+\libchap{Packet Dispatcher}{pd}			\input{pd}
+
+% Device driver implementations
+\libchap{Linux Driver Set}{linux_dev}		\input{linux-dev}
+\libchap{FreeBSD Driver Set}{freebsd_dev}	\input{freebsd-dev}
+
+% Video and window mgr implementations
+\libchap{Video Support}{video}			\input{video}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{Utilities}
+\label{utils}
+
+\chapter{Network Booting}			\input{netboot}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{The Legal Stuff}
+\label{copyrights}
+
+\chapter{Copyrights and Licenses}		\input{licensing}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% End of file.
+

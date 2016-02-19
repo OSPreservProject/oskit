@@ -1,0 +1,81 @@
+#
+# Copyright (c) 1994-1996, 1998, 1999 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+#### Start of configuration section ####
+
+OSKIT_SRCDIR	= @top_srcdir@
+OBJDIR		= .
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+
+include $(OBJDIR)/Makeconf
+
+SUBDIRS		= $(filter-out $(OSKIT_EXCLUDED_SUBDIRS),@oskit_subdirs@)
+
+##### End of configuration section #####
+
+# Get rid of a bunch of nasty built-in implicit rules.
+.SUFFIXES:
+
+# How to recursively descend into subdirectories to make general targets such as `all'.
+%.MAKE:
+	@$(MAKE) -C $(dir $@) $(basename $(notdir $@))
+%-subdirs: $(addsuffix /%.MAKE,$(SUBDIRS)) ;
+
+# By default, make any target by descending into subdirectories.
+%: %-subdirs ;
+
+all: all-subdirs
+
+clean: clean-subdirs
+	rm -rf lib
+
+# This target "prepares" the tree by building any machine-generated
+# source files, creating links into the source tree, etc.
+# (Used by Knit)
+.PHONY: prepare
+prepare:: prepare-subdirs
+
+distclean: distclean-subdirs
+	rm -rf lib GNUmakefile Makeconf config.status config.cache config.log \
+		$(addsuffix /GNUmakefile,$(SUBDIRS)) boot/bsd/mkbsdimage
+
+
+# For testing
+check:
+	$(MAKE) -C testsuite $@
+testsum:
+	@$(MAKE) --no-print-directory -C testsuite $@
+
+
+# Make directories that have to happen first dependencies of all others,
+# and directories that have to happen lest dependent on all others.
+# Thus parallelism (-j) will not barf.
+FIRST_SUBDIRS = oskit flask
+LAST_SUBDIRS = boot/% examples/%
+
+$(patsubst %,%/all.MAKE,$(filter-out $(FIRST_SUBDIRS),$(SUBDIRS))): $(FIRST_SUBDIRS:%=%/all.MAKE)
+$(patsubst %,%/all.MAKE,$(filter $(LAST_SUBDIRS),$(SUBDIRS))): $(patsubst %,%/all.MAKE,$(filter-out $(LAST_SUBDIRS),$(SUBDIRS)))
+
+# The libc and freebsd/libc directories depend on posix/sys being built first.
+libc/all.MAKE freebsd/libc/all.MAKE: posix/sys/all.MAKE
+# The freebsd/libc_r directory depends on posix/sys_r being built first.
+freebsd/libc_r/all.MAKE: posix/sys_r/all.MAKE
+
+debug:
+	@echo SUBDIRS = $(SUBDIRS)

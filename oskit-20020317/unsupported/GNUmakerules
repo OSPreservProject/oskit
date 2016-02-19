@@ -1,0 +1,104 @@
+#
+# Copyright (c) 1995-1996, 1998-2000 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+ifndef _oskit_unsupported_makerules_
+_oskit_unsupported_makerules_ = yes
+
+TARGET	= liboskit_unsupp.a
+
+# the spec file goes there
+GCC_SPEC = $(INSTALL_LIBDIR)/oskit/specs
+
+# this will be the name of the driver
+GCC_DRIVER = $(HOST_ARCH)-oskit-gcc
+
+SRCDIRS +=	$(OSKIT_SRCDIR)/unsupported
+
+INCDIRS +=	$(OSKIT_SRCDIR)/oskit/unsupp $(OSKIT_SRCDIR)/oskit/c
+
+DEFINES +=	-DOSKIT
+
+include $(OSKIT_SRCDIR)/GNUmakerules-lib
+
+install: $(INSTALL_BINDIR)/sym-trace
+all: scripts/sym-trace
+
+ifneq ($(GCC_NEEDS_FULL_SPECS),broken)
+install: $(GCC_SPEC) $(INSTALL_BINDIR)/$(GCC_DRIVER)
+all: gcc-specs scripts/gcc-driver-script
+endif
+
+$(INSTALL_BINDIR)/$(GCC_DRIVER) : scripts/gcc-driver-script
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	-mkdir -p $(INSTALL_BINDIR)
+	$(INSTALL_PROGRAM) $< $@
+
+dumpspecs = $(CC) $(OSKIT_CFLAGS) $(CFLAGS) -dumpspecs
+
+# If $(CC) -print-file-name=include finds no directory and returns include,
+# then -iwithprefix include would find something unhelpful like /usr/include,
+# so we want to elide it.
+define frob-sysinclude
+test "`$(CC) $(OSKIT_CFLAGS) $(CFLAGS) -print-file-name=include`" != include \
+|| { sed 's/^.oskit_sysinclude/&_OFF/' < $@.new > $@.n2 && mv $@.n2 $@.new; }
+endef
+
+substvars := prefix exec_prefix unix_host \
+	     INSTALL_INCDIR INSTALL_BINDIR INSTALL_LIBDIR
+
+ifeq ($(GCC_NEEDS_FULL_SPECS),yes)
+# We don't have %rename, so instead produce the values we need in native-specs.
+native-specs: $(OSKIT_SRCDIR)/unsupported/$(HOST_ARCH)/gcc-specs.in \
+	      ../Makeconf
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating gcc-specs (step 1)"
+	$(dumpspecs) | sed -n "`sed -n 's@^%rename[ 	]*\([^ 	][^ 	]*\)[ 	]*\([^ 	][^ 	]*\)@/^[*]\1:$$/{s/\1/\2/;N;N;p;}@p' $<`" > $@.new
+	mv -f $@.new $@
+our-specs: $(OSKIT_SRCDIR)/unsupported/$(HOST_ARCH)/gcc-specs.in \
+	   native-specs
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating gcc-specs (step 2)"
+	sed '/%rename/d$(foreach V,$(substvars),;s%@$V@%$($V)%g)' \
+	    $^ > $@.new
+	$(frob-sysinclude)
+	mv -f $@.new $@
+gcc-specs: our-specs
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating gcc-specs (step 3)"
+	($(dumpspecs) | \
+	 sed "`sed -n 's@^[*]\([^:]*\):$$@/^[*]\1:/{N;N;d;}@p' < $<`"; \
+	 cat $<) > $@.new
+	$(frob-sysinclude)
+	mv -f $@.new $@
+else
+gcc-specs: $(OSKIT_SRCDIR)/unsupported/$(HOST_ARCH)/gcc-specs.in
+	$(OSKIT_QUIET_MAKE_INFORM) "Generating gcc-specs"
+	sed$(foreach V,$(substvars), -e 's%@$V@%$($V)%g') $< > $@.new
+	mv -f $@.new $@
+endif
+
+$(GCC_SPEC): gcc-specs
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	$(INSTALL_DATA) $< $@
+
+$(INSTALL_BINDIR)/sym-trace : scripts/sym-trace
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	-mkdir -p $(INSTALL_BINDIR)
+	$(INSTALL_PROGRAM) $< $@
+
+drivers.m4: $(OSKIT_SRCDIR)/unsupported/drivers-list.in
+	$(OSKIT_QUIET_MAKE_INFORM) "Installing $<"
+	$(CC) $(OSKIT_CFLAGS) $(CFLAGS) -E -x c $< | $(SHELL) > $@
+
+endif

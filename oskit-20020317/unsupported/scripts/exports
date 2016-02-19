@@ -1,0 +1,69 @@
+#! /usr/local/bin/perl 
+
+# List the symbols "exported" (ie defined) in a .o or .a file.
+# Typically used in conjunction with summarise:
+#
+#  exports liboskit_kern.a \
+#  | summarise pdir_ oskit_ pic_ i16_bios_ i16_ phys_ intr_ \
+#              mem_ gdb_ console_ com_ dos_ cpu_ base_critical_ \
+#              base_ anno_ direct_cons_
+#
+# You might also want to uncomment the lines that filter tedious entries
+# out of the output.
+
+$nm = "nm";
+
+foreach $f (@ARGV) {
+    ($IN,$OUT) = &typeof($f);
+    $IN = &diff($IN,$OUT);
+
+# Filter that strips internal symbols out
+#
+#     $IN  = &zap($IN, "^FDEV_LINUX_");
+#     $OUT = &zap($OUT,"^FDEV_LINUX_");
+# 
+#     $IN  = &zap($IN, "^OSKIT_LINUX_");
+#     $OUT = &zap($OUT,"^OSKIT_LINUX_");
+# 
+#     $IN  = &zap($IN, "_iid\$");
+
+    print "\t", join("\n\t",sort(keys %$OUT)),"\n";
+}
+
+exit 0;
+
+sub typeof {
+    local ($filename) = @_;	
+    local (%IMPORTS,%EXPORTS);
+    local ($x);
+    open(FILE, "$nm -pa $filename |") || die "Can't find $filename\n";
+    while (<FILE>) {
+	@fields = split;
+
+	if ($fields[0] =~ /[U]/) { 
+	    $IMPORTS{$fields[1]} = 1;
+	} elsif ($fields[1] =~ /[ABCDGIRSTW]/) { 
+	    $EXPORTS{$fields[2]} = 1;
+	}
+    }
+    return \(%IMPORTS,%EXPORTS);
+#   close <FILE>;
+}
+
+sub diff {
+    local ($X,$Y) = @_;
+    local ($x,%r);
+    foreach $x (keys %$X) {
+	$r{$x} = 1 unless exists $$Y{$x};
+    }
+    return \%r;
+}
+
+sub zap {
+    local ($X,$patt) = @_;
+    local ($x,%r);
+    foreach $x (keys %$X) {
+	$r{$x} = 1 unless $x =~ /$patt/;
+    }
+    return \%r;
+}

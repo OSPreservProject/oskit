@@ -1,0 +1,439 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Files (excluding filesystems and devices)
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+bundletype PosixFD_T = 
+{ include "${OSKITDIR}/oskit/c/unistd.h",
+  include "${OSKITDIR}/oskit/c/fcntl.h",
+  include "${OSKITDIR}/oskit/c/sys/uio.h",
+  include "${OSKITDIR}/oskit/c/sys/time.h",
+  include "${OSKITDIR}/oskit/c/sys/ioccom.h",
+  close,
+  dup,
+  dup2,
+  fcntl,
+  getdtablesize,
+  ioctl,
+  lseek,
+  read,
+  readv,
+  select,
+  write,
+  writev,
+
+// for internal use only
+  include "${OSKITDIR}/oskit/c/fd.h",
+  initial_fd_array,
+  fd_alloc,
+  fd_array,
+  fd_arraylen,
+  fd_cleanup,
+  fd_free,                   
+
+// these are only in the multithreaded version but I'm being sloppy...
+  fd_access_rawlock,
+  fd_access_unlock,
+} with flags libc
+
+bundletype PosixFiles_T = {
+  include "${OSKITDIR}/oskit/c/stdio.h",
+  include "${OSKITDIR}/oskit/c/unistd.h",
+  include "${OSKITDIR}/oskit/c/sys/stat.h",
+  include "${OSKITDIR}/oskit/c/fs.h",
+  access,
+  chdir,
+  chmod,
+  chown,
+  chroot,
+  creat,
+  fchdir,
+  fstat,
+  fsync,
+
+  fs_lookup,      // not actually a POSIX function
+  fs_lookup_dir,
+
+  ftruncate,
+  getumask,
+  lchown,
+  link,
+  lstat,
+  mkdir,
+  mkfifo,
+  mknod,
+  open,
+  readlink,
+  rename,
+  rmdir,
+  stat,
+  symlink,
+  truncate,
+  umask,
+  unlink,
+} with flags libc
+
+/*#
+SOA stands for Simple Object Adapter.
+#*/
+bundletype SOAOpenFile_T = 
+{ // Knit C parser chokes on this file: include "${OSKITDIR}/oskit/fs/soa.h",
+  oskit_soa_openfile_from_absio,
+  oskit_soa_openfile_from_file,
+  oskit_soa_openfile_from_stream,
+} with flags libc
+
+/*#
+This is what the minimal C library exports.
+#*/
+bundletype CFiles_T =
+{ include "${OSKITDIR}/oskit/c/stdio.h",
+  __sF,  // stdin, stdout, stderr use this
+  fclose,
+  fflush,
+  fgetc,
+  fgets,
+  fopen,
+  fprintf,
+  fputc,
+  fputs,
+  fread,
+  fscanf,
+  fseek,
+  ftell,
+  fwrite,
+  vfprintf,
+  vfscanf,
+} with flags libc
+
+/*#
+This is what the FreeBSD library adds.
+#*/
+bundletype FreeBSDFiles_T =
+{ extends CFiles_T,
+  f_prealloc,  // is this really an export?
+  __srget, // needed by frune in locale
+  __swbuf, // needed by frune in locale
+  __sfvwrite,   // needed by freebsd_stdout
+  fdopen,
+  feof,
+  ferror,
+  fgetln,
+  fgetpos,
+  fileno,
+  fpurge,
+  freopen,
+  fseeko,
+  fsetpos,
+  ftello,
+  funopen,
+
+  flockfile,
+  ftrylockfile,
+  funlockfile,
+
+  closedir,
+  opendir,
+  readdir,
+  rewinddir,
+
+  getcwd,
+  isatty,
+  realpath,
+  remove,
+  rewind,
+  setbuf,
+  setbuffer,
+  setlinebuf,
+  setvbuf,
+  tcgetattr,
+}
+
+/************************************************************/
+// Implementation
+/************************************************************/
+
+/*#
+A Simple Object Adapter.
+#*/
+
+// mk_unit -o -n soa_openfile com/openfile_file.o com/openfile_stream.o com/openfile_absio.o
+
+unit SOA_openfile = {
+  imports[ iids    : { oskit_absio_iid
+                      , oskit_blkio_iid
+                      , oskit_iunknown_iid
+                      , oskit_openfile_iid
+                      , oskit_stream_iid
+                     }
+          , panic   : Panic_T
+	  , malloc  : Malloc_T // smalloc, sfree
+         ];
+  exports[ soaopenfile : SOAOpenFile_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "com/openfile_file.c"
+       , "com/openfile_stream.c"
+       , "com/openfile_absio.c"
+       }
+       with flags com;
+}
+
+
+/*#
+It's sad but true that Posix files require a console to initialise
+the file descriptors for stdin, stdout, stderr
+#*/
+
+// mk_unit -o -n posix_file_descriptors posix/sys/close.o posix/sys/dup.o posix/sys/dup2.o posix/sys/fcntl.o posix/sys/fd_alloc.o posix/sys/fd_free.o posix/sys/fd_lock.o posix/sys/ioctl.o posix/sys/getdtablesize.o posix/sys/lseek.o posix/sys/read.o posix/sys/readv.o posix/sys/write.o posix/sys/writev.o posix/sys/console.o posix/sys/select.o
+
+// mk_unit -o -n posix_file_descriptors_r posix/sys_r/close.o posix/sys_r/dup.o posix/sys_r/dup2.o posix/sys_r/fcntl.o posix/sys_r/fd_alloc.o posix/sys_r/fd_free.o posix/sys_r/fd_lock.o posix/sys_r/ioctl.o posix/sys_r/getdtablesize.o posix/sys_r/lseek.o posix/sys_r/read.o posix/sys_r/readv.o posix/sys_r/write.o posix/sys_r/writev.o posix/sys_r/console.o posix/sys_r/select.o
+
+// posix/sys/pipe.o
+
+// What's the difference between single and multi-threaded version?
+// 
+// posix/sys/fd_alloc.c:
+//   fd_init creates mutexes for each fd
+// posix/sys/fd_free.c
+//   threaded/debugging version sets creater of each fd to -1
+// posix/sys/fd_lock.c
+//   null for single-threaded version
+//   used in oskit/c/fd.h to define FD_ACCESS_*
+// posix/sys/select.c
+//   whilst building up the FD_SET, also try to acquire locks
+//   unlock them at the end
+// posix/sys/setitimer.c
+//   overcome minor differences between pthread_kill/pthread_self
+//   and kill/<not implemented>
+// posix/sys/sigaction.c
+//   entire implementation lives in pthread library
+// posix/sys/write.c
+//   could be done by a wrapper which disables interrupts around 
+//   writes to stdout.  Don't understand why this isn't an issue in
+//   single-threaded case.
+// oskit/c/fd.h (included by almost everything in posix/sys
+//   extra fields (mutexes and the like) in struct fd
+//   conditional definition of FD_ACCESS_* macros
+
+unit posix_file_descriptors = {
+  imports[ errno       : Errno_T,
+           sleep       : Sleep_T,
+	   iids	       : { oskit_asyncio_iid
+                         , oskit_iunknown_iid
+                         , oskit_posixio_iid
+                         , oskit_stream_iid
+                         , oskit_ttystream_iid
+	       	         },
+	   string      : String_T, // memset
+	   malloc      : Malloc_T, // malloc, realloc
+           panic       : Panic_T,
+           stdout      : Stdout_T, // only for getdtablesize
+	   create_listener : CreateListener_T,  // for select
+           console_obj : DefaultConsole_T,
+//           pthread     : PThread_T,
+//           pthread_locks : PThreadLocks_T,
+         ];
+  exports[ fds : PosixFD_T ];
+  initializer fd_init2 for fds;
+  // ToDo: is fd_cleanup a finalizer?
+  depends{ exports + inits + finis needs imports };
+  files{ "posix/sys/close.c",
+         "posix/sys/dup.c",
+         "posix/sys/dup2.c",
+         "posix/sys/fcntl.c",
+         "posix/sys/fd_alloc.c",
+         "posix/sys/fd_free.c",
+         "posix/sys/fd_lock.c",
+         "posix/sys/getdtablesize.c",  // yoiks: needs printf
+         "posix/sys/ioctl.c",
+         "posix/sys/lseek.c",
+         "posix/sys/read.c",
+         "posix/sys/readv.c",
+         "posix/sys/write.c",
+         "posix/sys/writev.c",
+         "posix/sys/console.c",
+         "posix/sys/select.c",
+//  } with flags { flags posix, "-DTHREAD_SAFE" };
+  } with flags { flags posix };
+}
+
+// ignore fs_cmask requirement
+// mk_unit -o -n posix_files posix/sys/access.o posix/sys/chdir.o posix/sys/chmod.o posix/sys/chown.o posix/sys/chroot.o posix/sys/creat.o posix/sys/fchdir.o posix/sys/flock.o posix/sys/fs.o posix/sys/fstat.o posix/sys/ftruncate.o posix/sys/fsync.o posix/sys/lchown.o posix/sys/link.o posix/sys/lstat.o posix/sys/mkdir.o posix/sys/mkfifo.o posix/sys/mknod.o posix/sys/open.o posix/sys/readlink.o posix/sys/rename.o posix/sys/rmdir.o posix/sys/stat.o posix/sys/truncate.o posix/sys/unlink.o posix/sys/umask.o posix/sys/getumask.o  
+// posix/sys/getdirentries.o
+
+// mk_unit -o -n posix_files_r posix/sys_r/access.o posix/sys_r/chdir.o posix/sys_r/chmod.o posix/sys_r/chown.o posix/sys_r/chroot.o posix/sys_r/creat.o posix/sys_r/fchdir.o posix/sys_r/flock.o posix/sys_r/fs.o posix/sys_r/fstat.o posix/sys_r/ftruncate.o posix/sys_r/fsync.o posix/sys_r/lchown.o posix/sys_r/link.o posix/sys_r/lstat.o posix/sys_r/mkdir.o posix/sys_r/mkfifo.o posix/sys_r/mknod.o posix/sys_r/open.o posix/sys_r/readlink.o posix/sys_r/rename.o posix/sys_r/rmdir.o posix/sys_r/stat.o posix/sys_r/truncate.o posix/sys_r/unlink.o posix/sys_r/umask.o posix/sys_r/getumask.o  
+
+unit posix_files = {
+  imports[ errno    : Errno_T,
+	   iids	    : { oskit_dir_iid
+                      , oskit_posixio_iid
+                      , oskit_openfile_iid
+	       	      },
+	   string   : String_T, // strncpy, strrchr
+           soaofile : SOAOpenFile_T,
+	   fsn_obj  : { fsn },
+           atexit   : AtExit_T,
+           fds      : PosixFD_T,
+//           pthread  : PThread_T,
+         ];
+  exports[ posixfiles : PosixFiles_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "posix/sys/access.c",
+         "posix/sys/chdir.c",
+         "posix/sys/chmod.c",
+         "posix/sys/chown.c",
+         "posix/sys/chroot.c",
+         "posix/sys/creat.c",
+         "posix/sys/fchdir.c",
+         "posix/sys/flock.c",
+         "posix/sys/fs.c",
+         "posix/sys/fstat.c",
+         "posix/sys/fsync.c",
+         "posix/sys/ftruncate.c",
+//         "posix/sys/getdirentries.c",
+         "posix/sys/lchown.c",
+         "posix/sys/link.c",
+         "posix/sys/lstat.c",
+         "posix/sys/mkdir.c",
+         "posix/sys/mkfifo.c",
+         "posix/sys/mknod.c",
+         "posix/sys/open.c",
+         "posix/sys/readlink.c",
+         "posix/sys/rename.c",
+         "posix/sys/rmdir.c",
+         "posix/sys/stat.c",
+         "posix/sys/symlink.c",
+         "posix/sys/truncate.c",
+         "posix/sys/unlink.c",
+         "posix/sys/umask.c",
+         "posix/sys/getumask.c",
+//  } with flags { flags posix, "-DTHREAD_SAFE" };
+  } with flags { flags posix };
+  %{
+#include <sys/types.h>
+#include <sys/stat.h>
+oskit_mode_t fs_cmask = 0;
+  %} with flags posix;
+  rename{ fsn_obj.fsn to oskit_fsnamespace };
+}
+
+// mk_unit -o -n libc_files libc/fclose.o libc/fflush.o libc/fgetc.o libc/fgets.o libc/fopen.o libc/fprintf.o libc/fputc.o libc/fputs.o libc/fread.o libc/fscanf.o libc/fseek.o libc/ftell.o libc/fwrite.o libc/vfprintf.o libc/doprnt.o libc/doscan.o libc/stdio.o
+
+unit libc_files = {
+  imports[ posixfiles : PosixFiles_T,
+           fds        : PosixFD_T,
+           errno      : Errno_T,
+           malloc     : Malloc_T,   // malloc, free
+           iids       : { oskit_stream_iid},
+         ];
+  exports[ out : CFiles_T ];
+  depends{ exports + inits + finis needs imports };
+  files{ "libc/stdio/fclose.c",
+         "libc/stdio/fflush.c",
+         "libc/stdio/fgetc.c",
+         "libc/stdio/fgets.c",
+         "libc/stdio/fopen.c",
+         "libc/stdio/fprintf.c",
+         "libc/stdio/fputc.c",
+         "libc/stdio/fputs.c",
+         "libc/stdio/fread.c",
+         "libc/stdio/fscanf.c",
+         "libc/stdio/fseek.c",
+         "libc/stdio/ftell.c",
+         "libc/stdio/fwrite.c",
+         "libc/stdio/vfprintf.c",
+         "libc/stdio/doprnt.c",
+         "libc/stdio/doscan.c",
+         "libc/stdio/stdio.c",
+  } with flags libc;
+}
+
+// mk_unit -o -nfreebsd_file freebsd/libc/fclose.o freebsd/libc/_flock_stub.o freebsd/libc/fdopen.o freebsd/libc/feof.o freebsd/libc/ferror.o freebsd/libc/fflush.o freebsd/libc/fgetc.o freebsd/libc/fgetln.o freebsd/libc/fgetpos.o freebsd/libc/fgets.o freebsd/libc/fileno.o freebsd/libc/findfp.o freebsd/libc/fopen.o freebsd/libc/fpurge.o freebsd/libc/fputc.o freebsd/libc/fputs.o freebsd/libc/fread.o freebsd/libc/freopen.o freebsd/libc/fseek.o freebsd/libc/fsetpos.o freebsd/libc/ftell.o freebsd/libc/funopen.o freebsd/libc/fvwrite.o freebsd/libc/fwrite.o freebsd/libc/getcwd.o freebsd/libc/opendir.o freebsd/libc/realpath.o freebsd/libc/remove.o freebsd/libc/rewind.o freebsd/libc/setbuf.o freebsd/libc/setbuffer.o freebsd/libc/setvbuf.o freebsd/libc/refill.o freebsd/libc/rget.o freebsd/libc/makebuf.o  freebsd/libc/wbuf.o freebsd/libc/wsetup.o freebsd/libc/fwalk.o freebsd/libc/stdio.o freebsd/libc/flags.o freebsd/libc/isatty.o freebsd/libc/tcgetattr.o        
+
+unit freebsd_files = {
+  imports[ files  : PosixFiles_T,
+           fds    : PosixFD_T,
+           errno  : Errno_T,
+           malloc : { extends Malloc_T, reallocf },
+           mem    : { osenv_mem_free },   // blech!  getdirents
+           bizarro_stuff : { __isthreaded, __cleanup },
+           string : String_T,
+           iids   : { oskit_dir_iid },
+           quad   : Quad_T,
+	   math   : Math_T,
+	   mathstr: MathString_T,
+	   atexit : AtExit_T,
+         ];
+  exports[ out : FreeBSDFiles_T ];
+//  constraints{ context exports <= context imports };  // would require specification of all the imports
+  constraints{ context exports <= ProcessContext }; // assumes that at least one import needs a process context which is a reasonable guess!
+  depends{ exports + inits + finis needs imports };
+  // depends{ exports + inits + finis needs files + fds + errno + malloc + bizarro_stuff + string + iids };
+  files{ "freebsd/3.x/src/lib/libc/stdio/fclose.c",
+         "freebsd/3.x/src/lib/libc/stdio/_flock_stub.c",
+         "freebsd/3.x/src/lib/libc/stdio/fdopen.c",
+         "freebsd/3.x/src/lib/libc/stdio/feof.c",
+         "freebsd/3.x/src/lib/libc/stdio/ferror.c",
+         "freebsd/3.x/src/lib/libc/stdio/fflush.c",
+         "freebsd/3.x/src/lib/libc/stdio/fgetc.c",
+         "freebsd/3.x/src/lib/libc/stdio/fgetln.c",
+         "freebsd/3.x/src/lib/libc/stdio/fgetpos.c",
+         "freebsd/3.x/src/lib/libc/stdio/fgets.c",
+         "freebsd/3.x/src/lib/libc/stdio/fileno.c",
+         "freebsd/3.x/src/lib/libc/stdio/findfp.c",
+         "freebsd/3.x/src/lib/libc/stdio/fopen.c",
+         "freebsd/3.x/src/lib/libc/stdio/fprintf.c",
+         "freebsd/3.x/src/lib/libc/stdio/fpurge.c",
+         "freebsd/3.x/src/lib/libc/stdio/fputc.c",
+         "freebsd/3.x/src/lib/libc/stdio/fputs.c",
+         "freebsd/3.x/src/lib/libc/stdio/fread.c",
+         "freebsd/3.x/src/lib/libc/stdio/freopen.c",
+         "freebsd/3.x/src/lib/libc/stdio/fseek.c",
+         "freebsd/3.x/src/lib/libc/stdio/fsetpos.c",
+         "freebsd/3.x/src/lib/libc/stdio/ftell.c",
+         "freebsd/3.x/src/lib/libc/stdio/funopen.c",
+         "freebsd/3.x/src/lib/libc/stdio/fvwrite.c",
+         "freebsd/3.x/src/lib/libc/stdio/fwrite.c",
+         "freebsd/3.x/src/lib/libc/stdio/remove.c",
+         "freebsd/3.x/src/lib/libc/stdio/rewind.c",
+         "freebsd/3.x/src/lib/libc/stdio/setbuf.c",
+         "freebsd/3.x/src/lib/libc/stdio/setbuffer.c",
+         "freebsd/3.x/src/lib/libc/stdio/setvbuf.c",
+         "freebsd/3.x/src/lib/libc/stdio/refill.c",
+         "freebsd/3.x/src/lib/libc/stdio/rget.c",
+         "freebsd/3.x/src/lib/libc/stdio/makebuf.c",
+         "freebsd/3.x/src/lib/libc/stdio/vfprintf.c",
+         "freebsd/3.x/src/lib/libc/stdio/wbuf.c",
+         "freebsd/3.x/src/lib/libc/stdio/wsetup.c",
+         "freebsd/3.x/src/lib/libc/stdio/fwalk.c",
+         "freebsd/3.x/src/lib/libc/stdio/stdio.c",
+         "freebsd/3.x/src/lib/libc/stdio/flags.c",
+
+         "freebsd/3.x/src/lib/libc/gen/getcwd.c",  // uses dirent.h
+         "freebsd/3.x/src/lib/libc/gen/isatty.c",
+         "freebsd/3.x/src/lib/libc/gen/tcgetattr.c",
+
+         "freebsd/3.x/src/lib/libc/stdlib/realpath.c",
+
+         "freebsd/libc/glue/opendir.c",
+  } with flags freebsd_libc;
+}
+/************************************************************/
+// End
+/************************************************************/

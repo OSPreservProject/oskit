@@ -1,0 +1,36 @@
+Directories: oskit/boot/ofwboot
+Target: ofwboot
+Documentation: none
+Original Code Source:
+	Flux Research Group, University of Utah.
+	Derived from PXE boot loader (oskit/boot/pxe).
+Description:
+
+Like oskit/boot/pxe, this is a simple first-stage boot loader which
+speaks ``bootinfo'', a custom UDP protocol, to a remote server to determine
+what to boot next.  ofwboot is intended to be loaded via TFTP directly
+from the OpenFirmware; i.e., it is the boot file specified in the BOOTP
+or DHCP configuration file.  As such, it should be ``wrapped'' using the
+mkofwimage utility.  The ofwboot.image target in the Makefile does this.
+
+ofwboot works by issuing an OpenFirmware boot command with the bootinfo-
+provided kernel and command line as the bootspec argument.  Hence, the
+kernel specified via bootinfo itself needs to be a mkofwimage-wrapped
+OSKit kernel, or other kernel which knows how to interact with OpenFirmware
+(e.g., a NetBSD or ARM/Linux kernel).
+
+Once the ofwboot kernel is running, it will query our own little bootinfo
+server to find out what to do next.  The protocol is very simple, sending
+a UDP packet to a port defined in oskit/boot/bootwhat.h, which returns a
+packet. How you implement that server is up to you, but as a trivial example
+of how to get started, see oskit/boot/pxe/bootinfo/bootinfo.c.
+
+Notes
+
+* Requires a BOOTP (or DHCP) server to acquire its host information.
+
+* Uses a simple UDP/IP implementation which doesn't support IP fragmentation.
+
+* This program should be extended to boot multiboot-complient kernels
+  directly (i.e., by loading and jumping to them) rather than by rebooting
+  the machine.

@@ -1,0 +1,155 @@
+/************************************************************/
+// Copyright (c) 2000-2001 University of Utah and the Flux Group.
+// All rights reserved.
+// 
+// This file is part of the Flux OSKit.  The OSKit is free software, also known
+// as "open source;" you can redistribute it and/or modify it under the terms
+// of the GNU General Public License (GPL), version 2, as published by the Free
+// Software Foundation (FSF).  To explore alternate licensing terms, contact
+// the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+// 
+// The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+// received a copy of the GPL along with the OSKit; see the file COPYING.  If
+// not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+//
+// Example kernels
+//
+// Test: Hello_ADR
+// Test: TimeTest
+// Test: Echo
+/************************************************************/
+
+directory "${OSKITDIR}"
+
+unit Hello_ADR = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit : _Exit_T
+         ];
+  exports[ progress : Progress_T,
+           out      : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke   : InvokeMain_T,
+           reset    : Reset_T,
+         ];
+  flatten;
+  link{
+    out        =  multiboot + stack + version;
+
+    [main]     <- hello_min <- [stdout];
+    [stdout]   <- libc_stdout <- [console];  // really only needs putchar
+    [stdin]    <- libc_stdin <- [console,stdout];
+
+    [console]  <- vga_console <- [vga,kbd,stdout];
+    [vga]      <- VGA <- [critical,vm,string];
+    [kbd]      <- KBD <- [critical];
+
+    [critical] <- null_critical <- [];
+    [vm]       <- null_VM <- [];
+    [version]  <- version <- [];
+    [stack]    <- base_stack <- [];
+
+    [reset]    <- base_reset <- [vm];
+
+    [exit,atexit] <- libc_exit <- [_exit];
+
+    [multiboot]<- multiboot_main2 <- [string,vm];
+    [string]   <- libc_string <- [];
+    [invoke]   <- invoke_simplemain <- [main,ld_symbols,exit,atexit];
+    [progress] <- progress <- [stdout];
+  }
+}
+
+unit TimeTest = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit : { _exit }
+         ];
+  exports[ progress : Progress_T,
+           out    : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke : InvokeMain_T,
+           reset  : Reset_T,
+         ];
+  link{
+    out = multiboot + stack + version;
+
+    [main]     <- time_test <- [time,stdout];
+    [stdout]   <- libc_stdout <- [console];  // really only needs putchar
+    [stdin]    <- libc_stdin <- [console,stdout];
+
+    [time]       <- gettimeofday_fromrtc <- [osenv_rtc];
+    [osenv_rtc]  <- osenv_rtc <- [osenv_intr,osenv_log,rtc];
+    [osenv_intr] <- osenv_intr <- [];
+    [osenv_log]  <- osenv_log <- [stdout];
+    [rtc]        <- rtclock <- [];
+
+    [console]  <- vga_console <- [vga,kbd,stdout];
+    [vga]      <- VGA <- [critical,vm,string];
+    [kbd]      <- KBD <- [critical];
+
+    [critical] <- null_critical <- [];
+    [vm]       <- null_VM <- [];
+    [version]  <- version <- [];
+    [stack]    <- base_stack <- [];
+
+    [reset]    <- base_reset <- [vm];
+
+    [exit,atexit] <- libc_exit <- [_exit];
+
+    [multiboot]<- multiboot_main2 <- [string,vm];
+    [string]   <- libc_string <- [];
+    [invoke]   <- invoke_simplemain <- [main,ld_symbols,exit,atexit];
+    [progress] <- progress <- [stdout];
+  }
+}
+
+// a slightly more complicated example which uses command line
+// parsing (which needs memory which needs...)
+// also uses a faster reboot mechanism (the return_address hack)
+unit Echo = {
+  imports[ ld_symbols : LDSymbols_T,
+           _exit : { _exit }
+         ];
+  exports[ progress : Progress_T,
+           out    : { multiboot_main_wrapped, base_stack_end, oskit_version_string },
+           invoke : InvokeMain_T,
+           reset  : Reset_T,
+         ];
+  link{
+    out = multiboot + stack + version;
+
+    [main]     <- echo <- [stdout];
+
+    [stdout]   <- libc_stdout <- [console];  // really only needs putchar
+    [stdin]    <- libc_stdin  <- [console,stdout];
+    [string]   <- libc_string <- [];
+    [panic]    <- libc_panic  <- [exit,stdout,trace];
+    [trace]    <- stack_trace <- [stdout];
+    [exit,atexit] <- libc_exit <- [_exit];
+
+    [console]  <- vga_console <- [vga,kbd,stdout];
+    [vga]      <- VGA <- [critical,vm,string];
+    [kbd]      <- KBD <- [critical];
+
+    [critical] <- null_critical <- [];
+    [vm]       <- null_VM <- [];
+    [version]  <- version <- [];
+    [stack]    <- base_stack <- [];
+
+    [multiboot, phys_lmm, cmdline, invoke, reset]
+      <- multiboot <- [main,exit,atexit,panic,string,lmm,vm,ld_symbols,cpu,
+                  gdt,segments];
+    [lmm]      <- LMM <- [panic,stdout];
+    [mem]      <- mem_obj <- [lmm,phys_lmm,mem_lock,string,iids];
+    [mem_lock] <- null_mem_lock <- [];  // the main thread does all allocation
+    [iids]     <- oskit_IIDs <- [];
+    [cpu,gate,pic,idt,trap,tss,gdt,irq] <- x86 <- [segments,anno,panic,stdout,string,softint];
+    [segments] <- null_segments <- [];
+    [softint]  <- null_softint <- [panic,trap];
+    [anno]     <- base_anno <- [ld_symbols];
+    [progress] <- progress <- [stdout];
+  }
+}
+
+/************************************************************/
+// End
+/************************************************************/

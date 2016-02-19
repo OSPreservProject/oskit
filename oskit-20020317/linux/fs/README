@@ -1,0 +1,9 @@
+Directories: oskit/linux/fs
+Target: liboskit_linux_fs.a
+Documentation: doc/fs.tex
+Original Code Source: 
+	Flux Research Group, University of Utah
+Description:  
+	This directory contains glue code for using
+	the Linux v2.2.12 filesystems in the OSKit.
+

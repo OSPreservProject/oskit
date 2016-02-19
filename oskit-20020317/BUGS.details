@@ -1,0 +1,191 @@
+Following is the full text of open PRs in our GNATS database for the OSkit
+as of 1998/12/13, plus details of other BUGS that aren't yet in GNATS.
+
+
+Date: Fri, 23 Jan 1998 16:03:21 -0700 (MST)
+From: Kevin Van Maren <vanmaren>
+Reply-To: vanmaren
+To: bugs
+Subject: loopback interface doesn't work
+X-Send-Pr-Version: tkgnats-3.0.3
+
+>Number:         11
+>Category:       oskit
+>Synopsis:       loopback interface doesn't work
+>Confidential:   no
+>Severity:       serious
+>Priority:       medium
+>Responsible:    oskit
+>State:          open
+>Quarter:        
+>Keywords:       bsd network loopback
+>Date-Required:  
+>Class:          sw-bug
+>Submitter-Id:   flux
+>Arrival-Date:   Fri Jan 23 16:10:01 MST 1998
+>Last-Modified:  
+>Originator:     Kevin T. Van Maren
+>Organization:
+___________________________________________________________
+
+  Kevin T. Van Maren     http://www.cs.utah.edu/~vanmaren
+  University of Utah, CSL        (801)581-3045
+___________________________________________________________
+>Release:        unreleased
+>Environment:
+This was observed in Fluke, but exists in the OSKit default environment as well.
+
+>Description:
+The loopback interface is not functional.  Connecting to your own IP address causes a
+divide-by-zero fault.
+
+>How-To-Repeat:
+Use the BSD networking stack and connect a socket to your own IP address.
+
+>Fix:
+This should go away with a proper implementation of PSEUDO_SET.
+However, there is probably a problem with ip_input not getting
+called due to software interrupt issues.
+
+Simply adding a call to loopattach() in oskit_freebsd_net_init()
+prevents the divide-by-zero trap, but the packets do not appear
+to every make it to ip_input.  Not investigated further.
+
+
+>Audit-Trail:
+>Unformatted:
+
+Date: Mon, 7 Dec 1998 02:19:51 -0700 (MST)
+From: Bart Robinson <lomew>
+Reply-To: lomew
+To: bugs
+Subject: Linking with i386-mach tools doesn't completely work
+X-Send-Pr-Version: tkgnats-3.0.3
+
+>Number:         220
+>Category:       oskit
+>Synopsis:       Linking with i386-mach tools doesn't completely work
+>Confidential:   no
+>Severity:       serious
+>Priority:       low
+>Responsible:    oskit
+>State:          open
+>Quarter:        
+>Keywords:       linking a.out i386-mach
+>Date-Required:  
+>Class:          sw-bug
+>Submitter-Id:   flux
+>Arrival-Date:   Mon Dec  7 02:20:00 MST 1998
+>Last-Modified:  
+>Originator:     Bart Robinson
+>Organization:
+flux
+>Release:        
+>Environment:
+
+
+>Description:
+This is actually a problem with GNU binutils a.out linking, but put here
+so people know what is going on.
+I tested with binutils 2.8.1 and 2.9.1.
+
+The fsbmodmount example won't link with i386-mach tools since 
+in libstartup, _init_devices_net incorrectly gets resoved to the
+one from start_network.c instead of the (empty) one from start_devices.c.
+start_network.c's _init_devices_net references oskit_freebsd_net_open_ether_if,
+which isn't there since that library isn't on the linkline (and shouldn't be).
+
+Roland says (oskit@flux <199811010054.TAA05563@baalperazim.frob.com>):
+ > Ack!  No, it certainly doesn't work with the i386-mach tools, and I can't
+ > figure out a way to make it.  It works with ELF, and it works with real
+ > a.out tools (i.e. the *BSDs' pre-bfd a.out ld), it just doesn't work with
+ > the GNU binutils 2.x ld's a.out support.  Since this is about the oldest
+ > piece of unix linking magic in existence, I just assumed it would work
+ > everywhere (there are other solutions like weak symbols that are less
+ > portable, but ironically would work fine with these i386-mach tools).
+ >
+ > I'm not sure what to do.  We could of course just punt these convenience
+ > functions entirely, or build them only for ELF or some other kludge.  I
+ > could add a configure test for .weak and use it if it's there.  I think
+ > that would in fact win, but it's getting rather frobbity for this
+ > one convenience function.
+
+>How-To-Repeat:
+Try to link the fsbmodmount example (from the "extended" dir)
+with an oskit built with the i386-mach tools.
+
+>Fix:
+
+
+
+>Audit-Trail:
+>Unformatted:
+
+------------------
+Details on bugs not currently in GNATS:
+
+Several booting-related bugs have recently surfaced during testing
+because we don't use these tools much ourselves.  These used to work.
+Looks like bit rot, tool chain dependencies, and possible hardware
+glitches.
+
+----------------------------------------
+DOS boot adapter:
+
+Date: Thu, 3 Dec 1998 10:20:16 -0700 (MST)
+From: Kevin Van Maren <vanmaren>
+To: oskit@fast.cs.utah.edu
+Subject: some testing
+
+......
+
+I also tried to use dosboot (mkdosimage), so I could test it more
+easily on my Win98 PC at home.  That proved to be quite problematic,
+as a) it requires a funny cross-compiler (I tried to build and use
+i386-moss), b) configure is somewhat broken, c) the kernel is too
+big (won't fit in a 64k segment), and d) it kept having problems
+reading the image.exe file under dos.
+
+By ripping out huge chunks (like all gdb) and reducing the base_stack
+back down to 4k, I was finally able to get it working, by dumping the
+trap_state structure before and after the interrupt; I'm not sure what
+was going on there (WHY did that make it work?).
+
+...
+
+Anyway, the dos boot adapter could probably use revisiting.  I think
+it would be good to make a dosboot.exe that loaded another file as
+a multiboot image, and distribute that, rather than expect people
+to try to build all the tools required to boot kernels.
+
+----------------------------------------
+Linux boot adapter:
+
+The Linux boot adapter (mklinuximage and linuxboot.bin in boot/linux)
+has two known problems.  We have not had time to track these down any
+further.
+
+1) It doesn't work on our Pentium II 300 Intel DK440LX motherboard
+Phoenix BIOS test machines (that give us trouble with other things
+such as netboot), but does work on our PPro 200 machines, on a PII
+350 SMP ASUS motherboard machine, on a Pentium II 266, and on a
+Pentium 166 Micron laptop.
+
+GRUB 0.5 (from www.uruk.org and mirrored on our ftp site,
+flux.cs.utah.edu) exhibits a similar pattern when we tried it
+on the first two types of machines.
+
+2) It doesn't work when built with the tool chain on a current Linux
+distribution: Debian 2.1.126, tools versions:
+  gcc version 2.7.2.3
+  GNU assembler version 2.9.1 (i486-linux), using BFD version 2.9.1.0.15
+  GNU ld version 2.9.1 (with BFD 2.9.1.0.15)
+
+but does work when cross-built on a FreeBSD 3.0 system using these tools:
+  gcc version 2.7.2.2
+  GNU assembler version 2.9.1 (i486-linux), using BFD version 2.9.1
+  GNU ld version 2.9.1 (with BFD 2.9.1).
+
+Therefore we also provide a binary.
+
+----------------------------------------

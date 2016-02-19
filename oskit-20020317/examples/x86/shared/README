@@ -1,0 +1,9 @@
+
+Directories: oskit/examples/x86/shared
+Targets: Lots
+Documentation: See the headers of each .c
+Original Code Source: Flux Research Group, University of Utah
+Description:  
+	Contains files that are shared or seperate from the example
+	kernels and that are useful but don't demonstrate any
+	basic functionality not in one of the example kernels.

@@ -1,0 +1,149 @@
+#!/bin/sh
+#
+# Copyright (c) 1999 University of Utah and the Flux Group.
+# All rights reserved.
+# 
+# This file is part of the Flux OSKit.  The OSKit is free software, also known
+# as "open source;" you can redistribute it and/or modify it under the terms
+# of the GNU General Public License (GPL), version 2, as published by the Free
+# Software Foundation (FSF).  To explore alternate licensing terms, contact
+# the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
+# 
+# The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
+# received a copy of the GPL along with the OSKit; see the file COPYING.  If
+# not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
+#
+
+# This little script uses GNU ld to build a OFW/BSD 32-bit boot image
+# from a kernel and a set of boot modules.
+
+#
+# Usage: mkbsdimage [options] [files ...]
+#
+# Options:
+#   -x filename
+#      Use <filename> as the BSD adaptor file instead of the default.
+#   -o filename
+#      Specify the output <filename> of the resulting BSD/Mach image. The
+#      default is "Image" in the current directory.
+#   -c 'string'
+#      Specify a command line <string> to pass to the kernel when it is
+#      invoked.
+#   -save-temps
+#      Debugging option to save temporary files instead of deleting them
+#      after the image is built.
+#   -stdin
+#      Take file specifications from stdin, in addition to those on the
+#      command line. This is useful when using another script to build
+#      a list of file specifications which can then be piped into this
+#      script.
+#   [files ...]
+#      A list of file specifications in the format pathname1:pathname2,
+#      where pathname1 is the name of a local module which is placed in the
+#      boot image. If :pathname2 is provided, it specifies the name to give
+#      the module in the image. If :pathname2 is omitted, it defaults to
+#      pathname1.
+#
+#   The first file specification is typically the name of the Oskit kernel.
+#
+
+bootdir=${BOOTDIR-@prefix@/lib/boot}
+bb=$bootdir/ofwboot.o
+cc=${CC-@CC@}
+aoutld=${AOUT_LD-@AOUT_LD@}
+
+modules=
+outfile=Image
+savetemps=
+ldopts="-Ttext 0xF0000020 -X -T $bootdir/ldscript.elf2bsd"
+cmdlinefile="bootadapter_cmdline"
+
+
+if [ $# -eq 0 ]; then
+    echo "Usage: `basename $0` [option | filename]" 1>&2
+    exit
+fi
+
+# Parse the command-line options.
+until [ $# -eq 0 ]
+do
+	case "$1" in
+		-x ) bb="$2"; shift; shift;;
+		-o ) outfile="$2"; shift; shift;;
+		-c ) cmdline="$2"; shift; shift;;
+		-stdin) fromstdin="yes"; shift;;
+		-save-temps) savetemps="$1"; shift;;
+		* ) modules="$modules $1"; shift;;
+	esac
+done
+
+#
+# Read the rest of the modules from stdin.
+#
+if [ "X${fromstdin}" != "X" ]; then
+	read mod
+	while [ "X${mod}" != "X" ];
+	do
+		modules="$modules $mod"
+		read mod
+	done
+fi
+
+# Stick the command line bootmod into the image file.
+if [ "X${cmdline}" != "X" ]; then
+	echo ${cmdline} > ${outfile}.bsdcmdline
+	modules="$modules ${outfile}.bsdcmdline:${cmdlinefile}"
+fi
+
+
+# Wrap each of the input files in a .o file.
+# At the same time, build an assembly language module
+# containing a table describing the boot modules.
+echo >$outfile.mods.S ".data; .globl boot_modules,_boot_modules; boot_modules:; _boot_modules:"
+files=
+for module in $modules; do
+	# Split out the associated string, if any.
+	file=`echo $module | sed -e 's,:.*$,,'`
+	string=`echo $module | sed -e 's,^[^:]*:,,'`
+	if test -z "$string"; then string=$file; fi
+
+	# Add this file to the list of files to be included,
+	# but only if it hasn't already been seen before
+	# (e.g., with a different attached string).
+	alreadythere=
+	for afile in $files; do
+		if [ $file = $afile ]; then alreadythere=yes; fi
+	done
+	if [ -z $alreadythere ]; then files="$files $file"; fi
+
+	# Convert all non-alphanum chars to underscores for the symbol name.
+	# The BFD binary input format will do the same thing
+	# to produce the symbol names that it "wraps around" the input files.
+	sym_name=`echo $file | sed -e 's,[^a-zA-Z0-9],_,g'`
+
+	# Produce an entry in the module description file.
+	echo >>$outfile.mods.S ".long _binary_$sym_name""_start"
+	echo >>$outfile.mods.S ".long _binary_$sym_name""_end"
+	echo >>$outfile.mods.S ".long 1f"
+	echo >>$outfile.mods.S ".data 2"
+	echo >>$outfile.mods.S "1: .ascii \"$string\\0\""
+	echo >>$outfile.mods.S ".data"
+done
+echo >>$outfile.mods.S ".long 0; .data; .align 4"
+
+# Assemble the module vector file.
+$cc -c -o $outfile.mods.o $outfile.mods.S || exit 1
+
+# Link the OFW boot file and the module vector file with the boot module files.
+# Use the binary bfd backend for the input bmod files.
+$aoutld $ldopts -o $outfile $bb $outfile.mods.o \
+	-format binary $files -format default \
+	|| exit 1
+
+if test -z "$savetemps"; then
+	rm -f $outfile.mods.S $outfile.mods.o ${outfile}.bsdcmdline
+fi
+
+exit 0

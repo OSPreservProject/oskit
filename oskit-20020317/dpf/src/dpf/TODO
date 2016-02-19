@@ -1,0 +1,34 @@
+sort by number of atoms (longest match of a form).
+
+must find offset upto next shift and check against it.
+	- actually, do we need to keep a list?
+
+NEED TO DO:
+	+ use different hash functions.
+	+ chop vcode down so the fucking linker doesn't pull in the
+		world.
+	+ biggest code gen optimization: provide a gp register so we
+		don't have to load pointer immediates.
+	+ schedule across atoms.
+	+ Fix vcode so the 16 bit-offset problem, isn't.
+
+Done:
+
+	+ Fix vcode so that returns don't rely on 16 bit offsets.
+ 	+ rehash when collisions
+	+ optimize for no collisions
+	+ optimize for all terminals
+	+ Implement incremental compilation.
+	+ don't regenerate code if no modification happens.
+		need to expand to all cases where we don't need to
+		regenerate all code (incremenally link in additions).
+
+	+ special case no collisions in ht
+
+	+ special case all terms in ht
+
+on the alpha at least, linking is taking 50% of the time.  should 
+look into eliminating the need for so many labels.  (Could have
+destructive links... or push pop style links i suppose canonicallized
+for ors, etc).
+
