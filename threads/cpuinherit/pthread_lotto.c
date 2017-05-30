@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 1996, 1998, 1999 University of Utah and the Flux Group.
  * All rights reserved.
- * 
+ *
  * This file is part of the Flux OSKit.  The OSKit is free software, also known
  * as "open source;" you can redistribute it and/or modify it under the terms
  * of the GNU General Public License (GPL), version 2, as published by the Free
  * Software Foundation (FSF).  To explore alternate licensing terms, contact
  * the University of Utah at csl-dist@cs.utah.edu or +1-801-585-3271.
- * 
+ *
  * The OSKit is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GPL for more details.  You should have
@@ -68,7 +68,7 @@ lotto_rand(lottosched_t *psched)
 	psched->rstate[0] += (psched->rstate[1] << 13) |
 		             (psched->rstate[1] >> 19);
 	psched->rstate[1] += psched->rstate[0];
-		
+
 	return psched->lastrand = (psched->rstate[0] % psched->tickets);
 }
 
@@ -129,14 +129,14 @@ create_lotto_scheduler(pthread_t *tid,
 
 	if (tidhash_create(&psched->hashtable, 0))
 		panic("allocate_lotto_scheduler: Hash Table allocation");
-		
+
 	psched->preemptible = preemptible;
 	queue_init(&psched->runq);
 
 	pthread_create(tid, attr, lotto_schedloop, (void *) psched);
 
 	/*
-	 * The scheduler has to run. 
+	 * The scheduler has to run.
 	 */
 	while (! psched->ready)
 		oskit_pthread_sleep(1);
@@ -166,7 +166,7 @@ lotto_thread_init(lottosched_t *psched, pthread_t tid, int tickets)
 	lotto_setstate(psched, tid, pstate);
 
 	return pstate;
-}	
+}
 
 /*
  * Are there any threads on the runq?
@@ -178,7 +178,7 @@ runq_empty(lottosched_t *psched)
 }
 
 /*
- * Determine if a pthread is on the runq. Use a separate field 
+ * Determine if a pthread is on the runq. Use a separate field
  * since using the flags would require locking the thread. Use the
  * queue chain pointer instead, setting it to zero when a thread is
  * removed from the queue.
@@ -206,7 +206,7 @@ runq_insert(lottosched_t *psched, lotto_state_t *pstate)
 		queue_enter(phdr, pstate, lotto_state_t *, runq);
 		goto done;
 	}
-	
+
 	queue_iterate(&(psched->runq), ptmp, lotto_state_t *, runq) {
 		if (pstate->tickets >= ptmp->tickets) {
 			queue_enter_before(phdr, ptmp,
@@ -242,9 +242,9 @@ runq_dequeue(lottosched_t *psched)
 		if (count > winning_ticket)
 			break;
 	}
-	
+
 	queue_remove(phdr, pnext, lotto_state_t *, runq);
-	pnext->runq.next = (queue_entry_t) 0;	
+	pnext->runq.next = (queue_entry_t) 0;
 	psched->runq_count--;
 	psched->tickets -= pnext->tickets;
 
@@ -260,7 +260,7 @@ runq_remove(lottosched_t *psched, lotto_state_t *pstate)
 	queue_head_t	*phdr = &(psched->runq);
 
 	queue_remove(phdr, pstate, lotto_state_t *, runq);
-	pstate->runq.next = (queue_entry_t) 0;	
+	pstate->runq.next = (queue_entry_t) 0;
 	psched->runq_count--;
 	psched->tickets -= pstate->tickets;
 }
@@ -273,7 +273,7 @@ runq_check(lottosched_t *psched)
 {
 	int		count, tickets;
 	lotto_state_t	*pstate;
-	
+
 	tickets = count = 0;
 	queue_iterate(&(psched->runq), pstate, lotto_state_t *, runq) {
 		count++;
@@ -297,7 +297,7 @@ lotto_debug(lottosched_t *psched)
 
 	printf("lotto(%d): Tickets %d Last: %d\n",
 	       (int) pthread_self(), psched->tickets, psched->lastrand);
-	
+
 	queue_iterate(&(psched->runq), pstate, lotto_state_t *, runq) {
 		printf("0x%x(%d) T %d\n",
 		       (int) pstate, (int) pstate->tid, pstate->tickets);
@@ -351,7 +351,7 @@ lotto_schedloop(void *arg)
 		CPUDEBUG(LOTTO,
 			 "lotto_schedloop(%d): qcount(%d)\n",
 			 psched->tid, psched->runq_count);
-		
+
 		/*
 		 * Consume any pending messages until there are no more.
 		 */
@@ -360,7 +360,7 @@ lotto_schedloop(void *arg)
 
 		if (CPUDEBUG_ISSET(LOTTO))
 			lotto_debug(psched);
-		
+
 		/*
 		 * Find a thread to run.
 		 */
@@ -379,14 +379,14 @@ lotto_schedloop(void *arg)
 				 "lotto_schedloop(%d): pstate 0x%x(%d)\n",
 				 psched->tid, (int) current_thread,
 				 current_thread->tid);
-			
+
 			if (pedantic || !runq_empty(psched))
 				wakeup_cond = WAKEUP_ON_BLOCK;
 			else
 				wakeup_cond = WAKEUP_ON_SWITCH;
 
 			/*
-			 * Donate and check the return condition. 
+			 * Donate and check the return condition.
 			 */
 			rc =
 			 pthread_sched_donate_wait_recv(current_thread->tid,
@@ -404,11 +404,11 @@ lotto_schedloop(void *arg)
 				 * Forget about this thread.
 				 */
 				break;
-				
+
 			case SCHEDULE_BLOCKED:
 				/* Thread blocked, so forget about it. */
 				break;
-				
+
 			case SCHEDULE_PREEMPTED:
 			case SCHEDULE_YIELDED:
 			case SCHEDULE_TIMEDOUT:
@@ -435,7 +435,7 @@ lotto_schedloop(void *arg)
 			 */
 			CPUDEBUG(LOTTO,
 				 "lotto_schedloop(%d): Recv\n", psched->tid);
-			
+
 			rc = pthread_sched_message_recv(&msg, -1);
 
 			if (rc == OSKIT_ECANCELED)
@@ -477,7 +477,7 @@ lotto_schedloop(void *arg)
 			/* and add it to the runq */
 			runq_insert(psched, pstate);
 			break;
-			
+
 		case MSG_SCHED_UNBLOCK:
 			/*
 			 * A thread wants to be rescheduled.
@@ -485,7 +485,7 @@ lotto_schedloop(void *arg)
 			if (! runq_onrunq(psched, pstate))
 				runq_insert(psched, pstate);
 			break;
-			
+
 		case MSG_SCHED_SETSTATE:
 			/*
 			 * Thread parameters have been changed. The opaque
@@ -503,17 +503,17 @@ lotto_schedloop(void *arg)
 
 		case MSG_SCHED_EXITED:
 			/*
-			 * The thread has exited. 
+			 * The thread has exited.
 			 */
 			CPUDEBUG(LOTTO,
-				 "lotto_schedloop(%d): "
+				 "lotto_schedloop(%d):"
 				 "Exit: Thread 0x%x(%d)\n",
 				 pthread_self(), (int) pstate, pstate->tid);
 
 			lotto_remstate(psched, pstate->tid);
 			free(pstate);
 			break;
-		
+
 		default:
 			panic("lotto_schedloop: Bad message: %d 0x%x\n",
 			      msg.type, pstate);
