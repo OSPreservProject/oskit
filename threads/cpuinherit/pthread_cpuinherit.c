@@ -135,7 +135,7 @@ pthread_init_scheduler(void)
 /*
  * A thread is being resumed. Send a message to the threads scheduler.
  */
-int 
+int
 pthread_sched_setrunnable(pthread_thread_t *pthread)
 {
 	pthread_sched_wakeup(pthread, 0);
@@ -167,8 +167,8 @@ pthread_sched_change_state(pthread_thread_t *pthread, int newprio, int policy)
 	 * Send it an IPC. This thread will block if the target scheduler
 	 * is not waiting for a message.
 	 */
-	pthread_sched_message_send(pthread->scheduler, &msg);	
-	
+	pthread_sched_message_send(pthread->scheduler, &msg);
+
 	/*
 	 * Return indicator for yield.
 	 */
@@ -178,7 +178,7 @@ pthread_sched_change_state(pthread_thread_t *pthread, int newprio, int policy)
 /*
  * Helper function for creating schedulers. Force a switch into a specific
  * thread. Nothing special about it, except that target thread must remain
- * locked across the switch. 
+ * locked across the switch.
  */
 void
 pthread_sched_switchto(pthread_thread_t *pthread)
@@ -188,7 +188,7 @@ pthread_sched_switchto(pthread_thread_t *pthread)
 
 	save_preemption_enable(preemptable);
 	enabled = save_disable_interrupts();
-	
+
 	/* Don't worry about the lock */
 	thread_switch(pthread, &cur->schedlock, CURPTHREAD());
 
@@ -212,7 +212,7 @@ pthread_sched_dispatch(resched_flags_t reason)
 	int			enabled, preemptable;
 #ifdef  MEASURE
 	unsigned long		before, after;
-#endif	
+#endif
 	save_preemption_enable(preemptable);
 	enabled = save_disable_interrupts();
 
@@ -293,7 +293,7 @@ pthread_sched_dispatch(resched_flags_t reason)
 		inheritor = donator;
 		donator   = donator->inherits_from;
 	}
-	
+
 	if (donator == NULL_THREADPTR) {
 		/*
 		 * Nothing to run, not even the root scheduler has anything
@@ -315,7 +315,7 @@ pthread_sched_dispatch(resched_flags_t reason)
 		 */
 		donator->inherits_from = NULL_THREADPTR;
 		donator->nextup        = NULL_THREADPTR;
-		
+
 		goto dispatch;
 	}
 
@@ -372,15 +372,15 @@ dispatch:
 	assert(pthread->inherits_from ||
 	       ((pthread == pthread_root_scheduler) ||
 		(pthread == IDLETHREAD)));
-	
+
 	/*
-	 * Thread has switched back in. 
+	 * Thread has switched back in.
 	 *
 	 * Time to look for exceptions before letting it return to
 	 * whatever it was doing before it yielded.
 	 */
 	pthread->schedflags = SCHED_RUNNING;
-	
+
 	if (pthread->sleeprec) {
 		/*
 		 * Thread is returning to an osenv_sleep. The thread must
@@ -411,7 +411,7 @@ dispatch:
 		else
 			goto done;
 	}
-	
+
 	/*
 	 * Look for signals. Deliver them in the context of the thread.
 	 */
@@ -440,7 +440,7 @@ pthread_sched_reschedule(resched_flags_t reason, pthread_lock_t *plock)
 	 */
 	if (plock)
 		pthread_unlock(plock);
-	
+
 	rc = pthread_sched_dispatch(reason);
 
 	restore_interrupt_enable(enabled);
@@ -471,7 +471,7 @@ pthread_sched_handoff(int waitstate, pthread_thread_t *pnext)
 
 	pthread_sched_wakeup(pnext, 0);
 	pthread->waitflags |= waitstate;
-	
+
 #ifdef  MEASURE
 	stats.handoff_attempts++;
 #endif
@@ -526,7 +526,7 @@ pthread_sched_wakeup(pthread_thread_t *pthread, int level)
 				 (int) pthread, pthread->tid,
 				 (int) pthread->donating_to,
 				 (int) pthread->scheduler);
-			
+
 			pthread->donate_rc   = SCHEDULE_PREEMPTED;
 			pthread->donating_to = NULL_THREADPTR;
 			pthread->wakeup_cond = WAKEUP_ALWAYS;
@@ -539,20 +539,20 @@ pthread_sched_wakeup(pthread_thread_t *pthread, int level)
 	 */
 	if (pthread->schedflags == SCHED_DONATING) {
 		pthread->schedflags = SCHED_READY;
-		
+
 		/*
 		 * Follow the chain down, setting each one along the way
-		 * to the ready state instead of donating. 
+		 * to the ready state instead of donating.
 		 */
 		inheritor = pthread->donating_to;
-		
+
 		while (inheritor->donating_to) {
 			inheritor->schedflags = SCHED_READY;
 
 			ptmp      = inheritor;
 			inheritor = inheritor->donating_to;
 		}
-		
+
 		/*
 		 * Go to the end of the chain. Severe the chain at the
 		 * thread being woken up. Point the last thread in the
@@ -585,7 +585,7 @@ pthread_sched_wakeup(pthread_thread_t *pthread, int level)
 
 		CPUDEBUG(CORE3,
 			 "PSW1: 0x%x(%d)\n", (int) inheritor, inheritor->tid);
-			
+
 		goto done;
 	}
 
@@ -611,15 +611,15 @@ pthread_sched_wakeup(pthread_thread_t *pthread, int level)
 		/* cpuprintf("PSW3: 0x%x 0x%x 0x%x\n",
 		       (int) pthread, (int) pscheduler,
 		       (int) pthread->inherits_from); */
-		
+
 		pthread->schedflags = SCHED_READY;
 		inheritor = pthread->inherits_from;
-		
+
 		pthread_sched_wakeup(inheritor, level + 1);
 	}
 	else if (pscheduler) {
 		pthread->schedflags = SCHED_READY;
-		
+
 		/*
 		 * If the thread waking up is different than the thread
 		 * the scheduler is currently donating to, this implies
@@ -646,7 +646,7 @@ pthread_sched_wakeup(pthread_thread_t *pthread, int level)
 		if (pscheduler->wakeup_cond == WAKEUP_ALWAYS ||
 		    pscheduler->wakeup_cond == WAKEUP_ON_BLOCK) {
 			schedmsg_t	msg;
-			
+
 			CPUDEBUG(CORE2,
 				 "PSW5: 0x%x(%d) 0x%x(%d)\n",
 				 (int) pscheduler, pscheduler->tid,
@@ -751,13 +751,13 @@ pthread_sched_thread_donate(pthread_thread_t *pchild,
 	 */
 	pchild->inherits_from = pthread;
 	pchild->nextup        = NULL_THREADPTR;
-	
+
 	/*
 	 * BUT, if the thread being switched into is part of an old active
 	 * chain, need to decend the chain setting each thread to DONATED.
 	 * Set the back pointer too since it might no longer be valid if
 	 * another thread donated to the chain at some point.
-	 * 
+	 *
 	 * STOP when we hit a thread with WAKEUP_ALWAYS set, or at the end.
 	 * This is the thread that actually gets run. Lock that thread.
 	 */
@@ -765,13 +765,13 @@ pthread_sched_thread_donate(pthread_thread_t *pchild,
 	if (pnext->donating_to) {
 		while (pnext->donating_to) {
 			pthread_thread_t	*ptmp;
-			
+
 			if (pnext->schedflags != SCHED_READY)
 				panic("pthread_sched_donate SCHED_READY");
 
 			if (pnext->wakeup_cond == WAKEUP_ALWAYS)
 				break;
-		
+
 			pnext->schedflags = SCHED_DONATING;
 
 			/*
@@ -781,7 +781,7 @@ pthread_sched_thread_donate(pthread_thread_t *pchild,
 			ptmp = pnext->donating_to;
 			ptmp->inherits_from = pnext;
 			ptmp->nextup        = NULL_THREADPTR;
-			
+
 			CPUDEBUG(CORE3,
 				 "PSD3: "
 				 "Followed chain from 0x%x(%d) to 0x%x(%d)\n",
@@ -816,7 +816,7 @@ pthread_sched_thread_donate(pthread_thread_t *pchild,
 	SETCURPTHREAD(pthread);
 
 	/*
-	 * Back from donation. 
+	 * Back from donation.
 	 *
 	 * Undo the donating link. Leave the back link alone since another
 	 * thread could have donated to the child if the chain was preempted.
@@ -846,7 +846,7 @@ pthread_sched_thread_wait(pthread_thread_t *waiting_on,
 	int			enabled;
 
 	enabled = save_disable_interrupts();
-	
+
 	if (queue)
 		queue_enter(queue, pthread, pthread_thread_t *, chain);
 
@@ -856,7 +856,7 @@ pthread_sched_thread_wait(pthread_thread_t *waiting_on,
 	 */
 	if (plock)
 		pthread_unlock(plock);
-	
+
 /*	cpuprintf("pthread_sched_thread_wait: h:0x%x(%d) p:0x%x(%d)\n",
 		  (int) waiting_on, waiting_on->tid,
 		  (int) pthread, pthread->tid); */
@@ -888,12 +888,12 @@ pthread_sched_clocktick(void)
 	/*
 	 * Look for preemption along the active chain. These are threads
 	 * that donated with a timeout value. Decrement the timeout and
-	 * schedule any threads that expire. 
+	 * schedule any threads that expire.
 	 */
 	while (pthread) {
 		if (pthread->timeout) {
 			pthread->timeout -= PTHREAD_TICK;
-			
+
 			if (pthread->timeout <= 0) {
 			CPUDEBUG(CORE3,
 				 "PRE: 0x%x(%d) 0x%x 0x%x\n",
@@ -901,7 +901,7 @@ pthread_sched_clocktick(void)
 				 (int) pthread->donating_to,
 				 (int) pthread->scheduler);
 
-				
+
 				pthread->timeout     = 0;
 				pthread->wakeup_cond = WAKEUP_ALWAYS;
 				pthread_sched_wakeup(pthread, 0);
@@ -955,7 +955,7 @@ pthread_sched_setstate(pthread_t tid, int opaque)
 	 * Send it an IPC. This thread will block if the target scheduler
 	 * is not waiting for a message.
 	 */
-	pthread_sched_message_send(pthread->scheduler, &msg);	
+	pthread_sched_message_send(pthread->scheduler, &msg);
 
 	return 0;
 }
@@ -972,7 +972,7 @@ pthread_sched_donate_wait_recv(pthread_t tid,
 	pthread_thread_t	*pthread = CURPTHREAD();
 	pthread_thread_t	*ptarget;
 	int			rc;
-	
+
 	if ((ptarget = tidtothread(tid)) == NULL_THREADPTR)
 		panic("pthread_sched_donate: Bad TID: %d\n", tid);
 
@@ -982,7 +982,7 @@ pthread_sched_donate_wait_recv(pthread_t tid,
 
 	/*
 	 * Setup the scheduler to be woken up from its donation if
-	 * a message is sent to it. The thread is made to look like it 
+	 * a message is sent to it. The thread is made to look like it
 	 * is in a message wait.
 	 */
 	if (pthread_sched_recv_wait(pthread, msg)) {
@@ -995,7 +995,7 @@ pthread_sched_donate_wait_recv(pthread_t tid,
 	}
 
 	/*
-	 * Donate. 
+	 * Donate.
 	 */
 	rc = pthread_sched_thread_donate(ptarget, wakeup_cond, timeout);
 
