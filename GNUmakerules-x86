@@ -29,7 +29,7 @@ OBJFILES += $(patsubst %.S,%.o,$(notdir $(SFILES)))
 
 %.o: %.S 
 	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
-	$(CC) -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
+	$(CC) -arch i386 -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
 
 %.po: %.S 
 	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
