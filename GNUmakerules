@@ -75,7 +75,7 @@ LIBDIRS += $(OBJDIR)/lib
 #	-I flags after -I- are searched for all include files.
 OSKIT_CPPFLAGS	+= -MD $(DEFINES) -I. $(addprefix -I,$(SRCDIRS)) \
 		    $(addprefix -I,$(MOSTLY_SRCDIRS)) \
-		    -I- $(addprefix -I,$(INCDIRS)) -nostdinc
+		    -iquote $(addprefix -I,$(INCDIRS)) -nostdinc
 OSKIT_CFLAGS	+= $(OSKIT_CPPFLAGS) -Wall $(OSKIT_FFLAGS)
 OSKIT_LDFLAGS	+= $(addprefix -L,$(LIBDIRS))
 

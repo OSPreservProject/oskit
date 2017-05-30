@@ -14,7 +14,6 @@
 # received a copy of the GPL along with the OSKit; see the file COPYING.  If
 # not, write to the FSF, 59 Temple Place #330, Boston, MA 02111-1307, USA.
 #
-
 AC_INIT(oskit/config.h.in)
 AC_PREREQ(2.12)
 
@@ -28,7 +27,7 @@ oskit_options=""
 
 # Find the build, host, and target machines,
 # and derive the program prefix and suffix.
-AC_CANONICAL_SYSTEM
+#AC_CANONICAL_TARGET
 test "$program_prefix" = "NONE" && program_prefix=
 AC_SUBST(program_prefix)
 test "$program_suffix" = "NONE" && program_suffix=
@@ -36,8 +35,10 @@ AC_SUBST(program_suffix)
 
 # Determine the general architecture from the CPU types;
 # this determines which architecture-specific subdirectories are used.
+host_cpu=x86_64
+echo HOST CPU $host_cpu
 case $host_cpu in
-[	i[3-6]86*)	host_arch=x86 ; host_impl=pc ;; ]
+[	i[3-6]86*|x86*)	host_arch=x86 ; host_impl=pc ;; ]
 	hppa*)		host_arch=hppa ; host_impl=ws ;;
 	arm*)		host_arch=arm32 ; host_impl=shark ;;
 	*)
