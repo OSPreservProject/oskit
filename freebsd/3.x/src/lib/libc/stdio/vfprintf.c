@@ -73,7 +73,7 @@ static int	__sbprintf __P((FILE *, const char *, va_list));
 static char *	__ultoa __P((u_long, char *, int, int, char *));
 static char *	__uqtoa __P((u_quad_t, char *, int, int, char *));
 static void	__find_arguments __P((const char *, va_list, void ***));
-static void	__grow_type_table __P((int, unsigned char **, int *));
+/*static*/ void	__grow_type_table __P((int, unsigned char **, int *));
 
 /*
  * Flush out all the vectors defined by the given uio,
@@ -264,8 +264,8 @@ __uqtoa(val, endp, base, octzero, xdigs)
 #define	BUF		(MAXEXP+MAXFRACT+1)	/* + decimal point */
 #define	DEFPREC		6
 
-static char *cvt __P((double, int, int, char *, int *, int, int *));
-static int exponent __P((char *, int, int));
+char *cvt __P((double, int, int, char *, int *, int, int *));
+int exponent __P((char *, int, int));
 
 #else /* no FLOATING_POINT */
 
@@ -1113,55 +1113,60 @@ done:
 	for (n = 1; n <= tablemax; n++) {
 		switch (typetable [n]) {
 		    case T_UNUSED:
-			(*argtable) [n] = (void *) &va_arg (ap, int);
+			(*argtable) [n] = (void *) va_arg (ap, int);
 			break;
 		    case T_SHORT:
-			(*argtable) [n] = (void *) &va_arg (ap, int);
+			(*argtable) [n] = (void *) va_arg (ap, int);
 			break;
 		    case T_U_SHORT:
-			(*argtable) [n] = (void *) &va_arg (ap, int);
+			(*argtable) [n] = (void *) va_arg (ap, int);
 			break;
 		    case TP_SHORT:
-			(*argtable) [n] = (void *) &va_arg (ap, short *);
+			(*argtable) [n] = (void *) va_arg (ap, short *);
 			break;
 		    case T_INT:
-			(*argtable) [n] = (void *) &va_arg (ap, int);
+			(*argtable) [n] = (void *) va_arg (ap, int);
 			break;
 		    case T_U_INT:
-			(*argtable) [n] = (void *) &va_arg (ap, unsigned int);
+			(*argtable) [n] = (void *) va_arg (ap, unsigned int);
 			break;
 		    case TP_INT:
-			(*argtable) [n] = (void *) &va_arg (ap, int *);
+			(*argtable) [n] = (void *) va_arg (ap, int *);
 			break;
 		    case T_LONG:
-			(*argtable) [n] = (void *) &va_arg (ap, long);
+			(*argtable) [n] = (void *) va_arg (ap, long);
 			break;
 		    case T_U_LONG:
-			(*argtable) [n] = (void *) &va_arg (ap, unsigned long);
+			(*argtable) [n] = (void *) va_arg (ap, unsigned long);
 			break;
 		    case TP_LONG:
-			(*argtable) [n] = (void *) &va_arg (ap, long *);
+			(*argtable) [n] = (void *) va_arg (ap, long *);
 			break;
 		    case T_QUAD:
-			(*argtable) [n] = (void *) &va_arg (ap, quad_t);
+			(*argtable) [n] = (void *) va_arg (ap, quad_t);
 			break;
 		    case T_U_QUAD:
-			(*argtable) [n] = (void *) &va_arg (ap, u_quad_t);
+			(*argtable) [n] = (void *) va_arg (ap, u_quad_t);
 			break;
 		    case TP_QUAD:
-			(*argtable) [n] = (void *) &va_arg (ap, quad_t *);
+			(*argtable) [n] = (void *) va_arg (ap, quad_t *);
 			break;
-		    case T_DOUBLE:
-			(*argtable) [n] = (void *) &va_arg (ap, double);
+		    case T_DOUBLE:{
+			double *tmp;
+			*tmp = va_arg(ap, double);
+			(*argtable) [n] = (void *) tmp;
 			break;
-		    case T_LONG_DOUBLE:
-			(*argtable) [n] = (void *) &va_arg (ap, long double);
+                    }
+		    case T_LONG_DOUBLE:{
+			long double *tmp;
+			*tmp = va_arg (ap, long double);
+			(*argtable) [n] = (void *)tmp;
 			break;
 		    case TP_CHAR:
-			(*argtable) [n] = (void *) &va_arg (ap, char *);
+			(*argtable) [n] = (void *) va_arg (ap, char *);
 			break;
 		    case TP_VOID:
-			(*argtable) [n] = (void *) &va_arg (ap, void *);
+			(*argtable) [n] =  va_arg (ap, void *);
 			break;
 		}
 	}
@@ -1173,7 +1178,8 @@ done:
 /*
  * Increase the size of the type table.
  */
-static void
+//static 
+void
 __grow_type_table (nextarg, typetable, tablesize)
 	int nextarg;
 	unsigned char **typetable;
@@ -1201,7 +1207,7 @@ __grow_type_table (nextarg, typetable, tablesize)
 
 extern char *__dtoa __P((double, int, int, int *, int *, char **));
 
-static char *
+char *
 cvt(value, ndigits, flags, sign, decpt, ch, length)
 	double value;
 	int ndigits, flags, *decpt, ch, *length;
@@ -1245,7 +1251,7 @@ cvt(value, ndigits, flags, sign, decpt, ch, length)
 	return (digits);
 }
 
-static int
+int
 exponent(p0, exp, fmtch)
 	char *p0;
 	int exp, fmtch;
