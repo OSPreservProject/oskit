@@ -46,7 +46,7 @@ oskit_freebsd_net_open_ether_if(oskit_etherdev_t *dev,
         eif->recv_nio = oskit_netio_create(bsdnet_net_receive, eif);
         if (eif->recv_nio == NULL) {
                 osenv_log(OSENV_LOG_ERR, 
-			"oskit_netio_create failed in "__FUNCTION__);
+			"oskit_netio_create failed in %s", __FUNCTION__);
 		return OSKIT_ENOMEM;
 	}
 
@@ -108,7 +108,7 @@ oskit_freebsd_net_prepare_ether_if(oskit_freebsd_net_ether_if_t **out_eif)
 	eif->recv_nio = oskit_netio_create(bsdnet_net_receive, eif);
         if (eif->recv_nio == NULL) {
                 osenv_log(OSENV_LOG_ERR, 
-			"oskit_netio_create failed in "__FUNCTION__);
+			"oskit_netio_create failed in %s", __FUNCTION__);
 		return OSKIT_ENOMEM;
 	}
 	*out_eif = eif;

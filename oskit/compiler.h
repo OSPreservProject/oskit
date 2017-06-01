@@ -57,11 +57,12 @@
 #else
 #define OSKIT_NORETURN
 #endif
-
+/*
 #ifdef HAVE_STDCALL
 #define OSKIT_STDCALL	__attribute__((__stdcall__))
 #else
+*/
 #define OSKIT_STDCALL
-#endif
+//#endif
 
 #endif /* _OSKIT_COMPILER_H_ */

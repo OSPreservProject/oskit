@@ -63,7 +63,7 @@ pthread_init_scheduler(void)
 		}
 	}
 	if (!okay)
-		panic(__FUNCTION__ ": No schedulers linked in!");
+		panic("%s: No schedulers linked in!", __FUNCTION__);
 #ifdef	SCHED_STATS
 	atexit(dump_scheduler_stats);
 #endif
@@ -416,7 +416,7 @@ pthread_sched_init_schedstate(pthread_thread_t *pthread,
 	}
 
 	if (!pthread->scheduler)
-		panic(__FUNCTION__ ": Invalid schedule policy!");
+		panic("%s: Invalid schedule policy!", __FUNCTION__);
 
 	pthread->policy = policy;
 	pthread->scheduler->init_schedstate(pthread, param);
@@ -497,7 +497,7 @@ pthread_sched_change_state(pthread_thread_t *pthread,
 		}
 
 		if (!pthread->scheduler)
-			panic(__FUNCTION__ ": Invalid schedule policy!");
+			panic("%s: Invalid schedule policy!", __FUNCTION__);
 
 		pthread->policy = policy;
 

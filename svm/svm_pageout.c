@@ -106,7 +106,7 @@ svm_pageout(void)
 			lastptr = 0;
 	}
    done:
-	
+	;	
 #ifdef  DEBUG_SVM_PAGEOUT
 	printf("svm_pageout: "
 	       "Paged out %d pages. Avail memory is %d bytes\n",

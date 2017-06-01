@@ -83,8 +83,8 @@ static int oskit_uvm_sleep(int *sync)
 {
 	int s;
 
-	XPRINTF(OSKIT_DEBUG_SYNC, __FUNCTION__": thread %d sleep on %p\n",
-		(int)pthread_self(), sync);
+	XPRINTF(OSKIT_DEBUG_SYNC,"%s: thread %d sleep on %p\n",
+		__FUNCTION__, (int)pthread_self(), sync);
 	curproc->p_pid = 0;
 	s = reset_spl();
 	*sync = 0;
@@ -98,7 +98,7 @@ static int oskit_uvm_sleep(int *sync)
 
 static void oskit_uvm_wakeup(int *sync)
 {
-    	XPRINTF(OSKIT_DEBUG_SYNC, __FUNCTION__": wakeup %p\n", sync);
+    	XPRINTF(OSKIT_DEBUG_SYNC, "%s: wakeup %p\n", __FUNCTION__, sync);
 	*sync = 1;
 	pthread_cond_broadcast(&uvm_cond);
 }

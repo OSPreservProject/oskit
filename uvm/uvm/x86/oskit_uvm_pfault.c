@@ -162,9 +162,9 @@ oskit_uvm_pfault_handler(struct trap_state *frame)
 			goto out;
 		}
 
-		XPRINTF(OSKIT_DEBUG_FAULT, __FUNCTION__
-			": uvm_fault failed (%d) accessing va 0x%lx from %s "
-			"mode, thread %d\n", rv, (unsigned long)va,
+		XPRINTF(OSKIT_DEBUG_FAULT,
+ 			"%s: uvm_fault failed (%d) accessing va 0x%lx from %s "
+			"mode, thread %d\n", __FUNCTION__, rv, (unsigned long)va,
 			(type == T_PAGE_FAULT ? "kernel" : "user"),
 			(int)pthread_self());
 
@@ -189,7 +189,7 @@ oskit_uvm_pfault_handler(struct trap_state *frame)
 	}
     default:
     we_re_toast:
-    	panic(__FUNCTION__"\n");
+    	panic("%s\n",__FUNCTION__);
     }
  out:
     return 0;

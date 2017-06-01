@@ -39,6 +39,7 @@ static char sccsid[] = "@(#)ns_ntoa.c	8.1 (Berkeley) 6/4/93";
 #include <netns/ns.h>
 #include <stdio.h>
 
+static char *spectHex();
 char *
 ns_ntoa(addr)
 	struct ns_addr addr;
@@ -50,7 +51,6 @@ ns_ntoa(addr)
 	char *cp2;
 	register u_char *up = addr.x_host.c_host;
 	u_char *uplim = up + 6;
-	static char *spectHex();
 
 	net.net_e = addr.x_net;
 	sprintf(obuf, "%lx", (u_long)ntohl(net.long_e));

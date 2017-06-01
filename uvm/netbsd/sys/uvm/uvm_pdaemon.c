@@ -120,7 +120,7 @@ uvm_wait(wmsg)
 	int timo = 0;
 	int s = splbio();
 
-	XPRINTF(OSKIT_DEBUG_SYNC, __FUNCTION__": wmsg = %s\n", wmsg);
+	XPRINTF(OSKIT_DEBUG_SYNC, "%s: wmsg = %s\n", __FUNCTION__, wmsg);
 
 	/*
 	 * check for page daemon going to sleep (waiting for itself)

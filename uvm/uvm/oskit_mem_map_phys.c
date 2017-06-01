@@ -40,7 +40,7 @@ oskit_uvm_mem_map_phys(oskit_addr_t pa, oskit_size_t size,
 
 #ifdef DIAGNOSTIC
     if (endpa <= pa)
-	panic(__FUNCTION__": overflow");
+	panic("%s: overflow", __FUNCTION__);
 #endif
 
     va = uvm_km_valloc(kernel_map, endpa - pa);

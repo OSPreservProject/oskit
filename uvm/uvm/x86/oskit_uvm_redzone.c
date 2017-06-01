@@ -65,7 +65,7 @@ oskit_uvm_redzone_init(void)
 	 */
 	if ((addr = (oskit_addr_t)
 	            lmm_alloc_aligned(&malloc_lmm, STACKSIZE, 0, 12, 0)) == 0)
-		panic(__FUNCTION__": Could not allocate stack\n");
+		panic("%s: Could not allocate stack\n", __FUNCTION__);
 
 	task_tss.ss0   = KERNEL_DS;
 	task_tss.esp0  = addr + STACKSIZE - sizeof(double);

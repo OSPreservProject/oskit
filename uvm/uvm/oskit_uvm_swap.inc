@@ -112,7 +112,7 @@ oskit_uvm_swap_off(oskit_iunknown_t *iunknown)
     int retval;
     int rc;
 
-    panic(__FUNCTION__" is broken.  Do not use!\n");
+    panic("%s is broken.  Do not use!\n", __FUNCTION__);
 
     if (! oskit_iunknown_query(iunknown, &oskit_absio_iid, &handle))
 	pagerabsio = (oskit_absio_t *) handle;
@@ -196,8 +196,8 @@ oskit_sw_reg_strategy(struct swapdev *sdp, struct buf *bp, int bn)
 	    sz = bp->b_bcount & ~(sdp->swd_bsize - 1);
 
 	    pthread_mutex_lock(&sdp->swd_lock);
-	    XPRINTF(OSKIT_DEBUG_SWAP, __FUNCTION__": %s addr %p, offset 0x%lx, "
-		    "0x%lx bytes\n", (bp->b_flags & B_READ) ? "read" : "write",
+	    XPRINTF(OSKIT_DEBUG_SWAP, "%s: %s addr %p, offset 0x%lx, "
+		    "0x%lx bytes\n", __FUNCTION__, (bp->b_flags & B_READ) ? "read" : "write",
 		    datap, (long)offset, (long)sz);
 	    if (bp->b_flags & B_READ) {
 		rc = oskit_blkio_read(bio, datap, offset, sz, &nbytes);
@@ -207,8 +207,8 @@ oskit_sw_reg_strategy(struct swapdev *sdp, struct buf *bp, int bn)
 	    pthread_mutex_unlock(&sdp->swd_lock);
 	} else {
 	    pthread_mutex_lock(&sdp->swd_lock);
-	    XPRINTF(OSKIT_DEBUG_SWAP, __FUNCTION__": %s addr %p, offset 0x%lx, "
-		   "0x%lx bytes\n", (bp->b_flags & B_READ) ? "read" : "write",
+	    XPRINTF(OSKIT_DEBUG_SWAP, "%s: %s addr %p, offset 0x%lx, "
+		   "0x%lx bytes\n", __FUNCTION__, (bp->b_flags & B_READ) ? "read" : "write",
 		   datap, (long)byteoffset, (long)bp->b_bcount);
 	    if (bp->b_flags & B_READ) {
 		rc = oskit_absio_read(aio, datap, byteoffset,
@@ -222,8 +222,8 @@ oskit_sw_reg_strategy(struct swapdev *sdp, struct buf *bp, int bn)
 	UVM_LOCK;		/* Relock the UVM lock */
 	
 	if (rc != 0) {
-		printf(__FUNCTION__": oskit_{absio,blkio}_%s() returned 0x%x\n",
-		       (bp->b_flags & B_READ) ? "read" : "write", rc);
+		printf("%s: oskit_{absio,blkio}_%s() returned 0x%x\n",
+		       __FUNCTION__, (bp->b_flags & B_READ) ? "read" : "write", rc);
 		break;
 	}
 	

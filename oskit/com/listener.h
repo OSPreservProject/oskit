@@ -57,9 +57,7 @@ extern const struct oskit_guid oskit_listener_iid;
 #define OSKIT_LISTENER_IID OSKIT_GUID(0x4aa7dfa8, 0x7c74, 0x11cf, \
 		0xb5, 0x00, 0x08, 0x00, 0x09, 0x53, 0xad, 0xc2)
 
-typedef oskit_error_t (*oskit_listener_callback_t)(
-	struct oskit_iunknown *, void *);
-oskit_listener_t * oskit_create_listener(
-	oskit_listener_callback_t hdlr, void *arg);
+typedef oskit_error_t (*oskit_listener_callback_t)(struct oskit_iunknown *, void *);
+oskit_listener_t * oskit_create_listener(oskit_listener_callback_t hdlr, void *arg);
 
 #endif /* _OSKIT_COM_LISTENER_H_ */

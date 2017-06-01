@@ -61,7 +61,7 @@ int	oskit_mem_uvm = 1;	/* link helper (see oskit_uvm.c) */
 }) 
 
 #if 0
-#define DPRINTF(fmt, args... ) printf(__FUNCTION__  ":" fmt , ## args)
+#define DPRINTF(fmt, args... ) printf("%s:" fmt , __FUNCTION__ , ## args)
 #else
 #define DPRINTF(fmt, args... )
 #endif
@@ -144,7 +144,7 @@ mem_realloc(oskit_mem_t *m, void *ptr,
 
 	if (IN_UVM_AREA(ptr)) {
 	    if (CANT_UVM(flags)) {
-		panic(__FUNCTION__": cannot handle such request %d\n", flags);
+		panic("%s: cannot handle such request %d\n", __FUNCTION__, flags);
 	    }
 	    DPRINTF("newsize = %d\n", newsize);
 	    chunk = realloc(ptr, newsize, M_TEMP, 

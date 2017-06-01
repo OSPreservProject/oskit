@@ -125,5 +125,5 @@ osenv_mem_get_virt(oskit_addr_t addr)
     if (addr < phys_mem_max) {
 	return ((oskit_addr_t)kvtophys(addr));
     }
-    panic(__FUNCTION__": cannot handle virtual range (0x%x)\n", addr);
+    panic("%s: cannot handle virtual range (0x%x)\n", __FUNCTION__, addr);
 }

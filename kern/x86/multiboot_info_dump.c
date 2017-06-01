@@ -111,7 +111,7 @@ multiboot_info_dump(struct multiboot_info *bi)
 				printf("undefined (%ld)\n", rdesc->Type);
 			}
 
-			(char *)rdesc += rdesc->size + 4;
+			//(char *)rdesc += rdesc->size + 4;
 		};
 	}
 	

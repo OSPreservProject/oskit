@@ -24,7 +24,7 @@
 #ifndef _OSKIT_X86_PC_BASE_IRQ_H_
 #define _OSKIT_X86_PC_BASE_IRQ_H_
 
-
+#include <oskit/x86/gate_init.h>
 
 /* On normal PCs, there are always 16 IRQ lines.  */
 #define BASE_IRQ_COUNT		0x10

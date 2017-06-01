@@ -73,20 +73,21 @@ static struct swilist swilists[NSWI];
  */
 static int swi_vector;
 
+static void	swi_softintr_handler(void *arg);
+
 void
 swi_init(void)
 {
 	int		err;
-	static void	swi_softintr_handler(void *arg);
 	extern void	bsdnet_net_softnet(void);
 
 	err = osenv_softirq_alloc_vector(&swi_vector);
 	if (err)
-		panic(__FUNCTION__ ": Could not allocate softirq vector\n");
+		panic("%s: Could not allocate softirq vector\n", __FUNCTION__);
 
 	err = osenv_softirq_alloc(swi_vector, swi_softintr_handler, 0, 0);
 	if (err)
-		panic(__FUNCTION__ ": Could not allocate softirq handler\n");
+		panic("%s: Could not allocate softirq handler\n", __FUNCTION__);
 
 	/*
 	 * Certain swi's are hardwired into the table in assembly

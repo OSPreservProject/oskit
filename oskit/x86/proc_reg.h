@@ -113,46 +113,50 @@ OSKIT_INLINE void set_ss(unsigned short ss);
 OSKIT_INLINE unsigned get_eflags(void)
 {
 	unsigned eflags;
-	asm volatile("
-		pushfl
-		popl %0" : "=r" (eflags));
+/*
+	asm volatile(
+		"pushfl\n\t"
+		"popl %0" : "=r" (eflags));
+*/
 	return eflags;
 }
 
 OSKIT_INLINE void set_eflags(unsigned eflags)
 {
-	asm volatile("
-		pushl %0
-		popfl" : : "r" (eflags));
+/*
+	asm volatile(
+		"pushl %0\n\t"
+		"popfl" : : "r" (eflags));
+*/
 }
 #else
 OSKIT_INLINE unsigned get_eflags(void)
 {
 	unsigned eflags;
-	asm volatile("
-		jmp	1f
-	1:	jmp	1f
-	1:	jmp	1f
-	1:	pushfl
-		jmp	1f
-	1:	jmp	1f
-	1:	jmp	1f
-	1:	popl %0" : "=r" (eflags));
+	asm volatile("\n\t"
+"		jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	pushfl\n\t"
+"		jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	popl %0" : "=r" (eflags));
 	return eflags;
 }
 
 OSKIT_INLINE void set_eflags(unsigned eflags)
 {
-	asm volatile("
-		pushl %0
-		jmp	1f
-	1:	jmp	1f
-	1:	jmp	1f
-	1:	popfl
-		jmp	1f
-	1:	jmp	1f
-	1:	jmp	1f
-	1:	" : : "r" (eflags));
+	asm volatile("\n\t"
+"		pushl %0\n\t"
+"		jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	popfl\n\t"
+"		jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	jmp	1f\n\t"
+"	1:	" : : "r" (eflags));
 }
 #endif
 
@@ -457,12 +461,12 @@ OSKIT_INLINE void set_ss(unsigned short ss)
  * but it's often used immediately after setting one,
  * to flush the instruction queue.
  */
-#define flush_instr_queue() \
-	asm volatile("
-		jmp	0f
-		0:
-	")
-
+void flush_instr_queue(void){
+	asm volatile(""
+		"jmp	0f\n\t" 
+		"0:" 
+	);
+}
 /* Inline functions work fine for 16-bit code as well.  */
 #ifdef HAVE_CODE16
 #define i16_get_eflags		get_eflags

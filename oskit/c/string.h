@@ -69,7 +69,7 @@ int bcmp(const void *s1, const void *s2, oskit_size_t n);
 void bcopy(const void *from, void *to, oskit_size_t n);
 void bzero(void *to, oskit_size_t n);
 
-int ffs(int i);
+//int ffs(int i);
 
 char *index(const char *s, int c);
 char *rindex(const char *s, int c);

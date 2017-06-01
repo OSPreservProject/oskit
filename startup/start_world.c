@@ -106,6 +106,7 @@ start_world(void)
 				   (oskit_file_t *) start_bmod())) != 0)
 			printf("start_world: fs_mount failed\n");
 	skipbmod:
+	 	;
 	}
 	else {
 		/*

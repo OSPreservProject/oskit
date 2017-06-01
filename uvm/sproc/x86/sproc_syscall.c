@@ -62,15 +62,15 @@ oskit_sproc_syscall_handler(struct trap_state *ts)
     syscalltab = &sproc->sp_desc->sd_syscalltab[syscallno];
 
 #if 0
-    printf(__FUNCTION__": Enter system call handler (trapno = %d)\n",
-	    ts->trapno);
+    printf("%s: Enter system call handler (trapno = %d)\n",
+	   __FUNCTION__, ts->trapno);
     printf("thread %d, stack = 0x%x\n", (int)pthread_self(), get_esp());
 #endif
 
     if (sproc->sp_desc->sd_nsyscall <= syscallno
 	|| (func = syscalltab->entry) == 0) {
-	printf(__FUNCTION__": Undefined System Call (%d). Ignored\n",
-	       syscallno);
+	printf("%s: Undefined System Call (%d). Ignored\n",
+	       __FUNCTION__, syscallno);
 	error = OSKIT_ENOSYS;
 	goto bad;
     }

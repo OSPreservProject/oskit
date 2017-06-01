@@ -126,6 +126,10 @@
 #define __dead2		__attribute__((__noreturn__))
 #define __pure2		__attribute__((__const__))
 #define __unused	__attribute__((__unused__))
+#else
+#define __dead2		__attribute__((__noreturn__))
+#define __pure2		__attribute__((__const__))
+#define __unused	__attribute__((__unused__))
 #endif
 
 /*

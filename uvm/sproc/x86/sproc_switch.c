@@ -31,8 +31,8 @@ oskit_sproc_switch(struct oskit_sproc *sproc,
     assert(stack->st_process == sproc);
 
     XPRINTF(OSKIT_DEBUG_SWITCH, 
-	    __FUNCTION__": thread %d, activate the vmspace\n",
-	    (int)pthread_self());
+	    "%s: thread %d, activate the vmspace\n",
+	    __FUNCTION__, (int)pthread_self());
 
     pthread_mutex_lock(&sproc->sp_lock);
 
@@ -88,6 +88,7 @@ oskit_sproc_switch(struct oskit_sproc *sproc,
 	set_gs(0);
 
 	/* taken from 386BSD */
+/*
 	asm volatile (
 	      "		     
               # build outer stack frame
@@ -106,6 +107,7 @@ oskit_sproc_switch(struct oskit_sproc *sproc,
 	      "g"(USER_DS),
 	      "g"(stack->st_sp),
 	      "g"(entry));
+*/
 	/* NOTRETURN */
     }
 

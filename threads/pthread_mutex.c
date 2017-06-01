@@ -252,8 +252,8 @@ pthread_mutex_lock(pthread_mutex_t *m)
 				}
 			}
 			queue_enter(q, pthread, pthread_thread_t *, chain);
-		inserted:
 		}
+		inserted:
 		/*
 		 * Okay, head of waiters queue is the highest priority thread
 		 * waiting to get the mutex. If its priority is greater than

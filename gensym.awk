@@ -44,35 +44,35 @@ BEGIN {
 
 # Take an arbitrarily complex C symbol or expression and constantize it.
 /^expr/ {
-	print "__asm (\"";
+	print "__asm (";
 	if ($3 == "")
-		printf "* %s mAgIc%%0\" : : \"i\" (%s));\n", $2, $2;
+		printf "\"* %s mAgIc%%0\" : : \"i\" (%s));\n", $2, $2;
 	else
-		printf "* %s mAgIc%%0\" : : \"i\" (%s));\n", $3, $2;
+		printf "\"* %s mAgIc%%0\" : : \"i\" (%s));\n", $3, $2;
 }
 
 # Output a symbol defining the size of a C structure.
 /^size/ {
-	print "__asm (\"";
+	print "__asm (";
 	if ($4 == "")
-		printf "* %s_SIZE mAgIc%%0\" : : \"i\" (sizeof(struct %s)));\n",
+		printf "\"* %s_SIZE mAgIc%%0\" : : \"i\" (sizeof(struct %s)));\n",
 			toupper($3), $2;
 	else
-		printf "* %s mAgIc%%0\" : : \"i\" (sizeof(struct %s)));\n",
+		printf "\"* %s mAgIc%%0\" : : \"i\" (sizeof(struct %s)));\n",
 			$4, $2;
 }
 
 # Output a symbol defining the byte offset of an element of a C structure.
 /^offset/ {
-	print "__asm (\"";
+	print "__asm (";
 	if ($5 == "")
 	{
-		printf "* %s_%s mAgIc%%0\" : : \"i\" (&((struct %s*)0)->%s));\n",
+		printf "\"* %s_%s mAgIc%%0\" : : \"i\" (&((struct %s*)0)->%s));\n",
 			toupper($3), toupper($4), $2, $4;
 	}
 	else
 	{
-		printf "* %s mAgIc%%0\" : : \"i\" (&((struct %s*)0)->%s));\n",
+		printf "\"* %s mAgIc%%0\" : : \"i\" (&((struct %s*)0)->%s));\n",
 			toupper($5), $2, $4;
 	}
 }

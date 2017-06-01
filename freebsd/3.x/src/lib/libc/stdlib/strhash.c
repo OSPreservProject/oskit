@@ -256,6 +256,9 @@ hash_destroy(hash_table *table, char *key, void (*nukefunc)())
  * 4) Otherwise just return 0.
  *
  */
+
+static int assign_key();
+
 void *
 hash_search(hash_table *table, caddr_t key, void *datum,
 	    void (*replace_func)())
@@ -275,7 +278,6 @@ hash_search(hash_table *table, caddr_t key, void *datum,
     else{
 	if (datum){
 
-	    static int assign_key();
 
 	    hash_node *new = (hash_node *)malloc(sizeof(hash_node));
 

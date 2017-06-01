@@ -50,6 +50,7 @@ OSKIT_INLINE void i16_enter_pmode(int prot_cs)
 
 	/* Switch to protected mode.  */
 	prot_jmp[3] = prot_cs;
+/*
 	asm volatile("
 		movl	%0,%%cr0
 	prot_jmp:
@@ -57,6 +58,7 @@ OSKIT_INLINE void i16_enter_pmode(int prot_cs)
 		ljmp	$0,$1f
 	1:
 	" : : "r" (i16_get_cr0() | CR0_PE));
+*/
 }
 
 
@@ -87,6 +89,7 @@ OSKIT_INLINE void i16_leave_pmode(int real_cs)
 	 * an indirect far jump leaves the code segment read-only.
 	 */
 	real_jmp[3] = real_cs;
+/*
 	asm volatile("
 		movl	%0,%%cr0
 		jmp	1f
@@ -96,6 +99,7 @@ OSKIT_INLINE void i16_leave_pmode(int real_cs)
 		ljmp	$0,$1f
 	1:
 	" : : "r" (i16_get_cr0() & ~CR0_PE));
+*/
 }
 
 

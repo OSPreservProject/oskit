@@ -189,7 +189,7 @@ master_ints:
 	/* But only if allowed to do so */
 	testl	$BASE_IRQ_SKIP_SOFTINT,%edx
 	jne	1f
-	movb	$BASE_IRQ_SOFTINT_CLEARED|BASE_IRQ_SOFTINT_DISABLED,EXT(base_irq_nest)
+	//movb	$BASE_IRQ_SOFTINT_CLEARED|BASE_IRQ_SOFTINT_DISABLED,EXT(base_irq_nest)
 	sti
 	pushl	%esp
 	movl	EXT(base_irq_softint_handler),%ebx
@@ -309,7 +309,7 @@ slave_ints:
 	/* But only if allowed to do so */
 	testl	$BASE_IRQ_SKIP_SOFTINT,%edx
 	jne	1f
-	movb	$BASE_IRQ_SOFTINT_CLEARED|BASE_IRQ_SOFTINT_DISABLED,EXT(base_irq_nest)
+	//movb	$BASE_IRQ_SOFTINT_CLEARED|BASE_IRQ_SOFTINT_DISABLED,EXT(base_irq_nest)
 	sti
 	pushl	%esp
 	movl	EXT(base_irq_softint_handler),%ebx

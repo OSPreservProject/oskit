@@ -842,7 +842,7 @@ file_create_checks(oskit_security_id_t csid,
     if (rc) \
 	    return rc; \
 \
-    rc = oskit_dir_##call##((oskit_dir_t*)sdir->file,(name),##args); \
+    rc = oskit_dir_##call((oskit_dir_t*)sdir->file,(name),##args); \
     if (rc) \
 	    return rc; \
 \

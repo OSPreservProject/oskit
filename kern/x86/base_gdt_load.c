@@ -63,10 +63,8 @@ void base_gdt_load(void)
 	/*
 	 * Reload all the segment registers from the new GDT.
 	 */
-	asm volatile("
-		ljmp	%0,$1f
-	1:
-	" : : "i" (KERNEL_CS));
+	asm volatile("ljmp	%0,$1f\n\t"
+	"1:" : : "i" (KERNEL_CS));
 	set_ds(KERNEL_DS);
 	set_es(KERNEL_DS);
 	set_ss(KERNEL_DS);

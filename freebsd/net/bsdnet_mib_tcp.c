@@ -415,6 +415,7 @@ xlate_tcpconn_state(int t_state)
 	XLATE_STATE(TIME_WAIT);
 #undef XLATE_STATE
 	default:
+		;
 		/* This should never happen. */
 	}
 	

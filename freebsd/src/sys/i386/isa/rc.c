@@ -670,6 +670,7 @@ repeat:
 						    rc_rcsrt[tptr[INPUT_FLAGS_SHIFT] & 0xF], tp);
 				}
 done1:
+				;
 			}
 			if (rc->rc_flags & RC_DOXXFER) {
 				disable_intr();

@@ -20,7 +20,7 @@ _oskit_makerules_x86_ = yes
 
 
 # Required compiler/assembler flags.
-OSKIT_ASFLAGS	+= $(OSKIT_CPPFLAGS) -DASSEMBLER
+OSKIT_ASFLAGS	+= $(OSKIT_CPPFLAGS) -m32 -march=i386 -DASSEMBLER
 
 
 # Assembly language source files.
@@ -29,7 +29,7 @@ OBJFILES += $(patsubst %.S,%.o,$(notdir $(SFILES)))
 
 %.o: %.S 
 	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
-	$(CC) -arch i386 -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
+	$(CC) -c -o $@ $(OSKIT_ASFLAGS) $(ASFLAGS) -MD $<
 
 %.po: %.S 
 	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"

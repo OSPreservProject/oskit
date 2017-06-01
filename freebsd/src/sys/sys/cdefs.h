@@ -108,14 +108,14 @@
  */
 #if __GNUC__ < 2
 #define __dead
-#define __dead2
+#define __dead2 bob
 #define __pure
 #define __pure2
 #define	__attribute__(x)
 #endif
 #if __GNUC__ == 2 && __GNUC_MINOR__ < 5
 #define	__dead		__volatile
-#define __dead2
+#define __dead2 bob2
 #define	__pure		__const
 #define __pure2
 #endif

@@ -53,6 +53,7 @@ ENTRY(gdb_trap_ss)
 	 */
 	popl	returnaddr
 	popl	%eax	/* throw away trap_state pointer */
+/*
 	popl	gdb_state+TR_GS
 	popl	gdb_state+TR_FS
 	popl	gdb_state+TR_ES
@@ -68,14 +69,17 @@ ENTRY(gdb_trap_ss)
 	popl	gdb_state+TR_TRAPNO
 	popl	gdb_state+TR_ERR
 	popl	gdb_state+TR_EIP
+*/
 	popl	%eax			/* Make CS a ring 1 selector */
 	orb	$1,%al
+/*
 	movl	%eax,gdb_state+TR_CS
 	popl	gdb_state+TR_EFLAGS
 	movl	%esp,gdb_state+TR_ESP
+*/
 	movw	%ss,%ax			/* Make SS a ring 1 selector */
 	orb	$1,%al
-	movw	%ax,gdb_state+TR_SS
+//	movw	%ax,gdb_state+TR_SS
 
 	/*
 	 * Call gdb_trap() on the special gdb_stack
@@ -90,11 +94,12 @@ ENTRY(gdb_trap_ss)
 	/*
 	 * Restore the new state frame, possibly in a new location.
 	 */
-	movl	gdb_state+TR_ESP,%esp
-	pushl	gdb_state+TR_EFLAGS
-	movl	gdb_state+TR_CS,%eax	/* Change CS back to ring 0 */
+	//movl	gdb_state+TR_ESP,%esp
+	//pushl	gdb_state+TR_EFLAGS
+	//movl	gdb_state+TR_CS,%eax	/* Change CS back to ring 0 */
 	andb	$0xfc,%al
 	pushl	%eax
+/*
 	pushl	gdb_state+TR_EIP
 	pushl	gdb_state+TR_ERR
 	pushl	gdb_state+TR_TRAPNO
@@ -110,6 +115,7 @@ ENTRY(gdb_trap_ss)
 	pushl	gdb_state+TR_ES
 	pushl	gdb_state+TR_FS
 	pushl	gdb_state+TR_GS
+*/
 	pushl	%esp			/* trap_state parameter */
 	pushl	returnaddr
 
@@ -120,5 +126,5 @@ ENTRY(gdb_trap_ss)
 	ret
 
 	.comm	returnaddr,4
-	.comm	gdb_state,TR_USIZE
+	//.comm	gdb_state,TR_USIZE
 	.comm	gdb_stack,GDB_STACK_SIZE

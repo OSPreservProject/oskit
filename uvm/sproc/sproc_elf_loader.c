@@ -54,8 +54,8 @@ read_exec_helper(void *handle, oskit_addr_t file_ofs, oskit_size_t file_size,
     void *mapaddr;
 
     XPRINTF(OSKIT_DEBUG_LOADER,
-	    __FUNCTION__": mem_addr %x filesz %x, memsz %x, type %x\n",
-	    mem_addr, file_size, mem_size, section_type);
+	    "%s: mem_addr %x filesz %x, memsz %x, type %x\n",
+	    __FUNCTION__, mem_addr, file_size, mem_size, section_type);
 
     if (mem_addr < OSKIT_UVM_MINUSER_ADDRESS) {
 	return -1;

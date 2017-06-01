@@ -39,6 +39,7 @@ OSKIT_INLINE int i16_bios_getchar()
 
 OSKIT_INLINE void i16_bios_warm_boot(void)
 {
+/*
 	asm volatile("
 		cli
 		movw	$0x40,%ax
@@ -46,10 +47,12 @@ OSKIT_INLINE void i16_bios_warm_boot(void)
 		movw	$0x1234,0x72
 		ljmp	$0xffff,$0x0000
 	");
+*/
 }
 
 OSKIT_INLINE void i16_bios_cold_boot(void)
 {
+/*
 	asm volatile("
 		cli
 		movw	$0x40,%ax
@@ -57,6 +60,7 @@ OSKIT_INLINE void i16_bios_cold_boot(void)
 		movw	$0x0000,0x72
 		ljmp	$0xffff,$0x0000
 	");
+*/
 }
 
 OSKIT_INLINE unsigned char i16_bios_copy_ext_mem(
@@ -83,13 +87,14 @@ OSKIT_INLINE unsigned char i16_bios_copy_ext_mem(
 #endif
 
 	/* Make the BIOS call to perform the copy.  */
+/*
 	asm volatile("
 		int	$0x15
 	" : "=a" (rc)
 	  : "a" ((unsigned short)0x8700),
 	    "c" (word_count),
 	    "S" ((unsigned short)(unsigned)buf));
-
+*/
 	return rc >> 8;
 }
 

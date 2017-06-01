@@ -95,7 +95,7 @@ mprotect(const void *addr, size_t len, int prot)
 	mprotect_buf[mprotect_buf_index].prot = prot;
 	mprotect_buf_index++;
 	if(mprotect_buf_index == NBUF) {
-	    panic(__FUNCTION__": too many call to mprotect\n");
+	    panic("%s: too many call to mprotect\n", __FUNCTION__);
 	}
 	return 0;
     }

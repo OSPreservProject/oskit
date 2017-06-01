@@ -54,7 +54,7 @@ uvm_gettimeofday(struct timeval *tvp)
 	oskit_library_services_lookup(&oskit_clock_iid,
 				      (void *) &sys_clock);
 	if (sys_clock == 0) {
-	    panic(__FUNCTION__": UVM needs sys_clock\n");
+	    panic("%s: UVM needs sys_clock\n", __FUNCTION__);
 	}
     }
     

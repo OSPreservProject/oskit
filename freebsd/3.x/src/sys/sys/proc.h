@@ -374,16 +374,18 @@ extern struct proclist zombproc;	/* List of zombie processes. */
 extern struct proc *initproc, *pageproc; /* Process slots for init, pager. */
 
 #define	NQS	32			/* 32 run queues. */
+
+struct	prochd {
+	struct	proc *ph_link;		/* Linked list of running processes. */
+	struct	proc *ph_rlink;
+};
+
 extern struct prochd qs[];
 extern struct prochd rtqs[];
 extern struct prochd idqs[];
 extern int	whichqs;	/* Bit mask summary of non-empty Q's. */
 extern int	whichrtqs;	/* Bit mask summary of non-empty Q's. */
 extern int	whichidqs;	/* Bit mask summary of non-empty Q's. */
-struct	prochd {
-	struct	proc *ph_link;		/* Linked list of running processes. */
-	struct	proc *ph_rlink;
-};
 
 struct proc *pfind __P((pid_t));	/* Find process by id. */
 struct pgrp *pgfind __P((pid_t));	/* Find process group by id. */

@@ -35,9 +35,7 @@ static void get_cache_config(struct cpu_info *id)
 		unsigned i;
 
 		cicount++;
-		asm volatile("
-			cpuid
-		" : "=a" (ci[0]), 
+		asm volatile("cpuid" : "=a" (ci[0]), 
 		    "=b" (ci[1]),
 		    "=c" (ci[2]),
 		    "=d" (ci[3])
@@ -87,9 +85,7 @@ void cpuid(struct cpu_info *out_id)
 			 * CPUID is supported, so use it.
 			 * First get the vendor ID string.
 			 */
-			asm volatile("
-				cpuid
-			" : "=a" (highest_val),
+			asm volatile("cpuid" : "=a" (highest_val),
 			    "=b" (*((int*)(out_id->vendor_id+0))),
 			    "=d" (*((int*)(out_id->vendor_id+4))),
 			    "=c" (*((int*)(out_id->vendor_id+8)))
@@ -98,9 +94,7 @@ void cpuid(struct cpu_info *out_id)
 			/* Now the feature information.  */
 			if (highest_val >= 1)
 			{
-				asm volatile("
-					cpuid
-				" : "=a" (*((int*)out_id)),
+				asm volatile("cpuid" : "=a" (*((int*)out_id)),
 				    "=d" (out_id->feature_flags)
 				  : "a" (1)
 				  : "ebx", "ecx");

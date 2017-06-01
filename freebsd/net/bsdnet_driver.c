@@ -98,13 +98,13 @@ bsdnet_driver_ioctl(struct ifnet * ifp, int cmd, char *data)
 
 	case SIOCSIFFLAGS: {
 		osenv_log(OSENV_LOG_WARNING, 
-			__FUNCTION__": SIOCSIFFLAGS was called and ignored\n");
+			"%s: SIOCSIFFLAGS was called and ignored\n", __FUNCTION__);
 		break;
 	}
 
 	case SIOCADDMULTI: {
 		osenv_log(OSENV_LOG_WARNING, 
-			__FUNCTION__": SIOCADDMULTI was called -- beats me\n");
+			"%s: SIOCADDMULTI was called -- beats me\n", __FUNCTION__);
 		/* FALLTHROUGH */
 	}
 

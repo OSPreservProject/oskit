@@ -39,8 +39,7 @@ oskit_freebsd_net_open_first_ether_if(
          */
         int ndev = osenv_device_lookup(&oskit_etherdev_iid, (void***)&etherdev);
         if (ndev <= 0) {
-                osenv_log(OSENV_LOG_WARNING, __FUNCTION__
-			": no ethernet adaptors found!");
+                osenv_log(OSENV_LOG_WARNING, "%s: no ethernet adaptors found!", __FUNCTION__);
 		return OSKIT_ENODEV;
 	}
 	/* XXX what happens to the references in the other etherdev[] fields */

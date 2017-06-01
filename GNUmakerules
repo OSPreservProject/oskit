@@ -75,7 +75,7 @@ LIBDIRS += $(OBJDIR)/lib
 #	-I flags after -I- are searched for all include files.
 OSKIT_CPPFLAGS	+= -MD $(DEFINES) -I. $(addprefix -I,$(SRCDIRS)) \
 		    $(addprefix -I,$(MOSTLY_SRCDIRS)) \
-		    -iquote $(addprefix -I,$(INCDIRS)) -nostdinc
+		    -I- $(addprefix -I,$(INCDIRS)) -nostdinc
 OSKIT_CFLAGS	+= $(OSKIT_CPPFLAGS) -Wall $(OSKIT_FFLAGS)
 OSKIT_LDFLAGS	+= $(addprefix -L,$(LIBDIRS))
 
@@ -142,20 +142,20 @@ CFILES := $(filter-out $(OSKIT_EXCLUDE),$(CFILES))
 # * Assemblers don't know about C structures,
 #   so machine-specific assembly language code
 #   can use symbol header files instead.
-%.symc: %.sym
+%.sym.c: %.sym
 	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@ from $<"
-	$(AWK) -f $(OSKIT_SRCDIR)/gensym.awk $< >$*.symc
+	$(AWK) -f $(OSKIT_SRCDIR)/gensym.awk $< >$*.sym.c
 
-%.symc.o: %.symc
+%.symc.o: %.sym.c
 	$(OSKIT_QUIET_MAKE_INFORM) "Assembling $<"
 	$(CC) -S $(OSKIT_CFLAGS) $(CFLAGS) -x c -o $@ $<
 
 %.h: %.symc.o
 	$(OSKIT_QUIET_MAKE_INFORM) "Generating $@ from $<"
-	sed <$< -e 's/^[^*].*$$//' | \
-		sed -e 's/^[*]/#define/' -e 's/mAgIc[^-0-9]*//' >$@
+	sed <$< -e '/^[^*]*$$/d' | \
+		sed -e 's/^[^*]*[*]/#define/' -e 's/mAgIc[^-0-9]*//' >$@
 
-CLEAN_FILES += *.symc *.symc.o
+CLEAN_FILES += *.sym.c *.symc.o
 
 
 # How to install files into their final resting places.

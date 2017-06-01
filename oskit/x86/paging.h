@@ -166,11 +166,11 @@ OSKIT_INLINE void paging_enable(oskit_addr_t pdir)
 	set_cr3(pdir);
 
 	/* Turn on paging.  */
-	asm volatile("
-		movl	%0,%%cr0
-		jmp	1f
-	1:
-	" : : "r" (get_cr0() | CR0_PG));
+	asm volatile(
+		"movl	%0,%%cr0\n\t"
+		"jmp	1f\n\t"
+	"1:"
+	 : : "r" (get_cr0() | CR0_PG));
 }
 
 /*
@@ -183,14 +183,15 @@ OSKIT_INLINE void paging_enable(oskit_addr_t pdir)
 OSKIT_INLINE void paging_disable(void)
 {
 	/* Turn paging off.  */
-	asm volatile("
-		movl	%0,%%cr0
-		jmp	1f
-	1:
-	" : : "r" (get_cr0() & ~CR0_PG));
-
+/*
+	asm volatile(""
+		"movl	%0,%%cr0\n\t"
+		"jmp	1f\n\t"
+	"1:\n\t"
+	 : : "r" (get_cr0() & ~CR0_PG));
+*/
 	/* Flush the TLB.  */
-	set_cr3(0);
+	//set_cr3(0);
 }
 
 #endif /* !ASSEMBLER */

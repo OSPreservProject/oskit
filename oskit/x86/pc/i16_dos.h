@@ -42,6 +42,7 @@ OSKIT_INLINE void i16_dos_exit(int rc)
 
 OSKIT_INLINE void i16_dos_get_int_vec(int vecnum, struct far_pointer_16 *out_vec)
 {
+/*
 	asm volatile("
 		pushw	%%es
 		int	$0x21
@@ -49,10 +50,12 @@ OSKIT_INLINE void i16_dos_get_int_vec(int vecnum, struct far_pointer_16 *out_vec
 		popw	%%es
 	" : "=r" (out_vec->seg), "=b" (out_vec->ofs)
 	  : "a" (0x3500 | vecnum));
+*/
 }
 
 OSKIT_INLINE void i16_dos_set_int_vec(int vecnum, struct far_pointer_16 *new_vec)
 {
+/*
 	asm volatile("
 		pushw	%%ds
 		movw	%1,%%ds
@@ -61,6 +64,7 @@ OSKIT_INLINE void i16_dos_set_int_vec(int vecnum, struct far_pointer_16 *new_vec
 	" :
 	  : "a" (0x2500 | vecnum),
 	    "r" (new_vec->seg), "d" (new_vec->ofs));
+*/
 }
 
 /* Open a DOS file and return the new file handle.
@@ -68,12 +72,14 @@ OSKIT_INLINE void i16_dos_set_int_vec(int vecnum, struct far_pointer_16 *new_vec
 OSKIT_INLINE int i16_dos_open(const char *filename, int access)
 {
 	int fh;
+/*
 	asm volatile("
 		int	$0x21
 		jnc	1f
 		movl	$-1,%%eax
 	1:
 	" : "=a" (fh) : "a" (0x3d00 | access), "d" (filename));
+*/
 	return fh;
 }
 
@@ -85,18 +91,21 @@ OSKIT_INLINE void i16_dos_close(int fh)
 OSKIT_INLINE int i16_dos_get_device_info(int fh)
 {
 	int info_word;
+/*
 	asm volatile("
 		int	$0x21
 		jnc	1f
 		movl	$-1,%%edx
 	1:
 	" : "=d" (info_word) : "a" (0x4400), "b" (fh), "d" (0));
+*/
 	return info_word;
 }
 
 OSKIT_INLINE int i16_dos_get_output_status(int fh)
 {
 	int status;
+/*
 	asm volatile("
 		int	$0x21
 		movzbl	%%al,%%eax
@@ -104,12 +113,14 @@ OSKIT_INLINE int i16_dos_get_output_status(int fh)
 		movl	$-1,%%eax
 	1:
 	" : "=a" (status) : "a" (0x4407), "b" (fh));
+*/
 	return status;
 }
 
 OSKIT_INLINE int i16_dos_alloc(unsigned short *inout_paras)
 {
 	int seg;
+/*
 	asm volatile("
 		int	$0x21
 		jnc	1f
@@ -117,18 +128,21 @@ OSKIT_INLINE int i16_dos_alloc(unsigned short *inout_paras)
 	1:
 	" : "=a" (seg), "=b" (*inout_paras)
 	  : "a" (0x4800), "b" (*inout_paras));
+*/
 	return seg;
 }
 
 OSKIT_INLINE int i16_dos_free(unsigned short seg)
 {
 	unsigned short rc;
+/*
 	asm volatile("
 		pushw	%%es
 		movw	%2,%%es
 		int	$0x21
 		popw	%%es
 	" : "=a" (rc) : "0" (0x4900), "r" (seg));
+*/
 	return rc;
 }
 

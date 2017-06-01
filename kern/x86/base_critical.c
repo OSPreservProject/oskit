@@ -28,7 +28,7 @@ static unsigned saved_eflags;
 void base_critical_enter(void)
 {
 	if (entry_count == 0) {
-		saved_eflags = get_eflags();
+		//saved_eflags = get_eflags();
 		cli();
 	}
 	entry_count++;

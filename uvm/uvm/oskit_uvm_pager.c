@@ -280,7 +280,7 @@ blkio_detach(uobj)
 #if 0
 	bobj->u_flags |= UAO_FLAG_KILLME;
 #endif
-	printf(__FUNCTION__": some pages are busy\n");
+	printf("%s: some pages are busy\n", __FUNCTION__);
 	simple_unlock(&bobj->u_obj.vmobjlock);
 	return;
     }
@@ -1246,8 +1246,8 @@ blkio_get(uobj, origoffset, pps, npagesp, centeridx, access_type, advice, flags)
 			}
 		}
 
-		XPRINTF(OSKIT_DEBUG_PAGER, __FUNCTION__": read offset 0x%lx, "
-			"length 0x%lx\n", (long)offset, (long)iobytes);
+		XPRINTF(OSKIT_DEBUG_PAGER, "%s: read offset 0x%lx, "
+			"length 0x%lx\n", __FUNCTION__, (long)offset, (long)iobytes);
 
 		UVM_UNLOCK;
 		if (bobj->pagerabsio) {
@@ -1262,9 +1262,9 @@ blkio_get(uobj, origoffset, pps, npagesp, centeridx, access_type, advice, flags)
 		UVM_LOCK;
 
 		if (oskit_err) {
-		    	printf(__FUNCTION__": oskit_{absio,blkio}_read "
+		    	printf("%s: oskit_{absio,blkio}_read "
 			       "error %d (offset 0x%lx, length 0x%lx)\n",
-			       oskit_err, (long)offset, (long)iobytes);
+			       __FUNCTION__, oskit_err, (long)offset, (long)iobytes);
 			error = VM_PAGER_ERROR;
 		}
 	}

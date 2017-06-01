@@ -43,7 +43,7 @@ osenv_timer_pit_init(int freq, void (*timer_intr)())
 	 * Install interrupt handler.
 	 */
 	if ((rc = osenv_irq_alloc(0, timer_intr, 0, 0)))
-		osenv_panic(__FUNCTION__": couldn't install intr handler %x", rc);
+		osenv_panic("%s: couldn't install intr handler %x", __FUNCTION__, rc);
 	handler = timer_intr;
 
 	return freq;

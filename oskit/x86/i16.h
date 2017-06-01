@@ -47,17 +47,23 @@
  * and you'll get very, very strange results...
  * It's safer to use the higher-level macros below when possible.
  */
-#define i16_switch_to_32bit(cs32) asm volatile("
-		ljmp	%0,$1f
-		.code32
-	1:
-	" : : "i" (cs32));
-#define switch_to_16bit(cs16) asm volatile("
-		ljmp	%0,$1f
-		"CODE16_STRING"
-	1:
-	" : : "i" (cs16));
+void i16_switch_to_32bit(cs32) {
+/*	asm volatile("ljmp	%0,$1f\n\t"
+		".code32\n\t"
+	"1:"
+	 : : "i" (cs32));
+*/
+}
 
+void switch_to_16bit(cs16) {
+/*
+	 asm volatile(
+		"ljmp	%0,$1f\n\t"
+		CODE16_STRING"\n\t"
+	"1:"
+	 : : "i" (cs16));
+*/
+}
 
 /*
  * From within one type of code, execute 'stmt' in the other.

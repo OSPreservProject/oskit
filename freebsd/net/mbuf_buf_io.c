@@ -218,8 +218,8 @@ bufio_write(oskit_bufio_t *io, const void *src,
 	oskit_off_t offset, oskit_size_t count, oskit_size_t *actual) 
 {
 #if 1
-	osenv_log(OSENV_LOG_ALERT, __FILE__":"__FUNCTION__
-		" called - that shouldn't happen.\n");
+	osenv_log(OSENV_LOG_ALERT, "%s:%s called - that shouldn't happen.\n", 
+		  __FILE__, __FUNCTION__);
 	return OSKIT_E_NOTIMPL;
 #else
 	struct fdev_buf *b;

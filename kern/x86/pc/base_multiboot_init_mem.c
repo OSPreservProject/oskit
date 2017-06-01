@@ -51,6 +51,7 @@ void base_multiboot_init_mem(void)
 	   as well as our own executable code, data, and bss.
 	   Start at the end of the BIOS data area.  */
 	min = 0x500;
+	retry:
 	do
 	{
 		oskit_addr_t max = 0xffffffff;
@@ -98,7 +99,6 @@ void base_multiboot_init_mem(void)
 
 		/* The skip() macro jumps to this label
 		   to restart with a different (higher) min address.  */
-		retry:
 	}
 	while (min < 0xffffffff);
 }

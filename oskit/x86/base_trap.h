@@ -45,6 +45,7 @@
 
 #ifndef ASSEMBLER
 
+#include <oskit/x86/gate_init.h>
 #include <oskit/compiler.h>
 
 /*
