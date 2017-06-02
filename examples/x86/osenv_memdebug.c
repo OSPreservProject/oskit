@@ -74,8 +74,8 @@ mem_release(oskit_osenv_mem_t *m0)
 
 	mem = m->mem;
 	oskit_osenv_mem_free(mem, m, 0, sizeof *m);
-	osenv_log(OSENV_LOG_INFO, __FUNCTION__": %d outstanding bytes\n",
-		  m->outstanding);
+	osenv_log(OSENV_LOG_INFO, "%s: %d outstanding bytes\n", 
+		__FUNCTION__, m->outstanding);
 	oskit_osenv_mem_release(mem);
 	return 0;
 }

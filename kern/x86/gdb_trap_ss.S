@@ -126,5 +126,5 @@ ENTRY(gdb_trap_ss)
 	ret
 
 	.comm	returnaddr,4
-	//.comm	gdb_state,TR_USIZE
+	.comm	gdb_state,TR_USIZE
 	.comm	gdb_stack,GDB_STACK_SIZE

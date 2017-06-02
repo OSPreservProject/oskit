@@ -705,6 +705,7 @@ deathwatch(void *arg)
 			}
 		}
            done:
+		;
 	}
 	return 0;
 }

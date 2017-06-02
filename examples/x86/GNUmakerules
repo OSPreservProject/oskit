@@ -73,7 +73,7 @@ hello_p: $(OBJDIR)/lib/multiboot.o hello.po $(DEPENDLIBS)
 		$(CLIB_P) $(OBJDIR)/lib/crtn.o
 
 # XXX requires -lgcc for long long ops
-LIBGCC := `$(CC) --print-libgcc-file-name`
+LIBGCC := `$(CC) -m32 --print-libgcc-file-name`
 memtest: $(OBJDIR)/lib/multiboot.o tiny_stack.o direct_console.o memtest.o \
 	$(DEPENDLIBS)
 	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"

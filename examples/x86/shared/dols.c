@@ -97,7 +97,7 @@ dols(char *name, int lslong)
 {
         struct stat stbuf;
 #if VERBOSITY > 1
-	printf(__FUNCTION__"(`%s',%d) called\n", name, lslong);
+	printf("%s(`%s',%d) called\n", __FUNCTION__, name, lslong);
 #endif
         lstat(name, &stbuf);
 
@@ -110,14 +110,14 @@ dols(char *name, int lslong)
 
 		if (thisdir == -1) {
 			perror("open .");
-			printf(__FUNCTION__": couldn't open current dir, "
-				"errno = x%x\n", errno);
+			printf("%s: couldn't open current dir, "
+				"errno = x%x\n", __FUNCTION__, errno);
 			return;
 		}
 
 		if (-1 == chdir(name)) {
 			perror(name);
-			printf(__FUNCTION__": chdir(`%s') failed\n", name);
+			printf("%s: chdir(`%s') failed\n", __FUNCTION__, name);
 			return;
 		}
 
@@ -133,8 +133,8 @@ dols(char *name, int lslong)
 		while ((de = readdir(fd)) != 0) {
 			if (-1 == lstat(de->d_name, &stbuf)) {
 				perror("lstat");
-				printf(__FUNCTION__": lstat(`%s') failed\n",
-					de->d_name);
+				printf("%s: lstat(`%s') failed\n",
+					__FUNCTION__, de->d_name);
 				return;
 			}
 			if (lslong)
@@ -151,8 +151,8 @@ dols(char *name, int lslong)
 
 			if (-1 == lstat(de->d_name, &stbuf)) {
 				perror("lstat");
-				printf(__FUNCTION__": stat de->d_name=`%s' "
-						"failed\n", de->d_name);
+				printf("%s: stat de->d_name=`%s' "
+						"failed\n", __FUNCTION__, de->d_name);
 				break;
 			}
 			if (S_ISDIR(stbuf.st_mode)) {

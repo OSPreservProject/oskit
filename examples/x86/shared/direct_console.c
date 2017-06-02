@@ -74,7 +74,7 @@ trygetchar(void)
  */
 static void our_exit(int rc)
 {
-	printf(__FUNCTION__"(%d) called; rebooting...\n", rc);
+	printf("%s(%d) called; rebooting...\n", __FUNCTION__, rc);
 
 	/* This is so that the user has a chance to SEE the output */
 	printf("Press a key to reboot");

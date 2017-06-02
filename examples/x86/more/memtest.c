@@ -199,13 +199,14 @@ main()
 #define real_main main
 #endif
 
+static void drain_lmm(void);
+
 int
 real_main(int argc, char **argv)
 {
 	size_t size;
 
 #ifdef OSKIT
-	static void drain_lmm(void);
 	drain_lmm();
 #endif
 	parse_args(argc, argv);
@@ -236,7 +237,7 @@ real_main(int argc, char **argv)
  * This will force either a panic, or a call to morecore when an attempt
  * to allocate memory is made.
  */
-static void
+void
 drain_lmm(void)
 {
 	extern oskit_addr_t phys_mem_max;

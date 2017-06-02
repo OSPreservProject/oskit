@@ -51,7 +51,7 @@ CLIB_P = -loskit_freebsd_c_r_p -loskit_com_p -loskit_threads_p -loskit_gprof \
 
 kernel: $(OBJDIR)/lib/multiboot.o kernel.o kern_syscall.o $(DEPENDLIBS)
 	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
-	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+	$(LD) -melf_i386  -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
 		-o $@ $(filter-out %.a,$^)		\
 		-loskit_startup -loskit_fsnamespace \
 		-loskit_memfs -loskit_sproc \
@@ -62,7 +62,7 @@ kernel: $(OBJDIR)/lib/multiboot.o kernel.o kern_syscall.o $(DEPENDLIBS)
 
 kernel_p.gdb: $(OBJDIR)/lib/multiboot.o kernel.po kern_syscall.po $(DEPENDLIBS)
 	$(OSKIT_QUIET_MAKE_INFORM) "Linking example $@"
-	$(LD) -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
+	$(LD) -melf_i386 -Ttext 100000 $(LDFLAGS) $(OSKIT_LDFLAGS) \
 		-o $@ $(filter-out %.a,$^)		\
 		-loskit_startup_p -loskit_fsnamespace_p \
 		-loskit_memfs_p -loskit_sproc_p \
@@ -83,17 +83,17 @@ USER_CRT  = user_crt.o
 USER_OBJS = user_syscall.o user_mem.o user_morecore.o
 
 usermain_testsproc: $(USER_CRT) usermain_testsproc.o $(USER_OBJS)
-	$(CC) -nostdlib -static $(USER_CRT) usermain_testsproc.o $(USER_OBJS) \
+	$(CC) -m32 -march=i386 -nostdlib -static $(USER_CRT) usermain_testsproc.o $(USER_OBJS) \
 		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
 		-L../../../lib -loskit_c -loskit_lmm
 
 usermain_hello: $(USER_CRT) usermain_hello.o $(USER_OBJS)
-	$(CC) -nostdlib -static $(USER_CRT) usermain_hello.o $(USER_OBJS) \
+	$(CC) -m32 -march=i386 -nostdlib -static $(USER_CRT) usermain_hello.o $(USER_OBJS) \
 		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
 		-L../../../lib -loskit_c -loskit_lmm
 
 usermain_malloc: $(USER_CRT) usermain_malloc.o $(USER_OBJS)
-	$(CC) -nostdlib -static $(USER_CRT) usermain_malloc.o $(USER_OBJS) \
+	$(CC) -m32 -march=i386 -nostdlib -static $(USER_CRT) usermain_malloc.o $(USER_OBJS) \
 		-o $@ -Xlinker -Ttext -Xlinker 40000000 \
 		-L../../../lib -loskit_c -loskit_lmm
 

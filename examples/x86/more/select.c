@@ -77,7 +77,7 @@ static char *getnamebyaddr(long addr)   /* in network order !!! */
 }
 
 #define CHECK(x)        { if (-1 == (x)) { perror(#x); \
-        printf(__FILE__":%d in "__FUNCTION__"\n", __LINE__); exit(-1); } }
+        printf("%s:%d in %s\n", __FILE__, __FUNCTION__, __LINE__); exit(-1); } }
 
 #define N 32
 
