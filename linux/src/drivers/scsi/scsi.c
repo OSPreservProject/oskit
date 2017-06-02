@@ -3290,6 +3290,7 @@ void scsi_unregister_module(int module_type, void * ptr)
     case MODULE_SCSI_IOCTL:
 	break;
     default:
+	;
     }
     return;
 }

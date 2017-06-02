@@ -1174,7 +1174,7 @@ done:
 	if ((typetable != NULL) && (typetable != stattypetable))
 		free (typetable);
 }
-
+}
 /*
  * Increase the size of the type table.
  */
@@ -1201,7 +1201,6 @@ __grow_type_table (nextarg, typetable, tablesize)
 
 	*tablesize = newsize;
 }
-
 
 #ifdef FLOATING_POINT
 

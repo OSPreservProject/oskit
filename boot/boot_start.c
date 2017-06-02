@@ -68,32 +68,36 @@ void boot_start(struct multiboot_info *bi)
 	copy_source = kvtophys(boot_kern_image);
 	copy_size = boot_kern_hdr.load_end_addr - boot_kern_hdr.load_addr;
 	if (copy_source > boot_kern_hdr.load_addr)
-	{
+	{ 
+/*
 		asm volatile("
 			cld
 			ljmp	%0
 		" :
-		  : "mr" (ptr),		/* XXX r is inappropriate but gcc wants it */
+		  : "mr" (ptr),	/	* XXX r is inappropriate but gcc wants it * /
 		    "a" (boot_kern_hdr.entry),
 		    "S" (copy_source),
 		    "D" (boot_kern_hdr.load_addr),
 		    "c" (copy_size),
 		    "b" (kvtophys(bi)),
 		    "d" (LINEAR_DS));
+*/
 	}
 	else
 	{
 		printf("(copying backwards...)\n"); /* XXX */
+/*
 		asm volatile("
 			std
 			ljmp	%0
 		" :
-		  : "mr" (ptr),		/* XXX r is inappropriate but gcc wants it */
+		  : "mr" (ptr),		/ * XXX r is inappropriate but gcc wants it * /
 		    "a" (boot_kern_hdr.entry),
 		    "S" (copy_source + copy_size - 1),
 		    "D" (boot_kern_hdr.load_addr + copy_size - 1),
 		    "c" (copy_size),
 		    "b" (kvtophys(bi)),
 		    "d" (LINEAR_DS));
+*/
 	}
 }

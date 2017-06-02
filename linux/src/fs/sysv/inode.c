@@ -443,6 +443,7 @@ struct super_block *sysv_read_super(struct super_block *sb,void *data,
 			printk("SysV FS: cannot read superblock in %d byte mode\n", sb->sv_block_size);
 			goto failed;
 		superblock_ok:
+			;
 		}
 	} else {
 		/* Switch to 512 block size. Unfortunately, we have to

@@ -179,7 +179,7 @@ int ufs_check_dir_entry (const char * function,	struct inode * dir,
 	return (error_msg == NULL ? 1 : 0);
 }
 
-static struct file_operations ufs_dir_operations = {
+struct file_operations ufs_dir_operations = {
 	NULL,			/* lseek */
 	NULL,			/* read */
 	NULL,			/* write */

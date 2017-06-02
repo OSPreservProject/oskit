@@ -535,7 +535,7 @@ static void	isp1020_print_scsi_cmd(Scsi_Cmnd *);
 static void	isp1020_print_status_entry(struct Status_Entry *);
 #endif
 
-static struct proc_dir_entry proc_scsi_isp1020 = {
+struct proc_dir_entry proc_scsi_isp1020 = {
 	PROC_SCSI_QLOGICISP, 7, "isp1020",
 	S_IFDIR | S_IRUGO | S_IXUGO, 2
 };

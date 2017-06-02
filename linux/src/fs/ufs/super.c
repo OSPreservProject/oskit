@@ -921,7 +921,7 @@ int ufs_statfs (struct super_block * sb, struct statfs * buf, int bufsiz)
 	return copy_to_user(buf, &tmp, bufsiz) ? -EFAULT : 0;
 }
 
-static struct super_operations ufs_super_ops = {
+struct super_operations ufs_super_ops = {
 	ufs_read_inode,
 	ufs_write_inode,
 	ufs_put_inode,
@@ -933,7 +933,7 @@ static struct super_operations ufs_super_ops = {
 	ufs_remount
 };
 
-static struct file_system_type ufs_fs_type = {
+struct file_system_type ufs_fs_type = {
 	"ufs", 
 	FS_REQUIRES_DEV,
 	ufs_read_super,

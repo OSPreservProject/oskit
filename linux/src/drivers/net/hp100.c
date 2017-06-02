@@ -741,7 +741,7 @@ __initfunc(static int hp100_probe1( struct device *dev, int ioaddr, u_char bus, 
     {
       mem_ptr_phys = (u_int *)( hp100_inw( MEM_MAP_LSW ) | 
 				( hp100_inw( MEM_MAP_MSW ) << 16 ) );
-      (u_int)mem_ptr_phys &= ~0x1fff;  /* 8k alignment */
+      //mem_ptr_phys &= ~0x1fff;  /* 8k alignment */
 
       if ( bus == HP100_BUS_ISA && ( (u_long)mem_ptr_phys & ~0xfffff ) != 0 )
         {

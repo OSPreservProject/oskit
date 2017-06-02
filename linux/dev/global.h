@@ -808,7 +808,7 @@ i486-linux-nm liboskit_linux_dev.a | grep ' [TDRC] ' | egrep -vi ' (oskit_|fdev_
 #define bh_base FDEV_LINUX_bh_base
 #define bh_mask FDEV_LINUX_bh_mask
 #define bh_mask_count FDEV_LINUX_bh_mask_count
-#define do_bottom_half FDEV_LINUX_do_bottom_half
+//#define do_bottom_half FDEV_LINUX_do_bottom_half
 #define local_bh_count FDEV_LINUX_local_bh_count
 #define proc_scsi_t128 FDEV_LINUX_proc_scsi_t128
 #define t128_abort FDEV_LINUX_t128_abort

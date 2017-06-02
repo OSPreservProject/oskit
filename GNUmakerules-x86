@@ -21,6 +21,7 @@ _oskit_makerules_x86_ = yes
 
 # Required compiler/assembler flags.
 OSKIT_ASFLAGS	+= $(OSKIT_CPPFLAGS) -m32 -march=i386 -DASSEMBLER
+OSKIT_LDFLAGS   += -melf_i386
 
 
 # Assembly language source files.

@@ -51,9 +51,9 @@
 #endif
 
 #define BIOS_START OSKIT_LINUX_BIOS_START
-#define __down OSKIT_LINUX___down
+//#define __down OSKIT_LINUX___down
 #define __get_free_pages OSKIT_LINUX___get_free_pages
-#define __up OSKIT_LINUX___up
+//#define __up OSKIT_LINUX___up
 #define __wake_up OSKIT_LINUX___wake_up
 #define __wait_on_buffer OSKIT_LINUX___wait_on_buffer
 #define _const_udelay OSKIT_LINUX__const_udelay

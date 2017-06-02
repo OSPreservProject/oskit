@@ -55,21 +55,21 @@ unsigned int local_bh_count[1];		/* SMP */
  * Our softirq vector that osenv gave back to us.
  */
 int softintr_vector;
+static void	linux_softintr_handler(void *arg);
 
 void
 linux_softintr_init(void)
 {
 	int		err;
-	static void	linux_softintr_handler(void *arg);
 
 	err = osenv_softirq_alloc_vector(&softintr_vector);
 	if (err)
-		panic(__FUNCTION__ ": Could not allocate softirq vector\n");
+		panic("%s: Could not allocate softirq vector\n", __FUNCTION__);
 
 	err = osenv_softirq_alloc(softintr_vector,
 				  linux_softintr_handler, 0, 0);
 	if (err)
-		panic(__FUNCTION__ ": Could not allocate softirq handler\n");
+		panic("%s: Could not allocate softirq handler\n", __FUNCTION__);
 }
 
 /*

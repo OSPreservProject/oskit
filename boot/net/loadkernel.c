@@ -101,10 +101,11 @@ loadkernel(struct kerninfo *ki)
 	dprintf("stub = %p-%p\n", stub, stub + stub_size);
 
 	if (copy_source > load_addr) {
+/*
 		asm volatile("
 			cld
 			ljmp	%0
-		" : /* no outputs */
+		" : / * no outputs * /
 		  : "mr" (ptr),
 		    "a" (entry),
 		    "S" (copy_source),
@@ -112,12 +113,14 @@ loadkernel(struct kerninfo *ki)
 		    "c" (copy_size),
 		    "b" (kvtophys(ki->ki_mbinfo)),
 		    "d" (LINEAR_DS));
+*/
 	}
 	else {
+/*
 		asm volatile("
 			std
 			ljmp	%0
-		" : /* no outputs */
+		" : / * no outputs * /
 		  : "mr" (ptr),
 		    "a" (entry),
 		    "S" (copy_source + copy_size - 1),
@@ -125,5 +128,6 @@ loadkernel(struct kerninfo *ki)
 		    "c" (copy_size),
 		    "b" (kvtophys(ki->ki_mbinfo)),
 		    "d" (LINEAR_DS));
+*/
 	}
 }

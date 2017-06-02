@@ -1775,8 +1775,8 @@ static inline void ihdlr(int irq, unsigned int j) {
              BN(j), irq, reg, HD(j)->iocount);
       return;
       }
-
-   spp = (struct mscp *)DEV2V(ret = inl(sh[j]->io_port + REG_ICM));
+   ret = inl(sh[j]->io_port + REG_ICM);
+   spp = DEV2V(ret);
    cpp = spp;
 
    /* Clear interrupt pending flag */

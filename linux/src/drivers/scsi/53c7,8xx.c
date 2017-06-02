@@ -3969,7 +3969,7 @@ NCR53c7xx_queue_command (Scsi_Cmnd *cmd, void (* done)(Scsi_Cmnd *)) {
 	restore_flags (flags);
 	cmd->result = le32_to_cpu(0xffff);	/* The NCR will overwrite message
 				       and status with valid data */
-	cmd->host_scribble = (unsigned char *) tmp = create_cmd (cmd);
+	cmd->host_scribble = tmp = create_cmd (cmd);
     }
     cli();
     /*

@@ -74,9 +74,9 @@ static struct buffer_head * unused_list = NULL;
 static struct buffer_head * reuse_list = NULL;
 static struct wait_queue * buffer_wait = NULL;
 
-static int nr_buffers = 0;
+int nr_buffers = 0;
 static int nr_buffers_type[NR_LIST] = {0,};
-static int nr_buffer_heads = 0;
+int nr_buffer_heads = 0;
 static int nr_unused_buffer_heads = 0;
 static int nr_hashed_buffers = 0;
 

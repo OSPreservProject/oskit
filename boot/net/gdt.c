@@ -44,10 +44,12 @@ gdt_load(struct x86_desc *gdtp, oskit_size_t len)
 	/*
 	 * Reload all the segment registers from the new GDT.
 	 */
+/*
 	asm volatile("
 		ljmp	%0,$1f
 	1:
 	" : : "i" (KERNEL_CS));
+*/
 	set_ds(KERNEL_DS);
 	set_es(KERNEL_DS);
 	set_ss(KERNEL_DS);

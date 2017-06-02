@@ -473,6 +473,7 @@ extern inline void * memscan(void * addr, int c, size_t size)
 {
 	if (!size)
 		return addr;
+/*
 	__asm__("cld
 		repnz; scasb
 		jnz 1f
@@ -480,6 +481,7 @@ extern inline void * memscan(void * addr, int c, size_t size)
 1:		"
 		: "=D" (addr), "=c" (size)
 		: "0" (addr), "1" (size), "a" (c));
+*/
 	return addr;
 }
 

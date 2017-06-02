@@ -150,7 +150,10 @@ parse_options(char *options, uid_t *uid, gid_t *gid, int *mode, int *reserved, s
 					printk("AFFS: Argument for set[ug]id option missing\n");
 					return 0;
 				} else {
-					(f ? *uid : *gid) = simple_strtoul(value,&value,0);
+					if(f)
+						*uid =  simple_strtoul(value,&value,0);
+					else
+					        *gid = simple_strtoul(value,&value,0);
 					if (*value) {
 						printk("AFFS: Bad set[ug]id argument\n");
 						return 0;

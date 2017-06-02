@@ -3255,8 +3255,8 @@ Forced Error: Driver must define ADV_MAX_SG_LIST.
  *  REQTIMESTAMP() - system time stamp value
  */
 typedef Scsi_Cmnd            REQ, *REQP;
-#define REQPNEXT(reqp)       ((REQP) ((reqp)->host_scribble))
-#define REQPNEXTP(reqp)      ((REQP *) &((reqp)->host_scribble))
+#define REQPNEXT(reqp)       (((reqp)->host_scribble))
+#define REQPNEXTP(reqp)      (&((reqp)->host_scribble))
 #define REQPTID(reqp)        ((reqp)->target)
 #define REQPTIME(reqp)       ((reqp)->SCp.this_residual)
 #define REQTIMESTAMP()       (jiffies)
@@ -14129,7 +14129,7 @@ unsigned long  _adv_mcode_chksum ASC_INITDATA = 0x03494981UL;
  * Additional structure information can be found in a_condor.h where
  * the structure is defined.
  */
-STATIC ADVEEP_CONFIG
+ADVEEP_CONFIG
 Default_EEPROM_Config ASC_INITDATA = {
     ADV_EEPROM_BIOS_ENABLE,     /* cfg_msw */
     0x0000,                     /* cfg_lsw */

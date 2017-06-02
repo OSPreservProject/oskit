@@ -190,6 +190,7 @@ extern inline void siginitset(sigset_t *set, unsigned long mask)
 		break;
 	case 2: set->sig[1] = 0;
 	case 1:
+		;
 	}
 }
 
@@ -202,6 +203,7 @@ extern inline void siginitsetinv(sigset_t *set, unsigned long mask)
 		break;
 	case 2: set->sig[1] = -1;
 	case 1:
+		;
 	}
 }
 

@@ -22,7 +22,7 @@ extern unsigned long bh_active;
 extern unsigned long bh_mask;
 extern void (*bh_base[32])(void);
 
-asmlinkage void do_bottom_half(void);
+void do_bottom_half(void);
 
 /* Who gets which entry in bh_base.  Things which will occur most often
    should come first - in which case NET should be up the top with SERIAL/TQUEUE! */

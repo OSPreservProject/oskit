@@ -49,7 +49,7 @@ static int ufs_release_file (struct inode *, struct file *);
  * We have mostly NULL's here: the current defaults are ok for
  * the ufs filesystem.
  */
-static struct file_operations ufs_file_operations = {
+struct file_operations ufs_file_operations = {
 	ufs_file_lseek,	/* lseek */
 	generic_file_read,	/* read */
 	ufs_file_write, 	/* write */

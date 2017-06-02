@@ -80,6 +80,7 @@ static inline unsigned int ptype (unsigned char raw_type)
 		case LINUX_RAID_PARTITION:
 			return LINUX_RAID_PARTITION;
 		default:
+			;
 	}
 	return 0;
 }

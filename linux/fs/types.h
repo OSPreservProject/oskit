@@ -95,9 +95,9 @@ extern oskit_error_t gopenfile_create(gfile_t *file, struct file *f,
  */
 #define VERIFY_OR_PANIC(obj, name) ({				\
 	if ((obj) == NULL)					\
-		panic(__FUNCTION__": null " #name);		\
+		panic("%s: null " #name, __FUNCTION__);		\
 	if ((obj)->count == 0)					\
-		panic(__FUNCTION__": bad count");		\
+		panic("%s: bad count", __FUNCTION__);		\
 })
 static inline 
 int verify_fs(gfilesystem_t *obj, void* non_null_data)

@@ -35,11 +35,11 @@ unsigned
 linux_save_flags()
 {
 	unsigned rc;
-
+/*
 	asm volatile("
 		pushfl
 		popl %0" : "=r" (rc));
-
+*/
 	rc &= ~IF_FLAG;
 	if (osenv_intr_enabled())
 		rc |= IF_FLAG;
@@ -63,11 +63,11 @@ unsigned
 linux_save_flags_cli()
 {
 	unsigned rc;
-
+/*
 	asm volatile("
 		pushfl
 		popl %0" : "=r" (rc));
-
+*/
 	rc &= ~IF_FLAG;
 	if (osenv_intr_save_disable())
 		rc |= IF_FLAG;

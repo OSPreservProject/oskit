@@ -510,6 +510,8 @@ static int el16_send_packet(struct sk_buff *skb, struct device *dev)
 	return 0;
 }
 
+static void init_rx_bufs(struct device *);
+
 /*	The typical workload of the driver:
 	Handle the network interface interrupts. */
 static void el16_interrupt(int irq, void *dev_id, struct pt_regs *regs)
@@ -592,7 +594,6 @@ static void el16_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 
 	if ((status & 0x0070) != 0x0040  &&  dev->start) 
 	{
-		static void init_rx_bufs(struct device *);
 		/* The Rx unit is not ready, it must be hung.  Restart the receiver by
 		   initializing the rx buffers, and issuing an Rx start command. */
 		if (net_debug)

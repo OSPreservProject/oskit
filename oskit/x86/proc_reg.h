@@ -461,7 +461,7 @@ OSKIT_INLINE void set_ss(unsigned short ss)
  * but it's often used immediately after setting one,
  * to flush the instruction queue.
  */
-void flush_instr_queue(void){
+static void flush_instr_queue(void){
 	asm volatile(""
 		"jmp	0f\n\t" 
 		"0:" 
