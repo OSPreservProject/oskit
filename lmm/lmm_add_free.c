@@ -30,10 +30,9 @@ void lmm_add_free(lmm_t *lmm, void *block, oskit_size_t size)
 	   Here we can assume no such thing.  */
 	min = (min + ALIGN_MASK) & ~ALIGN_MASK;
 	max &= ~ALIGN_MASK;
-	assert(max >= min);
 
 	/* If after alignment we have nothing left, we're done.  */
-	if (max == min)
+	if (max <= min)
 		return;
 
 	/* Add the block to the free list(s) of whatever region(s) it overlaps.
